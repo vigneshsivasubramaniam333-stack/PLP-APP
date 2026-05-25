@@ -1,0 +1,16 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_report&stringtype=unspecified
+  rabbitmq:
+    port: 5673
+
+server:
+  port: 8186
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8861/eureka/

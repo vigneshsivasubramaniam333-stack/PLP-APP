@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_iam
+  data:
+    redis:
+      port: 6380
+
+server:
+  port: 8181
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8861/eureka/

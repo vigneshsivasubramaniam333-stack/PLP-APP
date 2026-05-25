@@ -1,0 +1,13 @@
+# PLP local profile — run alongside LOS (LOS unchanged). Use: SPRING_PROFILES_ACTIVE=local
+spring:
+  config:
+    activate:
+      on-profile: local
+
+server:
+  port: 8861
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8861/eureka/

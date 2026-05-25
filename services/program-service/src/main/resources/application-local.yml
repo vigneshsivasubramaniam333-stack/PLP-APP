@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_program
+  data:
+    redis:
+      port: 6380
+  rabbitmq:
+    port: 5673
+
+server:
+  port: 8182
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8861/eureka/
+
+plp:
+  storage:
+    minio:
+      endpoint: http://localhost:9010

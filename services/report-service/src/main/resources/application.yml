@@ -1,0 +1,44 @@
+server:
+  port: 8086
+  error:
+    include-message: always
+    include-stacktrace: on_param
+
+spring:
+  application:
+    name: report-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/plp_db?currentSchema=plp_report&stringtype=unspecified
+    username: plp_admin
+    password: plp_secret_2026
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: plp_report
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  flyway:
+    enabled: true
+    schemas: plp_report
+    locations: classpath:db/migration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: plp_rabbit
+    password: plp_rabbit_2026
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

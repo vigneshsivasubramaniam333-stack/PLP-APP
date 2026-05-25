@@ -1,0 +1,75 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: plp-postgres
+    environment:
+      POSTGRES_USER: plp_admin
+      POSTGRES_PASSWORD: plp_secret_2026
+      POSTGRES_DB: plp_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plp_admin -d plp_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: plp-redis
+    command: redis-server --requirepass plp_redis_2026 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "plp_redis_2026", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: plp-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: plp_rabbit
+      RABBITMQ_DEFAULT_PASS: plp_rabbit_2026
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    tmpfs:
+      - /var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+
+  minio:
+    image: minio/minio:latest
+    container_name: plp-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: plp_minio_admin
+      MINIO_ROOT_PASSWORD: plp_minio_secret_2026
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

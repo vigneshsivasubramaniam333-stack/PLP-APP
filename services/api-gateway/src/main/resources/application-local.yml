@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  data:
+    redis:
+      port: 6380
+
+server:
+  port: 8180
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8861/eureka/

@@ -1,0 +1,21 @@
+# Optional PLP UI (npm build — can fail on slow networks). Use with main compose:
+#   docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build platform-ui
+# Or: .\docker-start.ps1 -Build -WithUi
+
+name: plp
+
+services:
+  platform-ui:
+    build:
+      context: ./frontend
+      dockerfile: packages/platform-ui/Dockerfile
+    container_name: plp-platform-ui
+    ports:
+      - "3100:80"
+    volumes:
+      - ./frontend/packages/platform-ui/docker/env-config.js:/usr/share/nginx/html/env-config.js:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - plp-net
+    restart: unless-stopped

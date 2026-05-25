@@ -1,0 +1,22 @@
+{
+  "name": "plp-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:platform": "npm run dev --workspace=@plp/platform-ui",
+    "dev:anchor": "npm run dev --workspace=@plp/anchor-portal",
+    "dev:borrower": "npm run dev --workspace=@plp/borrower-portal",
+    "build:all": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.2.4"
+  }
+}

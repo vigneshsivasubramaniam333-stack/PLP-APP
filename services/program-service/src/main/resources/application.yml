@@ -1,0 +1,68 @@
+server:
+  port: 8082
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: program-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/plp_db?currentSchema=plp_program
+    username: plp_admin
+    password: plp_secret_2026
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: plp_program
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  flyway:
+    enabled: true
+    schemas: plp_program
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: plp_redis_2026
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: plp_rabbit
+    password: plp_rabbit_2026
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+plp:
+  iam:
+    base-url: ${PLP_IAM_BASE_URL:http://localhost:8081}
+  los-integration:
+    api-key: ${PLP_LOS_INTEGRATION_API_KEY:plp-los-integration-dev-key}
+  storage:
+    minio:
+      # Set true + credentials to upload bytes to MinIO (see docker-compose.infra.yml).
+      enabled: false
+      endpoint: http://localhost:9000
+      access-key: ${MINIO_ACCESS_KEY:}
+      secret-key: ${MINIO_SECRET_KEY:}
+      bucket: plp-invoices
+  dev-reset:
+    enabled: false

@@ -1,0 +1,282 @@
+# PLP full stack for Docker Desktop (runs alongside LOS on remapped host ports).
+# Usage:  docker compose up -d --build
+# UI:     http://localhost:3100/plp/     API: http://localhost:8180
+
+name: plp
+
+x-eureka-env: &eureka-env
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+
+x-db-env: &db-env
+  SPRING_DATASOURCE_USERNAME: plp_admin
+  SPRING_DATASOURCE_PASSWORD: plp_secret_2026
+
+x-redis-env: &redis-env
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: plp_redis_2026
+
+x-rabbit-env: &rabbit-env
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: plp_rabbit
+  SPRING_RABBITMQ_PASSWORD: plp_rabbit_2026
+
+services:
+  # ─── Infrastructure (host ports avoid LOS: 5432, 6379, 5672, 9000) ───
+  postgres:
+    image: postgres:16-alpine
+    container_name: plp-postgres
+    environment:
+      POSTGRES_USER: plp_admin
+      POSTGRES_PASSWORD: plp_secret_2026
+      POSTGRES_DB: plp_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - plp_postgres_data:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plp_admin -d plp_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - plp-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: plp-redis
+    command: redis-server --requirepass plp_redis_2026 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"
+    volumes:
+      - plp_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "plp_redis_2026", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - plp-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: plp-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: plp_rabbit
+      RABBITMQ_DEFAULT_PASS: plp_rabbit_2026
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    # Image declares VOLUME /var/lib/rabbitmq; anonymous volumes break on Windows (eacces on .erlang.cookie).
+    tmpfs:
+      - /var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+    networks:
+      - plp-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: plp-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: plp_minio_admin
+      MINIO_ROOT_PASSWORD: plp_minio_secret_2026
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - plp_minio_data:/data
+    networks:
+      - plp-net
+
+  # ─── Microservices (internal ports 8761/808x; host 8861/818x) ───
+  discovery-service:
+    build:
+      context: .
+      dockerfile: services/discovery-service/Dockerfile
+    container_name: plp-discovery
+    ports:
+      - "8861:8761"
+    environment:
+      <<: *eureka-env
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  iam-service:
+    build:
+      context: .
+      dockerfile: services/iam-service/Dockerfile
+    container_name: plp-iam
+    ports:
+      - "8181:8081"
+    environment:
+      <<: [*eureka-env, *db-env, *redis-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_iam
+      PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
+      PLP_INTEGRATION_DEFAULT_USER_PASSWORD: ChangeMe@PLP2026
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  program-service:
+    build:
+      context: .
+      dockerfile: services/program-service/Dockerfile
+    container_name: plp-program
+    ports:
+      - "8182:8082"
+    environment:
+      <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_program
+      PLP_STORAGE_MINIO_ENDPOINT: http://minio:9000
+      PLP_IAM_BASE_URL: http://iam-service:8081
+      PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  lending-service:
+    build:
+      context: .
+      dockerfile: services/lending-service/Dockerfile
+    container_name: plp-lending
+    ports:
+      - "8183:8083"
+    environment:
+      <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
+      ENCORE_BASE_URL: https://core.dev.billionloans.com/encore/
+      ENCORE_API_USERNAME: billiontech
+      ENCORE_API_PASSWORD: billionTech@encore25
+      ENCORE_ADMIN_BRANCH: MGPP
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_lending
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  integration-service:
+    build:
+      context: .
+      dockerfile: services/integration-service/Dockerfile
+    container_name: plp-integration
+    ports:
+      - "8184:8084"
+    environment:
+      <<: [*eureka-env, *db-env, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_integration
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: plp-notification
+    ports:
+      - "8185:8085"
+    environment:
+      <<: [*eureka-env, *db-env, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_notification
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  report-service:
+    build:
+      context: .
+      dockerfile: services/report-service/Dockerfile
+    container_name: plp-report
+    ports:
+      - "8186:8086"
+    environment:
+      <<: [*eureka-env, *db-env, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_report&stringtype=unspecified
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: plp-gateway
+    ports:
+      - "8180:8080"
+    environment:
+      <<: [*eureka-env, *redis-env]
+    depends_on:
+      discovery-service:
+        condition: service_started
+      iam-service:
+        condition: service_started
+      program-service:
+        condition: service_started
+      lending-service:
+        condition: service_started
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+networks:
+  plp-net:
+    driver: bridge
+
+volumes:
+  plp_postgres_data:
+  plp_redis_data:
+  plp_minio_data:

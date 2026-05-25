@@ -1,0 +1,1 @@
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS sub_program_id UUID NULL;

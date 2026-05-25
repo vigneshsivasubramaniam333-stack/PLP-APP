@@ -1,0 +1,66 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+      routes:
+        - id: program-service-los-integration
+          uri: lb://program-service
+          predicates:
+            - Path=/api/v1/integrations/los/**
+        - id: iam-service
+          uri: lb://iam-service
+          predicates:
+            - Path=/api/v1/auth/**,/api/v1/users,/api/v1/users/**,/api/v1/dev/reset-users
+        - id: program-service
+          uri: lb://program-service
+          predicates:
+            - Path=/api/v1/programs/**,/api/v1/sub-programs/**,/api/v1/anchors/**,/api/v1/borrowers/**,/api/v1/salary/**,/api/v1/invoices/**,/api/v1/portal/anchor/**,/api/v1/dev/reset-program-data,/api/v1/program-audit/**
+        - id: lending-service
+          uri: lb://lending-service
+          predicates:
+            - Path=/api/v1/loans/**,/api/v1/disbursements/**,/api/v1/repayments/**,/api/v1/portal/borrower/**,/api/v1/dev/reset-lending-data,/api/v1/lending-audit/**
+        - id: integration-service
+          uri: lb://integration-service
+          predicates:
+            - Path=/api/v1/integrations/**,/api/v1/webhooks/**
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+        - id: report-service
+          uri: lb://report-service
+          predicates:
+            - Path=/api/v1/reports/**
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: plp_redis_2026
+
+jwt:
+  secret: PLP-JWT-SECRET-KEY-CHANGE-IN-PRODUCTION-MIN-64-BYTES-LONG-2026!!
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
