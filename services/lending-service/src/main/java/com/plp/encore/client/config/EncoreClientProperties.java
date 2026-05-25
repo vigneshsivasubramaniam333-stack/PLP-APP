@@ -35,6 +35,7 @@ public class EncoreClientProperties {
     private String casaProductCode = "C100";
     private String loanProductType = "Loans";
     private String investmentAccountId = "000010000001";
+    private String defaultPinCode = "600001";
 
     private int connectTimeoutMs = 10000;
     private int readTimeoutMs = 30000;

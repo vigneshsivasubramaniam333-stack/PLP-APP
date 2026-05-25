@@ -176,17 +176,26 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
         }
         try {
             String transactionId = "BL-RPY-" + UUID.randomUUID().toString().substring(0, 8);
+            String txnName = repaymentType != null ? repaymentType : "ScheduledRepayment";
+            long now = System.currentTimeMillis();
             ArrayNode transactions = objectMapper.createArrayNode();
             ObjectNode txn = objectMapper.createObjectNode();
-            txn.put("accountId", encoreAccountId);
-            txn.put("amount1", amount.toPlainString());
-            txn.put("description", repaymentType != null ? repaymentType : "ScheduledRepayment");
-            txn.put("valueDateStr", LocalDate.now().format(DATE_FORMAT));
             txn.put("transactionId", transactionId);
-            txn.put("transactionName", repaymentType != null ? repaymentType : "ScheduledRepayment");
-            txn.put("instrument", "NEFT");
+            txn.put("valueDate", now);
+            txn.put("transactionDate", now);
+            txn.put("accountId", encoreAccountId);
+            txn.put("transactionName", txnName);
+            txn.put("amount1", amount.toPlainString());
+            txn.put("description", "");
             txn.put("userId", "los-adapter");
+            txn.put("instrument", "CASH");
+            txn.put("transactionLotId", transactionId);
             transactions.add(txn);
+
+            log.info("[LMS-REPAY-FINAL-PAYLOAD] accountId={} | transactionId={} | txnName={} | fullPayload={}",
+                    encoreAccountId, transactionId, txnName,
+                    objectMapper.writeValueAsString(transactions));
+
             postTransactionsArray(transactions);
             return transactionId;
         } catch (Exception e) {

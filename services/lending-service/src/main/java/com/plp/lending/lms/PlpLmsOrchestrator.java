@@ -65,7 +65,7 @@ public class PlpLmsOrchestrator {
             }
             BigDecimal amount = loan.getSanctionedAmount() != null ? loan.getSanctionedAmount() : loan.getRequestedAmount();
             BigDecimal rate = loan.getInterestRate() != null ? loan.getInterestRate() : BigDecimal.ZERO;
-            int tenureMonths = Math.max(1, (loan.getTenureDays() + 29) / 30);
+            int tenureDays = loan.getTenureDays() != null ? loan.getTenureDays() : 1;
 
             String productCode = cfg.getEncoreProductCode();
             if (productCode == null || productCode.isBlank()) {
@@ -73,13 +73,25 @@ public class PlpLmsOrchestrator {
                 return;
             }
 
-            EncoreOpenLoanParams params = EncoreOpenLoanParams.minimal(
-                    loan.getLoanNumber(),
-                    borrowerName,
-                    amount,
-                    rate,
-                    tenureMonths,
-                    productCode);
+            EncoreOpenLoanParams params;
+            if ("INVOICE_DISCOUNTING".equals(loan.getProductType())) {
+                params = EncoreOpenLoanParams.forInvoiceDiscounting(
+                        loan.getLoanNumber(),
+                        borrowerName,
+                        amount,
+                        rate,
+                        tenureDays,
+                        productCode);
+            } else {
+                int tenureMonths = Math.max(1, (tenureDays + 29) / 30);
+                params = EncoreOpenLoanParams.minimal(
+                        loan.getLoanNumber(),
+                        borrowerName,
+                        amount,
+                        rate,
+                        tenureMonths,
+                        productCode);
+            }
 
             var loanOd = plpEncoreLmsAdapter.buildLoanOdAccount(params, borrower);
             String requestJson = objectMapper.writeValueAsString(loanOd);
@@ -132,10 +144,12 @@ public class PlpLmsOrchestrator {
         }
         String accountId = resolveAccountId(loan);
         if (accountId == null) {
+            log.warn("PLP LMS repay skipped — no Encore account for {}", loan.getLoanNumber());
             return;
         }
         try {
-            String txnId = encoreLmsApi.repay(accountId, repaidAmount, "Repayment");
+            log.info("PLP LMS repay: loan={} accountId={} amount={}", loan.getLoanNumber(), accountId, repaidAmount);
+            String txnId = encoreLmsApi.repay(accountId, repaidAmount, "ScheduledRepayment");
             recordOp(loan.getId(), OP_REPAY, accountId, STATUS_SUCCESS, repaidAmount.toPlainString(), txnId, null);
             refreshSummary(loan, accountId);
         } catch (Exception e) {

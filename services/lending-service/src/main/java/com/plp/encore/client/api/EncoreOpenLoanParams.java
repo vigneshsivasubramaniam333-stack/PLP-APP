@@ -54,4 +54,20 @@ public record EncoreOpenLoanParams(
                 null, null
         );
     }
+
+    /**
+     * Invoice discounting uses Day tenure with actual days as magnitude (bl-core parity).
+     */
+    public static EncoreOpenLoanParams forInvoiceDiscounting(String applicationNumber, String borrowerName,
+                                                             BigDecimal sanctionedAmount, BigDecimal interestRate,
+                                                             int tenureDays, String productCode) {
+        return new EncoreOpenLoanParams(
+                applicationNumber, borrowerName, sanctionedAmount, interestRate, tenureDays, productCode,
+                null, null, "Day", BigDecimal.ZERO, tenureDays,
+                "None", 0, "Day", false, null, null,
+                null, null, null, null,
+                null, null, null, null, null,
+                null, null
+        );
+    }
 }

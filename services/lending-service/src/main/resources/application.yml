@@ -79,6 +79,7 @@ plp:
       casa-product-code: ${ENCORE_CASA_PRODUCT_CODE:C100}
       loan-product-type: ${ENCORE_LOAN_PRODUCT_TYPE:Loans}
       investment-account-id: ${ENCORE_INVESTMENT_ACCOUNT_ID:000010000001}
+      default-pin-code: ${ENCORE_DEFAULT_PIN_CODE:600001}
       connect-timeout-ms: ${ENCORE_CONNECT_TIMEOUT:10000}
       read-timeout-ms: ${ENCORE_READ_TIMEOUT:30000}
       max-retries-for-get: ${ENCORE_GET_RETRIES:2}

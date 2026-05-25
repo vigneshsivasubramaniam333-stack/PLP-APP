@@ -73,7 +73,8 @@ public class PlpEncoreLmsAdapter {
         acc.putNull("moratoriumNormalInterestRate");
         acc.putNull("moratoriumInterestAccrualCalculation");
 
-        putIfPresent(acc, "customer1PinCode", geoFrom(borrowerDetails, "pinCode", "pincode", "postalCode"));
+        String pinCode = geoFrom(borrowerDetails, "pinCode", "pincode", "postalCode");
+        acc.put("customer1PinCode", pinCode != null && !pinCode.isBlank() ? pinCode : properties.getDefaultPinCode());
         acc.put("customer1CityCode", DEFAULT_ENCORE_LOCATION_CODE);
         acc.put("customer1CountryCode", DEFAULT_ENCORE_LOCATION_CODE);
         acc.put("customer1StateCode", DEFAULT_ENCORE_LOCATION_CODE);
