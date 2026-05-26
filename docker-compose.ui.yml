@@ -1,6 +1,5 @@
-# Optional PLP UI (npm build — can fail on slow networks). Use with main compose:
-#   docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build platform-ui
-# Or: .\docker-start.ps1 -Build -WithUi
+# PLP UI portals (all 3). Use with main compose:
+#   docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build
 
 name: plp
 
@@ -14,6 +13,36 @@ services:
       - "3100:80"
     volumes:
       - ./frontend/packages/platform-ui/docker/env-config.js:/usr/share/nginx/html/env-config.js:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  anchor-portal:
+    build:
+      context: ./frontend
+      dockerfile: packages/anchor-portal/Dockerfile
+    container_name: plp-anchor-portal
+    ports:
+      - "3200:80"
+    volumes:
+      - ./frontend/packages/anchor-portal/docker/env-config.js:/usr/share/nginx/html/env-config.js:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - plp-net
+    restart: unless-stopped
+
+  borrower-portal:
+    build:
+      context: ./frontend
+      dockerfile: packages/borrower-portal/Dockerfile
+    container_name: plp-borrower-portal
+    ports:
+      - "3300:80"
+    volumes:
+      - ./frontend/packages/borrower-portal/docker/env-config.js:/usr/share/nginx/html/env-config.js:ro
     depends_on:
       - api-gateway
     networks:
