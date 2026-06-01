@@ -82,7 +82,7 @@ public class InvoiceService {
         Program program = programRepository.findById(programId)
                 .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
 
-        BigDecimal marginPct = program.getMarginPercent() != null ? program.getMarginPercent() : new BigDecimal("10.00");
+        BigDecimal marginPct = program.getMarginPercent() != null ? program.getMarginPercent() : BigDecimal.ZERO;
 
         List<Invoice> results = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvStream))) {
@@ -667,7 +667,7 @@ public class InvoiceService {
 
         BigDecimal marginPct = invoice.getMarginPercent() != null
                 ? invoice.getMarginPercent()
-                : (program.getMarginPercent() != null ? program.getMarginPercent() : new BigDecimal("10.00"));
+                : (program.getMarginPercent() != null ? program.getMarginPercent() : BigDecimal.ZERO);
         invoice.setMarginPercent(marginPct);
 
         BigDecimal netAmount = invoice.getNetAmount() != null

@@ -99,6 +99,25 @@ public class LoanController {
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", loan));
     }
 
+    @GetMapping("/{id}/payoff")
+    public ResponseEntity<Map<String, Object>> getPayoffAmount(
+            @PathVariable UUID id,
+            @RequestHeader(value = LoanAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Loan loan = loanService.getLoan(id);
+        LoanAccessGuard.requireLoanReadAccess(loan, rolesHeader, linkedEntityId, linkedEntityType);
+        BigDecimal payoffAmount = loanService.getPayoffAmount(id);
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "data", Map.of(
+                        "loanId", id,
+                        "loanNumber", loan.getLoanNumber(),
+                        "payoffAmount", payoffAmount,
+                        "outstandingAmount", loan.getOutstandingAmount()
+                )));
+    }
+
     @GetMapping
     public ResponseEntity<Map<String, Object>> listLoans(
             @RequestParam(required = false) UUID borrowerId,

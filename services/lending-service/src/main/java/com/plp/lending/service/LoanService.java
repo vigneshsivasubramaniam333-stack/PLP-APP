@@ -578,9 +578,14 @@ public class LoanService {
             throw new RuntimeException("Repayment cannot be recorded. Loan status: " + loan.getStatus());
         }
         loan.setTotalRepaid(loan.getTotalRepaid().add(repaidAmount));
-        loan.setOutstandingAmount(loan.getTotalRepayable().subtract(loan.getTotalRepaid()));
 
-        if (loan.getOutstandingAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        boolean lmsEnabled = plpLmsOrchestrator.isLmsEnabledForLoan(loan);
+        if (!lmsEnabled) {
+            loan.setOutstandingAmount(loan.getTotalRepayable().subtract(loan.getTotalRepaid()));
+        }
+        // When LMS is enabled, outstandingAmount will be set from Encore after repay sync (refreshSummary)
+
+        if (!lmsEnabled && loan.getOutstandingAmount().compareTo(BigDecimal.ZERO) <= 0) {
             loan.setOutstandingAmount(BigDecimal.ZERO);
             loan.setStatus(LoanStatus.CLOSED);
             loan.setClosureDate(LocalDate.now());
@@ -641,6 +646,21 @@ public class LoanService {
         } catch (Exception e) {
             log.error("PLP LMS repayment hook failed for {} (non-blocking): {}", loan.getLoanNumber(), e.getMessage(), e);
         }
+
+        if (lmsEnabled && loan.getStatus() != LoanStatus.CLOSED) {
+            // After Encore sync, refreshSummary updates outstandingAmount from payOffAndDueAmount
+            // Reload the loan to get the updated value
+            loan = loanRepository.findById(loan.getId()).orElse(loan);
+            if (loan.getOutstandingAmount() != null && loan.getOutstandingAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                loan.setOutstandingAmount(BigDecimal.ZERO);
+                loan.setStatus(LoanStatus.CLOSED);
+                loan.setClosureDate(LocalDate.now());
+                log.info("Loan closed (LMS payoff zero): {}", loan.getLoanNumber());
+                releaseLimitsOnClosure(loan);
+                loanRepository.save(loan);
+            }
+        }
+
         if (loan.getStatus() == LoanStatus.CLOSED
                 && "PAY_DAY_LOAN".equals(loan.getProductType())
                 && loan.getSalaryDataId() != null) {
@@ -650,6 +670,52 @@ public class LoanService {
         loanEventPublisher.publishAuditEvent("LOAN", loan.getId().toString(), "REPAYMENT",
                 null, null, null, "{\"repaidAmount\":" + repaidAmount + ",\"outstanding\":" + loan.getOutstandingAmount() + ",\"status\":\"" + loan.getStatus() + "\"}");
         return loan;
+    }
+
+    /**
+     * Returns the payoff amount for a loan. If LMS is enabled and reachable, fetches it from Encore;
+     * otherwise returns the locally computed outstanding amount.
+     */
+    public BigDecimal getPayoffAmount(UUID loanId) {
+        Loan loan = getLoan(loanId);
+        BigDecimal lmsPayoff = plpLmsOrchestrator.fetchPayoffAmount(loan);
+        if (lmsPayoff != null) {
+            return lmsPayoff;
+        }
+        return loan.getOutstandingAmount();
+    }
+
+    private void releaseLimitsOnClosure(Loan loan) {
+        UUID limitSp = resolveLimitSubProgramIdForDisbursement(loan);
+        if (limitSp != null && loan.getDisbursedAmount() != null) {
+            try {
+                subProgramLimits.releaseSubProgramLimits(limitSp, loan.getBorrowerId(), loan.getDisbursedAmount());
+                log.info("Sub-program limit released (LMS closure) subProgram={} borrower={} amount={}",
+                        limitSp, loan.getBorrowerId(), loan.getDisbursedAmount());
+            } catch (Exception e) {
+                log.error("CRITICAL: Failed sub-program limit release subProgram={} borrower={} amount={}: {}",
+                        limitSp, loan.getBorrowerId(), loan.getDisbursedAmount(), e.getMessage());
+                loanEventPublisher.publishLoanEvent("LIMIT_RELEASE_REQUIRED", loan);
+            }
+        } else if (loan.getDisbursedAmount() != null) {
+            try {
+                HttpEntity<Void> psPost = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
+                restTemplate.exchange(
+                        "http://program-service/api/v1/borrowers/{borrowerId}/limits/release?programId={programId}&amount={amount}",
+                        HttpMethod.POST,
+                        psPost,
+                        Map.class,
+                        loan.getBorrowerId(),
+                        loan.getProgramId(),
+                        loan.getDisbursedAmount());
+                log.info("Limit released (LMS closure) borrower={} program={} amount={}",
+                        loan.getBorrowerId(), loan.getProgramId(), loan.getDisbursedAmount());
+            } catch (Exception e) {
+                log.error("CRITICAL: Failed to release limit for borrower={} program={} amount={}: {}",
+                        loan.getBorrowerId(), loan.getProgramId(), loan.getDisbursedAmount(), e.getMessage());
+                loanEventPublisher.publishLoanEvent("LIMIT_RELEASE_REQUIRED", loan);
+            }
+        }
     }
 
     /**

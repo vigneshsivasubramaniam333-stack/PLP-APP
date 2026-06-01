@@ -134,6 +134,9 @@ public class ProgramService {
             String d = dto.getDescription().trim();
             program.setDescription(d.isEmpty() ? null : d);
         }
+        if (dto.getMarginPercent() != null) {
+            program.setMarginPercent(dto.getMarginPercent());
+        }
         if (dto.getConfig() != null && !dto.getConfig().isEmpty()) {
             Map<String, Object> merged =
                     program.getConfig() == null ? new HashMap<>() : new HashMap<>(program.getConfig());

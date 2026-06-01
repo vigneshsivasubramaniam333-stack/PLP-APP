@@ -83,6 +83,8 @@ export interface Program {
   anchorLimit?: number | null;
   maxBorrowerLimit: number;
   defaultInterestRate: number;
+  /** Margin deducted from net to get eligible amount. 0 means full eligibility. */
+  marginPercent?: number | null;
   maxTenureDays: number;
   status: ProgramStatus;
   createdAt?: string | null;

@@ -158,6 +158,59 @@ public class PlpLmsOrchestrator {
         }
     }
 
+    /**
+     * Fetches the live payoff amount from Encore for a loan.
+     * Returns null if LMS is not enabled, not active, or fetch fails.
+     */
+    public BigDecimal fetchPayoffAmount(Loan loan) {
+        ProgramLmsConfig cfg = programLmsConfigClient.fetch(loan.getProgramId());
+        if (!cfg.isLmsEnabled() || !encoreLmsApi.isActive()) {
+            return null;
+        }
+        String accountId = resolveAccountId(loan);
+        if (accountId == null) {
+            return null;
+        }
+        try {
+            JsonNode summary = encoreLmsApi.findSummaryFirstObject(accountId, true);
+            if (summary == null) {
+                return null;
+            }
+            // payOffAndDueAmount is the total closing amount (principal + interest + fees due)
+            if (summary.has("payOffAndDueAmount")) {
+                String val = summary.get("payOffAndDueAmount").asText();
+                if (val != null && !val.isBlank()) {
+                    BigDecimal payoff = new BigDecimal(val);
+                    log.info("PLP LMS payoff fetched: loan={} accountId={} payOffAndDueAmount={}",
+                            loan.getLoanNumber(), accountId, payoff);
+                    return payoff;
+                }
+            }
+            // Fallback to totalDemandDue if payOffAndDueAmount is absent
+            if (summary.has("totalDemandDue")) {
+                String val = summary.get("totalDemandDue").asText();
+                if (val != null && !val.isBlank()) {
+                    BigDecimal demandDue = new BigDecimal(val);
+                    log.info("PLP LMS payoff (totalDemandDue): loan={} accountId={} totalDemandDue={}",
+                            loan.getLoanNumber(), accountId, demandDue);
+                    return demandDue;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("PLP LMS payoff fetch failed for {} (returning null): {}", loan.getLoanNumber(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Returns true if LMS is enabled and active for the given loan's program.
+     */
+    public boolean isLmsEnabledForLoan(Loan loan) {
+        ProgramLmsConfig cfg = programLmsConfigClient.fetch(loan.getProgramId());
+        return cfg.isLmsEnabled() && encoreLmsApi.isActive();
+    }
+
     private void refreshSummary(Loan loan, String accountId) {
         try {
             JsonNode summary = encoreLmsApi.findSummaryFirstObject(accountId, true);
@@ -174,13 +227,20 @@ public class PlpLmsOrchestrator {
                     }
                 }
             }
-            if (summary.has("totalDemandDue")) {
+            BigDecimal lmsOutstanding = null;
+            if (summary.has("payOffAndDueAmount")) {
                 try {
-                    BigDecimal outstanding = new BigDecimal(summary.get("totalDemandDue").asText());
-                    mergeKfs(loan, "lmsOutstanding", outstanding.toPlainString());
-                } catch (Exception ignored) {
-                    /* keep local outstanding */
-                }
+                    lmsOutstanding = new BigDecimal(summary.get("payOffAndDueAmount").asText());
+                } catch (Exception ignored) { }
+            }
+            if (lmsOutstanding == null && summary.has("totalDemandDue")) {
+                try {
+                    lmsOutstanding = new BigDecimal(summary.get("totalDemandDue").asText());
+                } catch (Exception ignored) { }
+            }
+            if (lmsOutstanding != null) {
+                loan.setOutstandingAmount(lmsOutstanding);
+                mergeKfs(loan, "lmsOutstanding", lmsOutstanding.toPlainString());
             }
             mergeKfs(loan, "lmsSummary", summary.toString());
             loanRepository.save(loan);

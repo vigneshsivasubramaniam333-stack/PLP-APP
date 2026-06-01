@@ -30,6 +30,7 @@ export default function ProgramsPage() {
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
+    marginPercent: '',
     maxInvoiceAgeDays: '',
     minInvoiceAmount: '',
     minDaysToDueDate: '',
@@ -44,6 +45,7 @@ export default function ProgramsPage() {
     programLimit: '',
     maxBorrowerLimit: '',
     defaultInterestRate: '',
+    marginPercent: '0',
     maxTenureDays: '30',
     maxConcurrentLoans: '1',
     gracePeriodDays: '3',
@@ -65,6 +67,7 @@ export default function ProgramsPage() {
     setEditForm({
       name: p.programName,
       description: p.description ?? '',
+      marginPercent: p.marginPercent != null ? String(p.marginPercent) : '',
       maxInvoiceAgeDays: cfg.maxInvoiceAgeDays != null ? String(cfg.maxInvoiceAgeDays) : '',
       minInvoiceAmount: cfg.minInvoiceAmount != null ? String(cfg.minInvoiceAmount) : '',
       minDaysToDueDate: cfg.minDaysToDueDate != null ? String(cfg.minDaysToDueDate) : '',
@@ -98,9 +101,16 @@ export default function ProgramsPage() {
       if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
       if (Object.keys(cfg).length > 0) cfgPayload = cfg;
 
+      const marginVal = editForm.marginPercent.trim();
+      const marginNum = marginVal !== '' ? parseFloat(marginVal) : undefined;
+      if (marginNum !== undefined && (Number.isNaN(marginNum) || marginNum < 0)) {
+        throw new Error('Margin % must be 0 or greater');
+      }
+
       await programApi.update(editProgram.id, {
         name: editForm.name.trim(),
         description: editForm.description.trim(),
+        ...(marginNum !== undefined ? { marginPercent: marginNum } : {}),
         ...(cfgPayload ? { config: cfgPayload } : {}),
       });
       setEditProgram(null);
@@ -130,6 +140,7 @@ export default function ProgramsPage() {
         programLimit: parseFloat(form.programLimit),
         maxBorrowerLimit: parseFloat(form.maxBorrowerLimit),
         defaultInterestRate: parseFloat(form.defaultInterestRate),
+        marginPercent: form.marginPercent ? parseFloat(form.marginPercent) : 0,
         maxTenureDays: parseInt(form.maxTenureDays, 10),
         maxConcurrentLoans: parseInt(form.maxConcurrentLoans, 10),
         gracePeriodDays: parseInt(form.gracePeriodDays, 10),
@@ -144,6 +155,7 @@ export default function ProgramsPage() {
         programLimit: '',
         maxBorrowerLimit: '',
         defaultInterestRate: '',
+        marginPercent: '0',
         maxTenureDays: '30',
         maxConcurrentLoans: '1',
         gracePeriodDays: '3',
@@ -238,6 +250,13 @@ export default function ProgramsPage() {
                     className={inputCls} placeholder="e.g., 18" required />
                 </div>
                 <div>
+                  <label className={labelCls}>Margin (%)</label>
+                  <input type="number" step="0.01" min="0" value={form.marginPercent}
+                    onChange={(e) => setForm({...form, marginPercent: e.target.value})}
+                    className={inputCls} placeholder="0" />
+                  <p className="text-[11px] text-slate-400 mt-1">0 = eligible equals net amount</p>
+                </div>
+                <div>
                   <label className={labelCls}>Max Tenure (days)</label>
                   <input type="number" value={form.maxTenureDays}
                     onChange={(e) => setForm({...form, maxTenureDays: e.target.value})}
@@ -301,6 +320,21 @@ export default function ProgramsPage() {
                   className={`${inputCls} min-h-[88px] resize-y`}
                   placeholder="Optional"
                 />
+              </div>
+              <div>
+                <label className={labelCls}>Margin (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={editForm.marginPercent}
+                  onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
+                  className={inputCls}
+                  placeholder="0 = no margin (eligible = net amount)"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Deducted from invoice net amount to calculate eligible amount. Leave blank or set to 0 for full eligibility.
+                </p>
               </div>
               <div className="pt-2 border-t border-slate-100">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -379,6 +413,7 @@ export default function ProgramsPage() {
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Consumed</th>
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Available</th>
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Interest Rate</th>
+              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Margin %</th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider max-w-[200px]">
                 Eligibility config
               </th>
@@ -419,6 +454,9 @@ export default function ProgramsPage() {
                   )}
                 </td>
                 <td className="px-5 py-4 text-right text-slate-600">{p.defaultInterestRate}% p.a.</td>
+                <td className="px-5 py-4 text-right text-slate-600">
+                  {p.marginPercent != null ? `${p.marginPercent}%` : '0%'}
+                </td>
                 <td className="px-5 py-4 text-xs text-slate-600 max-w-[220px]" title={fmtCfgSummary(parseEligibleCfg(p))}>
                   <span className="line-clamp-2">{fmtCfgSummary(parseEligibleCfg(p))}</span>
                 </td>
@@ -446,7 +484,7 @@ export default function ProgramsPage() {
             ))}
             {programs.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-5 py-12 text-center">
+                <td colSpan={10} className="px-5 py-12 text-center">
                   <div className="text-slate-400 text-sm">No programs created yet</div>
                   <p className="text-xs text-slate-400 mt-1">Click "Create Program" to get started</p>
                 </td>
