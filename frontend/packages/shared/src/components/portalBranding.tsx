@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 
-export const COMPANY_LEGAL_NAME = 'Billionloans Financial Services Pvt Ltd';
-export const TECH_LEGAL_NAME = 'Billionloans Technology Services Pvt Ltd';
+export const COMPANY_LEGAL_NAME = 'Credinnov';
+export const TECH_LEGAL_NAME = 'Credinnov';
 export const POWERED_BY_LINE = `Powered by ${TECH_LEGAL_NAME}`;
 export const BRAND_PRIMARY_LOGO_PATH = './assets/branding/BillionLoans_Logo_Final_noBG.png';
 export const BRAND_TECH_LOGO_PATH = './assets/branding/BillionTech_Logo_Final.png';
