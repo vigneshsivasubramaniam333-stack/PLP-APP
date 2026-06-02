@@ -5,7 +5,8 @@
 **LOS URL:** `http://credinnov-sandbox.senseitech.com/los/`  
 **PLP platform:** `http://credinnov-sandbox.senseitech.com/plp/`  
 **PLP anchor:** `http://credinnov-sandbox.senseitech.com/plp-anchor/`  
-**PLP borrower:** `http://credinnov-sandbox.senseitech.com/plp-borrower/`
+**PLP borrower:** `http://credinnov-sandbox.senseitech.com/plp-borrower/`  
+**Encore LMS UI:** `http://credinnov-sandbox.senseitech.com/encore-client/` (`vuser` / `vuser` — used by LOS and PLP `lending-service`)
 
 Billionloans demo users are **deactivated** when migration `V57__seed_credinnov_los_auth_users.sql` (LOS) / `V3__seed_credinnov_users.sql` (PLP) runs.
 
@@ -111,6 +112,18 @@ curl -s http://127.0.0.1:8182/actuator/health
 LOS must use `admin@credinnov.com` / `Bltest@123` (`PLP_INTEGRATION_EMAIL` in LOS `.env.prod`).
 ```
 
+## Encore LMS (PLP `lending-service`)
+
+When a program has **LMS entry = YES**, `plp-lending` calls the same Encore API as LOS (`ENCORE_BASE_URL` in `docker-compose.yml`).
+
+```bash
+cd /vol/PLP-APP
+git pull origin credinnov
+docker compose -f docker-compose.yml up -d --no-deps lending-service
+docker exec plp-lending wget -qO- --user=vuser --password=vuser \
+  "http://host.docker.internal:8091/encore/webservices/loans/accounts/findBankWorkingDate"
+```
+
 ## Deploy on EC2
 
 ```bash
@@ -122,6 +135,7 @@ docker compose -f docker-compose.prod.yml up -d --build los-core ui-service
 cd /vol/PLP-APP && git fetch && git checkout credinnov && git pull origin credinnov
 docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build iam-service
 docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d platform-ui anchor-portal borrower-portal
+docker compose -f docker-compose.yml up -d --no-deps lending-service
 ```
 
 Flyway runs migrations on service startup. To re-run on existing DB, restart `los_core` and `plp-iam` (or run SQL manually if migrations already applied).

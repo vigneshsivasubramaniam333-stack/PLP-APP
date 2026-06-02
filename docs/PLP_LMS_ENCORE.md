@@ -9,12 +9,15 @@
 
 ## Environment (lending-service)
 
-Mirror LOS Encore settings:
+Mirror LOS Encore settings (Credinnov sandbox):
 
-- `ENCORE_BASE_URL`, `ENCORE_API_USERNAME`, `ENCORE_API_PASSWORD`
+- `ENCORE_BASE_URL` — `http://host.docker.internal:8091/encore/` from Docker on EC2 (public: `http://credinnov-sandbox.senseitech.com/credinnov-encore-server/encore/`)
+- `ENCORE_API_USERNAME` / `ENCORE_API_PASSWORD` — `vuser` / `vuser` (same as Encore UI at `/encore-client/`)
 - `ENCORE_ADMIN_BRANCH`, `ENCORE_CURRENCY` (optional)
 
-Configured under `plp.lms.encore.*` in `lending-service` `application.yml`.
+Configured under `plp.lms.encore.*` in `lending-service` `application.yml` and `docker-compose.yml` (`lending-service` env).
+
+Restart after change: `docker compose up -d --no-deps lending-service`
 
 ## Program configuration
 

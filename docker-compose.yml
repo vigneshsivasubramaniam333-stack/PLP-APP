@@ -167,12 +167,15 @@ services:
     container_name: plp-lending
     ports:
       - "8183:8083"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
-      ENCORE_BASE_URL: https://core.dev.billionloans.com/encore/
-      ENCORE_API_USERNAME: billiontech
-      ENCORE_API_PASSWORD: billionTech@encore25
-      ENCORE_ADMIN_BRANCH: MGPP
+      # Credinnov sandbox Encore (team server on host :8091; UI at /encore-client/)
+      ENCORE_BASE_URL: ${ENCORE_BASE_URL:-http://host.docker.internal:8091/encore/}
+      ENCORE_API_USERNAME: ${ENCORE_API_USERNAME:-vuser}
+      ENCORE_API_PASSWORD: ${ENCORE_API_PASSWORD:-vuser}
+      ENCORE_ADMIN_BRANCH: ${ENCORE_ADMIN_BRANCH:-MGPP}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_lending
     depends_on:
       postgres:
