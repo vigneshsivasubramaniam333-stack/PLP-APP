@@ -71,9 +71,13 @@ public class EncoreClientProperties {
             retryBackoffMs = 0;
         }
         if (port <= 0 || port > 65535) {
-            log.warn("los.lms.encore.port was invalid ({}); using 8090", port);
+            log.warn("plp.lms.encore.port was invalid ({}); using 8090", port);
             port = 8090;
         }
+        log.info("PLP Encore LMS client configured: baseUrl={} apiUsername={} apiPasswordConfigured={} "
+                        + "openAccountEndpoint={} connectTimeoutMs={} readTimeoutMs={}",
+                baseUrl, apiUsername, apiPassword != null && !apiPassword.isBlank(),
+                api != null ? api.getCreateLoanAccount() : "-", connectTimeoutMs, readTimeoutMs);
     }
 
     @Data

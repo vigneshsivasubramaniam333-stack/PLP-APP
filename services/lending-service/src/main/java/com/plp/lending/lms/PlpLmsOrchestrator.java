@@ -96,6 +96,10 @@ public class PlpLmsOrchestrator {
             var loanOd = plpEncoreLmsAdapter.buildLoanOdAccount(params, borrower);
             String requestJson = objectMapper.writeValueAsString(loanOd);
             String transactionId = "PLP-SANCTION-" + UUID.randomUUID().toString().substring(0, 8);
+            log.info("[PLP][ENCORE] Sanction LMS open — loanNumber={} programId={} productCode={} productType={} "
+                            + "transactionId={} borrowerId={} loanOdAccount={}",
+                    loan.getLoanNumber(), loan.getProgramId(), productCode, loan.getProductType(),
+                    transactionId, loan.getBorrowerId(), requestJson);
             String accountId = encoreLmsApi.openLoanAccountWithJson(transactionId, requestJson);
 
             loan.setLmsAccountId(accountId);

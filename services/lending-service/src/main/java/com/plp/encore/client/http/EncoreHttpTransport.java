@@ -86,9 +86,7 @@ public class EncoreHttpTransport {
         log.info("event={} correlationId={} appId={} productCode={} method={} path={} baseUrl={} queryKeys={}",
                 LmsLogEvent.LMS_REQUEST_INITIATED, correlation, appId, prodCode, method, apiPath,
                 properties.getBaseUrl(), queryParams != null ? queryParams.keySet() : "[]");
-        log.debug("event={} correlationId={} appId={} productCode={} requestPayload={}",
-                LmsLogEvent.LMS_REQUEST_INITIATED, correlation, appId, prodCode,
-                LogSanitizer.maskForLog(requestBody != null ? requestBody : "", 4000));
+        logEncoreRequestDetails(method, apiPath, queryParams, requestBody, url);
 
         int attempts = 0;
         int maxAttempts = allowGetRetry ? 1 + Math.max(0, properties.getMaxRetriesForGet()) : 1;
@@ -142,6 +140,8 @@ public class EncoreHttpTransport {
                 log.error("event={} correlationId={} appId={} productCode={} method={} path={} status={} durationMs={} body={}",
                         LmsLogEvent.LMS_REQUEST_FAILED, correlation, appId, prodCode, method, apiPath,
                         response.statusCode(), ms, LogSanitizer.maskForLog(response.body(), 2000));
+                log.error("[PLP][ENCORE][RESPONSE] HTTP {} — see [PLP][ENCORE][REQUEST] lines above for full URL and payload",
+                        response.statusCode());
                 throw new RuntimeException(err);
 
             } catch (InterruptedException e) {
@@ -205,5 +205,31 @@ public class EncoreHttpTransport {
     private String buildBasicAuthHeader() {
         String credentials = properties.getApiUsername() + ":" + properties.getApiPassword();
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * INFO-level request dump for Encore team support (password never logged).
+     */
+    private void logEncoreRequestDetails(String method, String apiPath, Map<String, String> queryParams,
+                                         String requestBody, String fullUrl) {
+        int pwdLen = properties.getApiPassword() != null ? properties.getApiPassword().length() : 0;
+        log.info("[PLP][ENCORE][REQUEST] method={} path={} baseUrl={} apiUsername={} apiPasswordLength={} "
+                        + "authHeader=Basic (credentials base64-encoded, not logged)",
+                method, apiPath, properties.getBaseUrl(), properties.getApiUsername(), pwdLen);
+        log.info("[PLP][ENCORE][REQUEST] resolvedUrl={}", LogSanitizer.maskForLog(fullUrl, 16_000));
+        if (queryParams != null && !queryParams.isEmpty()) {
+            for (Map.Entry<String, String> entry : queryParams.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue() != null ? entry.getValue() : "";
+                int max = "loanOdAccount".equals(key) ? 16_000 : 2_000;
+                log.info("[PLP][ENCORE][REQUEST] queryParam.{}={}", key, LogSanitizer.maskForLog(value, max));
+            }
+        }
+        if (requestBody != null && !requestBody.isBlank()) {
+            log.info("[PLP][ENCORE][REQUEST] postBody={}", LogSanitizer.maskForLog(requestBody, 16_000));
+        } else {
+            log.info("[PLP][ENCORE][REQUEST] postBody=(empty — openAccount uses query params per bl-core)");
+        }
+        log.info("[PLP][ENCORE][REQUEST] headers: Accept=application/json, Content-Type=application/json, Authorization=Basic ***");
     }
 }
