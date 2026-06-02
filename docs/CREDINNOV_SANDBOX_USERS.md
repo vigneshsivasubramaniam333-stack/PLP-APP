@@ -83,7 +83,19 @@ curl -s -X POST http://127.0.0.1:8180/api/v1/auth/login \
 
 If IAM direct (8181) works but gateway (8180) returns 503, wait for Eureka or check `docker logs plp-iam --tail 80` and `docker logs plp-gateway --tail 80`.
 
-Eureka UI: http://127.0.0.1:8861 (from server) — **IAM-SERVICE** should appear UP.
+Eureka UI: http://127.0.0.1:8861 (from server) — **IAM-SERVICE** and **PROGRAM-SERVICE** should appear UP.
+
+## LOS → PLP anchor sync (503)
+
+Gateway route `POST /api/v1/integrations/los/anchors` → **program-service**. If login works but anchor sync returns 503, restart program service:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build program-service
+docker logs plp-program --tail 80
+curl -s http://127.0.0.1:8182/actuator/health
+```
+
+LOS must use `admin@credinnov.com` / `Bltest@123` (`PLP_INTEGRATION_EMAIL` in LOS `.env.prod`).
 ```
 
 ## Deploy on EC2
