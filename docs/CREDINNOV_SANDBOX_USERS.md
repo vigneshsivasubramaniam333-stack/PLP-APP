@@ -38,11 +38,14 @@ Billionloans demo users are **deactivated** when migration `V57__seed_credinnov_
 
 Browsers must **not** call `http://localhost:8180` from the public site. Docker UIs mount `frontend/packages/*/docker/env-config.js`, which must use **`/plp-api`** when the hostname is `credinnov-sandbox.senseitech.com` (requires nginx `location /plp-api/`).
 
-After updating env-config, restart PLP UI containers (no rebuild required):
+After updating env-config, **rebuild** PLP UI images (index.html must load `/plp/env-config.js`, not `/env-config.js`):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d platform-ui anchor-portal borrower-portal
+docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build platform-ui anchor-portal borrower-portal
 ```
+
+In the browser, open DevTools → Network → `env-config.js` should be  
+`http://credinnov-sandbox.senseitech.com/plp/env-config.js` with `VITE_API_BASE_URL: '/plp-api'`.
 
 Test API via nginx:
 

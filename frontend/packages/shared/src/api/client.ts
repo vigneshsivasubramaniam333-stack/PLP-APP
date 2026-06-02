@@ -20,6 +20,15 @@ function resolveApiBaseUrl(): string {
     const v = window.__ENV__.VITE_API_BASE_URL;
     if (v !== undefined && v !== null) return String(v).trim();
   }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('credinnov') || host.endsWith('senseitech.com')) {
+      return '/plp-api';
+    }
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:8180';
+    }
+  }
   return trimNonEmpty(import.meta.env?.VITE_API_BASE_URL as string | undefined) ?? '';
 }
 

@@ -1,5 +1,4 @@
-// Runtime environment config - overridden at deployment.
-// Local dev: call PLP API gateway directly (CORS enabled); avoids Vite proxy issues with Spring Gateway.
+// Copied to dist on build; overridden at runtime by docker/env-config.js mount on EC2.
 window.__ENV__ = {
-  VITE_API_BASE_URL: "http://127.0.0.1:8180",
+  VITE_API_BASE_URL: '/plp-api',
 };
