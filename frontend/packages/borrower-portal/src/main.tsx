@@ -50,7 +50,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/plp">
+      <BrowserRouter basename="/plp-borrower">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><BorrowerLayout /></ProtectedRoute>}>

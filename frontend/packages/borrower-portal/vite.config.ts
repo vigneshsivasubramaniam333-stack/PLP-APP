@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: frontendRoot,
-    base: '/plp/',
+    base: '/plp-borrower/',
     plugins: [tailwindcss(), react()],
     server: {
       // 3012 avoids LOS Grafana on 3002 when infra monitoring is enabled

@@ -47,6 +47,19 @@ docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build plat
 In the browser, open DevTools → Network → `env-config.js` should be  
 `http://credinnov-sandbox.senseitech.com/plp/env-config.js` with `VITE_API_BASE_URL: '/plp-api'`.
 
+### White page on `/plp-borrower/`
+
+The borrower app must use base path **`/plp-borrower/`** (not `/plp/`, which is the admin UI). If the page is blank, rebuild `borrower-portal` and ensure host nginx **does not rewrite** `/plp-borrower/` to `/plp/`:
+
+```nginx
+location /plp-borrower/ {
+    proxy_pass http://127.0.0.1:3300;
+    # ... same proxy headers as /plp-anchor/
+}
+```
+
+Copy from `LOS_APP/deploy/nginx/plp-host-locations.conf` if needed, then `sudo nginx -t && sudo systemctl reload nginx`.
+
 Test API via nginx:
 
 ```bash
