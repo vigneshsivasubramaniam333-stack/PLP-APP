@@ -54,6 +54,36 @@ curl -s -X POST http://127.0.0.1/plp-api/api/v1/auth/login \
   -H 'Host: credinnov-sandbox.senseitech.com' \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@credinnov.com","password":"Bltest@123"}'
+
+### 502 / 503 on login
+
+| Code | Meaning |
+|------|---------|
+| **502** (nginx HTML) | `plp-gateway` not listening on `127.0.0.1:8180` — container down or still starting |
+| **503** (JSON from gateway) | Gateway up but **iam-service** not registered in Eureka yet (or IAM crashed) |
+
+On EC2, run in order:
+
+```bash
+cd /vol/PLP-APP
+git pull origin credinnov
+docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build
+# Wait 2–3 minutes, then:
+
+docker ps --filter name=plp --format "table {{.Names}}\t{{.Status}}"
+curl -s http://127.0.0.1:8180/actuator/health
+curl -s http://127.0.0.1:8181/actuator/health
+curl -s -X POST http://127.0.0.1:8181/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@credinnov.com","password":"Bltest@123"}'
+curl -s -X POST http://127.0.0.1:8180/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@credinnov.com","password":"Bltest@123"}'
+```
+
+If IAM direct (8181) works but gateway (8180) returns 503, wait for Eureka or check `docker logs plp-iam --tail 80` and `docker logs plp-gateway --tail 80`.
+
+Eureka UI: http://127.0.0.1:8861 (from server) — **IAM-SERVICE** should appear UP.
 ```
 
 ## Deploy on EC2
