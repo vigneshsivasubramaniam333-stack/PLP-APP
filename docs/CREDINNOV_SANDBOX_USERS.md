@@ -6,7 +6,7 @@
 **PLP platform:** `http://credinnov-sandbox.senseitech.com/plp/`  
 **PLP anchor:** `http://credinnov-sandbox.senseitech.com/plp-anchor/`  
 **PLP borrower:** `http://credinnov-sandbox.senseitech.com/plp-borrower/`  
-**Encore LMS UI:** `http://credinnov-sandbox.senseitech.com/encore-client/` (`vuser` / `vuser` — used by LOS and PLP `lending-service`)
+**Encore LMS UI:** `http://credinnov-sandbox.senseitech.com/encore-client/` (`admin` / `password1` — used by LOS and PLP `lending-service`)
 
 Billionloans demo users are **deactivated** when migration `V57__seed_credinnov_los_auth_users.sql` (LOS) / `V3__seed_credinnov_users.sql` (PLP) runs.
 
@@ -120,7 +120,7 @@ When a program has **LMS entry = YES**, `plp-lending` calls the same Encore API 
 cd /vol/PLP-APP
 git pull origin credinnov
 docker compose -f docker-compose.yml up -d --no-deps lending-service
-docker exec plp-lending wget -qO- --user=vuser --password=vuser \
+docker exec plp-lending wget -qO- --user=admin --password=password1 \
   "http://host.docker.internal:8091/credinnov-encore-server/encore/webservices/loans/accounts/findBankWorkingDate"
 ```
 

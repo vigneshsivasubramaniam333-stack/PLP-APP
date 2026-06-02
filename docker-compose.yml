@@ -173,8 +173,8 @@ services:
       <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
       # Credinnov sandbox Encore (team server on host :8091; UI at /encore-client/)
       ENCORE_BASE_URL: ${ENCORE_BASE_URL:-http://host.docker.internal:8091/credinnov-encore-server/encore/}
-      ENCORE_API_USERNAME: ${ENCORE_API_USERNAME:-vuser}
-      ENCORE_API_PASSWORD: ${ENCORE_API_PASSWORD:-vuser}
+      ENCORE_API_USERNAME: ${ENCORE_API_USERNAME:-admin}
+      ENCORE_API_PASSWORD: ${ENCORE_API_PASSWORD:-password1}
       ENCORE_ADMIN_BRANCH: ${ENCORE_ADMIN_BRANCH:-MGPP}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_lending
     depends_on:
