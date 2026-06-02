@@ -121,7 +121,7 @@ cd /vol/PLP-APP
 git pull origin credinnov
 docker compose -f docker-compose.yml up -d --no-deps lending-service
 docker exec plp-lending wget -qO- --user=vuser --password=vuser \
-  "http://host.docker.internal:8091/encore/webservices/loans/accounts/findBankWorkingDate"
+  "http://host.docker.internal:8091/credinnov-encore-server/encore/webservices/loans/accounts/findBankWorkingDate"
 ```
 
 ## Deploy on EC2

@@ -172,7 +172,7 @@ services:
     environment:
       <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
       # Credinnov sandbox Encore (team server on host :8091; UI at /encore-client/)
-      ENCORE_BASE_URL: ${ENCORE_BASE_URL:-http://host.docker.internal:8091/encore/}
+      ENCORE_BASE_URL: ${ENCORE_BASE_URL:-http://host.docker.internal:8091/credinnov-encore-server/encore/}
       ENCORE_API_USERNAME: ${ENCORE_API_USERNAME:-vuser}
       ENCORE_API_PASSWORD: ${ENCORE_API_PASSWORD:-vuser}
       ENCORE_ADMIN_BRANCH: ${ENCORE_ADMIN_BRANCH:-MGPP}

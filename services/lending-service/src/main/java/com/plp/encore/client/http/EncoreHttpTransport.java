@@ -83,9 +83,9 @@ public class EncoreHttpTransport {
         String url = buildUrl(apiPath, queryParams);
         Instant start = Instant.now();
 
-        log.info("event={} correlationId={} appId={} productCode={} method={} path={} queryKeys={}",
+        log.info("event={} correlationId={} appId={} productCode={} method={} path={} baseUrl={} queryKeys={}",
                 LmsLogEvent.LMS_REQUEST_INITIATED, correlation, appId, prodCode, method, apiPath,
-                queryParams != null ? queryParams.keySet() : "[]");
+                properties.getBaseUrl(), queryParams != null ? queryParams.keySet() : "[]");
         log.debug("event={} correlationId={} appId={} productCode={} requestPayload={}",
                 LmsLogEvent.LMS_REQUEST_INITIATED, correlation, appId, prodCode,
                 LogSanitizer.maskForLog(requestBody != null ? requestBody : "", 4000));

@@ -11,7 +11,7 @@
 
 Mirror LOS Encore settings (Credinnov sandbox):
 
-- `ENCORE_BASE_URL` — `http://host.docker.internal:8091/encore/` from Docker on EC2 (public: `http://credinnov-sandbox.senseitech.com/credinnov-encore-server/encore/`)
+- `ENCORE_BASE_URL` — `http://host.docker.internal:8091/credinnov-encore-server/encore/` (Tomcat context path; **not** `...:8091/encore/` alone — that returns HTTP 404)
 - `ENCORE_API_USERNAME` / `ENCORE_API_PASSWORD` — `vuser` / `vuser` (same as Encore UI at `/encore-client/`)
 - `ENCORE_ADMIN_BRANCH`, `ENCORE_CURRENCY` (optional)
 
