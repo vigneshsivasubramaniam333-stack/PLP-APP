@@ -11,7 +11,7 @@
 
 Mirror LOS Encore settings (Credinnov sandbox):
 
-- `ENCORE_BASE_URL` — `http://credinnov-sandbox.senseitech.com/credinnov-encore-server/encore/` (via host nginx; **not** `...:8091/encore/` alone — that returns HTTP 404)
+- `ENCORE_BASE_URL` — `http://credinnov-sandbox.senseitech.com/credinnov-encore-server/` (via host nginx; **not** `...:8091/encore/` alone — that returns HTTP 404)
 - `ENCORE_API_USERNAME` / `ENCORE_API_PASSWORD` — `admin` / `password1` (same as Encore UI at `/encore-client/`)
 - `ENCORE_ADMIN_BRANCH`, `ENCORE_CURRENCY` (optional)
 
