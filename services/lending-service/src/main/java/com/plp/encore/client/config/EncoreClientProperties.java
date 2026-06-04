@@ -24,8 +24,8 @@ public class EncoreClientProperties {
     private String hostname = "localhost";
     private int port = 8090;
 
-    private String apiUsername = "";
-    private String apiPassword = "";
+    private String apiUsername = "admin";
+    private String apiPassword = "password1";
 
     private EncoreApiEndpoints api = new EncoreApiEndpoints();
 
