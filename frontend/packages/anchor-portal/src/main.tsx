@@ -7,7 +7,8 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import SalaryUploadPage from './pages/SalaryUploadPage';
-import InvoiceUploadPage from './pages/InvoiceUploadPage';
+import InvoicesPage from './pages/InvoicesPage';
+import InvoiceCreatePage from './pages/InvoiceCreatePage';
 import SettlementsPage from './pages/SettlementsPage';
 import ReportsPage from './pages/ReportsPage';
 import AnchorLayout from './layouts/AnchorLayout';
@@ -63,7 +64,9 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="salary-upload" element={<SalaryUploadPage />} />
-            <Route path="invoice-upload" element={<InvoiceUploadPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="invoices/create" element={<InvoiceCreatePage />} />
+            <Route path="invoice-upload" element={<Navigate to="/invoices" replace />} />
             <Route path="settlements" element={<SettlementsPage />} />
             <Route path="reports" element={<ReportsPage />} />
           </Route>

@@ -19,6 +19,8 @@ eureka:
       defaultZone: http://localhost:8861/eureka/
 
 plp:
+  iam:
+    base-url: http://localhost:8181
   storage:
     minio:
       endpoint: http://localhost:9010

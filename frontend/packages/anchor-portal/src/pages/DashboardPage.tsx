@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { anchorApi, portalApi, useAuth } from '@plp/shared';
+import { Link } from 'react-router-dom';
+import { anchorApi, portalApi, useAuth, CreditLimitDashboardSection, useAnchorCreditLimits } from '@plp/shared';
 import type { Anchor, Program, Invoice, Borrower } from '@plp/shared';
 
 function isAnchorUser(linkedType: string | null | undefined): boolean {
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   const [salaryRowCount, setSalaryRowCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { rows: limitRows, loading: limitsLoading } = useAnchorCreditLimits(anchorId);
 
   useEffect(() => {
     if (!anchorId) {
@@ -133,6 +135,13 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      <CreditLimitDashboardSection
+        rows={limitRows}
+        loading={limitsLoading}
+        title="Program credit limits"
+        subtitle="Limit, utilized, and available headroom for your programs and sub-programs"
+      />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <div className="flex items-center gap-3">
@@ -245,6 +254,12 @@ export default function DashboardPage() {
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Limit
                 </th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Utilized
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Available
+                </th>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Status
                 </th>
@@ -266,7 +281,15 @@ export default function DashboardPage() {
                       {p.productType === 'PAY_DAY_LOAN' ? 'Pay Day Loan' : 'Invoice Discounting'}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-700">{formatCurrency(p.programLimit)}</td>
+                  <td className="px-5 py-3.5 text-right font-medium text-slate-700 tabular-nums">{formatCurrency(p.programLimit)}</td>
+                  <td className="px-5 py-3.5 text-right font-medium text-amber-700 tabular-nums">
+                    {formatCurrency(Number(p.utilizedLimit) || 0)}
+                  </td>
+                  <td className="px-5 py-3.5 text-right font-medium text-emerald-700 tabular-nums">
+                    {formatCurrency(
+                      Number(p.availableLimit) || Math.max(0, Number(p.programLimit) - (Number(p.utilizedLimit) || 0)),
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-center">
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
@@ -296,7 +319,12 @@ export default function DashboardPage() {
             <h3 className="text-sm font-semibold text-slate-700">Recent invoices</h3>
             <p className="text-xs text-slate-500 mt-0.5">Latest rows for your anchor (up to 8)</p>
           </div>
-          <span className="text-xs text-slate-400">{invoices.length} total</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-400">{invoices.length} total</span>
+            <Link to="/invoices" className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+              View all →
+            </Link>
+          </div>
         </div>
         {recentInvoices.length > 0 ? (
           <div className="overflow-x-auto">

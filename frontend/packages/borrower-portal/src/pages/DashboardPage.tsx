@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loanApi, useAuth } from '@plp/shared';
+import { loanApi, useAuth, CreditLimitDashboardSection, useBorrowerCreditLimits } from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 const REFRESH_EVENT = 'plp-borrower-loans-changed';
@@ -43,6 +43,7 @@ export default function DashboardPage() {
 
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
+  const { rows: limitRows, loading: limitsLoading } = useBorrowerCreditLimits(borrowerId);
 
   const loadStats = useCallback(async () => {
     if (!borrowerId) {
@@ -87,11 +88,18 @@ export default function DashboardPage() {
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-8">
           Your profile is not linked as a borrower. Contact support if this is unexpected.
         </p>
-      ) : loading ? (
-        <div className="flex justify-center py-16 mb-8">
-          <div className="animate-pulse text-slate-400 text-sm">Loading your summary…</div>
-        </div>
-      ) : (
+      ) : null}
+
+      {borrowerId ? (
+        <CreditLimitDashboardSection
+          rows={limitRows}
+          loading={limitsLoading}
+          title="Your credit limits"
+          subtitle="Limit, utilized, and available headroom across your programs"
+        />
+      ) : null}
+
+      {borrowerId && !loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <StatCard label="Loans" value={String(stats.loanCount)} sub="All records" accent="slate" />
           <StatCard label="Total outstanding" value={formatCurrency(stats.totalOutstanding)} sub="DISBURSED + due" accent="amber" />
@@ -99,7 +107,11 @@ export default function DashboardPage() {
           <StatCard label="Overdue" value={formatCurrency(stats.overdueAmount)} sub="OVERDUE" accent="red" />
           <StatCard label="Pending requests" value={String(stats.pendingRequests)} sub="REQUESTED" accent="sky" />
         </div>
-      )}
+      ) : borrowerId && loading ? (
+        <div className="flex justify-center py-8 mb-8">
+          <div className="animate-pulse text-slate-400 text-sm">Loading loan summary…</div>
+        </div>
+      ) : null}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

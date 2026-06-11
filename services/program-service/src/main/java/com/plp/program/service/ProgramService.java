@@ -109,6 +109,14 @@ public class ProgramService {
         return programs;
     }
 
+    /** Anchor portal: programs linked to anchor with computed utilized / available headroom. */
+    @Transactional(readOnly = true)
+    public List<Program> listProgramsForAnchor(UUID anchorId) {
+        List<Program> programs = programRepository.findProgramsForAnchor(anchorId);
+        attachProgramLimitHeadroom(programs);
+        return programs;
+    }
+
     private void attachProgramLimitHeadroom(List<Program> programs) {
         for (Program p : programs) {
             BigDecimal sum = borrowerLimitRepository.sumUtilizedByProgramId(p.getId());

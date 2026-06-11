@@ -106,6 +106,8 @@ export const subProgramApi = {
     apiClient.post(`/api/v1/sub-programs/${id}/deactivate`, {}, { headers: lenderLoanActionHeaders() }),
   listBorrowers: (subProgramId: string) =>
     apiClient.get(`/api/v1/sub-programs/${subProgramId}/borrowers`),
+  getBorrowerLimitSummary: (subProgramId: string, borrowerId: string) =>
+    apiClient.get(`/api/v1/sub-programs/${subProgramId}/borrowers/${borrowerId}/limit-summary`),
   addBorrower: (subProgramId: string, payload: Record<string, unknown>) =>
     apiClient.post(`/api/v1/sub-programs/${subProgramId}/borrowers`, payload, {
       headers: lenderLoanActionHeaders(),
@@ -237,6 +239,7 @@ export const loanApi = {
     apiClient.post(`/api/v1/loans/${id}/cancel-disbursement`, {}, { headers: lenderLoanActionHeaders() }),
   repay: (id: string, amount: number) =>
     apiClient.post(`/api/v1/loans/${id}/repay`, { amount }, { headers: loanRepayHeaders() }),
+  getPayoff: (id: string) => apiClient.get(`/api/v1/loans/${id}/payoff`),
 };
 
 export const salaryApi = {

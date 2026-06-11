@@ -36,6 +36,16 @@ function Build-StartCommand([string]$JarPath, [hashtable]$Env) {
     return ($lines -join "; ")
 }
 
+# Host-run JARs must use localhost (defaults in application.yml point at Docker service names).
+$localRedis = @{
+    SPRING_DATA_REDIS_HOST = "localhost"
+    SPRING_DATA_REDIS_PORT = "6380"
+}
+$localRabbit = @{
+    SPRING_RABBITMQ_HOST = "localhost"
+    SPRING_RABBITMQ_PORT = "5673"
+}
+
 # Per-service env overrides (Postgres host port 5433, infra remapped in docker-compose.infra.yml)
 $services = @(
     @{
@@ -53,9 +63,8 @@ $services = @(
         port = 8180
         env  = @{
             SERVER_PORT = "8180"
-            SPRING_DATA_REDIS_PORT = "6380"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRedis
     },
     @{
         name = "IAM Service"
@@ -64,9 +73,8 @@ $services = @(
         env  = @{
             SERVER_PORT = "8181"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_iam"
-            SPRING_DATA_REDIS_PORT = "6380"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRedis
     },
     @{
         name = "Program Service"
@@ -75,11 +83,11 @@ $services = @(
         env  = @{
             SERVER_PORT = "8182"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_program"
-            SPRING_DATA_REDIS_PORT = "6380"
-            SPRING_RABBITMQ_PORT = "5673"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
             PLP_STORAGE_MINIO_ENDPOINT = "http://localhost:9010"
-        }
+            PLP_IAM_BASE_URL = "http://localhost:8181"
+            PLP_LOS_INTEGRATION_API_KEY = "plp-los-integration-dev-key"
+        } + $localRedis + $localRabbit
     },
     @{
         name = "Lending Service"
@@ -88,10 +96,8 @@ $services = @(
         env  = @{
             SERVER_PORT = "8183"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_lending"
-            SPRING_DATA_REDIS_PORT = "6380"
-            SPRING_RABBITMQ_PORT = "5673"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRedis + $localRabbit
     },
     @{
         name = "Integration Service"
@@ -100,9 +106,8 @@ $services = @(
         env  = @{
             SERVER_PORT = "8184"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_integration"
-            SPRING_RABBITMQ_PORT = "5673"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRabbit
     },
     @{
         name = "Notification Service"
@@ -111,9 +116,8 @@ $services = @(
         env  = @{
             SERVER_PORT = "8185"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_notification"
-            SPRING_RABBITMQ_PORT = "5673"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRabbit
     },
     @{
         name = "Report Service"
@@ -122,9 +126,8 @@ $services = @(
         env  = @{
             SERVER_PORT = "8186"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_report&stringtype=unspecified"
-            SPRING_RABBITMQ_PORT = "5673"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
-        }
+        } + $localRabbit
     }
 )
 

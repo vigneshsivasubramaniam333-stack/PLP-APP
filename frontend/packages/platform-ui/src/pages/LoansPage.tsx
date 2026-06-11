@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { extractApiErrorMessage, getStoredAuthUser, lenderLoanCapabilities, loanApi } from '@plp/shared';
+import { extractApiErrorMessage, getStoredAuthUser, lenderLoanCapabilities, loanApi, loanHasLmsAccount, loanPrincipalAmount } from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 function humanizeStatus(status: string): string {
@@ -254,7 +254,10 @@ export default function LoansPage() {
                   </span>
                 </td>
                 <td className="px-5 py-3.5 text-right font-medium text-slate-700">
-                  {formatCurrency(l.requestedAmount)}
+                  {formatCurrency(loanPrincipalAmount(l))}
+                  {loanHasLmsAccount(l) ? (
+                    <span className="block text-[10px] font-normal text-sky-600">LMS</span>
+                  ) : null}
                 </td>
                 <td className="px-5 py-3.5 text-right text-slate-600">{l.interestRate}%</td>
                 <td className="px-5 py-3.5 text-center text-slate-600">{l.tenureDays}d</td>

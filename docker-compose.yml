@@ -67,12 +67,13 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: plp_rabbit
       RABBITMQ_DEFAULT_PASS: plp_rabbit_2026
+      RABBITMQ_ERLANG_COOKIE: plp_erlang_cookie_dev_2026
     ports:
       - "5673:5672"
       - "15673:15672"
     # Image declares VOLUME /var/lib/rabbitmq; anonymous volumes break on Windows (eacces on .erlang.cookie).
     tmpfs:
-      - /var/lib/rabbitmq
+      - /var/lib/rabbitmq:rw,noexec,nosuid,size=256m
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s

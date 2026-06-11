@@ -181,6 +181,9 @@ export interface Loan {
   dueDate: string;
   /** ISO timestamp when the loan row was created (lending-service). */
   createdAt?: string | null;
+  /** Encore LMS account id when program lms_entry_in=YES. */
+  lmsAccountId?: string | null;
+  kfsData?: Record<string, unknown> | null;
   /** Lending-service may store pending disburse amount here between initiate and execute. */
   eligibilitySnapshot?: Record<string, unknown> | null;
 }

@@ -7,6 +7,7 @@ import com.plp.lending.model.dto.LoanRequestDTO;
 import com.plp.lending.model.entity.Loan;
 import com.plp.lending.security.LoanAccessGuard;
 import com.plp.lending.security.LoanAccessGuard.LoanMutation;
+import com.plp.lending.service.LoanRepaymentHistoryService;
 import com.plp.lending.service.LoanService;
 import com.plp.lending.service.kfs.KfsService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class LoanController {
 
     private final LoanService loanService;
+    private final LoanRepaymentHistoryService loanRepaymentHistoryService;
     private final KfsService kfsService;
     private final AuditService auditService;
 
@@ -318,6 +320,19 @@ public class LoanController {
                 "SUCCESS",
                 amount.toPlainString());
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
+    }
+
+    @GetMapping("/{id}/repayments")
+    public ResponseEntity<Map<String, Object>> listRepayments(
+            @PathVariable UUID id,
+            @RequestHeader(value = LoanAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Loan loan = loanService.getLoan(id);
+        LoanAccessGuard.requireLoanReadAccess(loan, rolesHeader, linkedEntityId, linkedEntityType);
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "data", loanRepaymentHistoryService.listForLoan(id)));
     }
 
     @GetMapping("/{id}/kfs")

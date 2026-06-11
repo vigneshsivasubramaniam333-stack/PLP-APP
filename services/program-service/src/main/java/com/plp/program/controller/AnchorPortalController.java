@@ -10,6 +10,7 @@ import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
 import com.plp.program.security.AnchorPortalInvoiceAuth;
 import com.plp.program.service.InvoiceService;
+import com.plp.program.service.ProgramService;
 import com.plp.program.service.SalaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class AnchorPortalController {
     private final SubProgramRepository subProgramRepository;
     private final SalaryService salaryService;
     private final InvoiceService invoiceService;
+    private final ProgramService programService;
 
     /**
      * Resolves anchor id from trusted gateway headers. Optional {@code queryAnchorId} must match when supplied.
@@ -106,7 +108,7 @@ public class AnchorPortalController {
             @RequestHeader(value = "X-Linked-Entity-Id", required = false) String linkedEntityId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
         UUID resolvedAnchorId = requireAnchorFromHeaders(linkedEntityType, linkedEntityId, anchorId, userId);
-        List<Program> programs = programRepository.findProgramsForAnchor(resolvedAnchorId);
+        List<Program> programs = programService.listProgramsForAnchor(resolvedAnchorId);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", programs));
     }
 

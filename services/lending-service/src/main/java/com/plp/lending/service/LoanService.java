@@ -14,8 +14,11 @@ import com.plp.lending.lms.PlpLmsOrchestrator;
 import com.plp.lending.security.LenderRoleAuthorization;
 import com.plp.lending.security.LoanAccessGuard;
 import com.plp.lending.model.entity.Loan;
+import com.plp.lending.model.entity.Repayment;
 import com.plp.lending.model.enums.LoanStatus;
+import com.plp.lending.model.enums.RepaymentStatus;
 import com.plp.lending.repository.LoanRepository;
+import com.plp.lending.repository.RepaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -115,6 +118,7 @@ public class LoanService {
     private final AuditService auditService;
     private final ProgramServiceSalarySlipClient salarySlipClient;
     private final PlpLmsOrchestrator plpLmsOrchestrator;
+    private final RepaymentRepository repaymentRepository;
 
     @Transactional
     public Loan requestLoan(Loan loan) {
@@ -269,6 +273,7 @@ public class LoanService {
             if (loan.getSubProgramId() == null) {
                 throw RestClientIntegrationMapper.noSubProgramForInvoiceDiscounting();
             }
+            blockInvoiceDiscountingLimitsAtRequest(loan);
         }
 
         loan.setLoanNumber(generateLoanNumber(loan.getProductType()));
@@ -300,7 +305,12 @@ public class LoanService {
             log.info(
                     "Invoice discounting loan ready for persistence; calling program-service mark-financing-requested invoiceId={}",
                     invId);
-            markInvoiceFinancingRequested(invId);
+            try {
+                markInvoiceFinancingRequested(invId);
+            } catch (RuntimeException | LendingBusinessException e) {
+                releaseInvoiceDiscountingLimitsIfBlocked(loan);
+                throw e;
+            }
             log.info(
                     "mark-financing-requested succeeded for invoiceId={}; persisting loan loanNumber={}",
                     invId,
@@ -367,6 +377,7 @@ public class LoanService {
         loan.setStatus(LoanStatus.REJECTED);
         loan.setRejectionReason(reason);
         loanRepository.save(loan);
+        releaseInvoiceDiscountingLimitsIfBlocked(loan);
         if ("PAY_DAY_LOAN".equals(loan.getProductType()) && loan.getSalaryDataId() != null) {
             salarySlipClient.patchSlipStatus(loan.getSalaryDataId(), SLIP_REJECTED_AGAIN);
         }
@@ -414,8 +425,7 @@ public class LoanService {
     }
 
     /**
-     * Treasury: withdraw from disbursement initiation. Program-service sub-program / borrower limits are not booked
-     * until {@link #markDisbursed} succeeds, so there is no limit release step for the standard pending state.
+     * Treasury: withdraw from disbursement initiation. Invoice-discounting limits blocked at finance request are released here.
      */
     @Transactional
     public Loan cancelDisbursement(UUID loanId) {
@@ -430,6 +440,8 @@ public class LoanService {
         if (loan.getInvoiceId() != null && "INVOICE_DISCOUNTING".equals(loan.getProductType())) {
             revertInvoiceFinancingRequested(loan.getInvoiceId());
         }
+
+        releaseInvoiceDiscountingLimitsIfBlocked(loan);
 
         loan.setStatus(LoanStatus.CANCELLED);
         loan.setRejectionReason("Disbursement cancelled");
@@ -484,8 +496,9 @@ public class LoanService {
 
         UUID limitSubProgramId = resolveLimitSubProgramIdForDisbursement(loan);
         boolean limitViaSubProgram = limitSubProgramId != null;
+        boolean limitAlreadyBlockedAtRequest = isLimitBlockedAtRequest(loan);
 
-        if (limitViaSubProgram) {
+        if (limitViaSubProgram && !limitAlreadyBlockedAtRequest) {
             try {
                 subProgramLimits.blockSubProgramLimits(limitSubProgramId, loan.getBorrowerId(), disbursedAmount);
                 log.info("Sub-program limit blocked subProgram={} borrower={} amount={}",
@@ -495,7 +508,13 @@ public class LoanService {
                 revertDisbursementPendingState(loan);
                 throw e;
             }
-        } else {
+        } else if (limitViaSubProgram && limitAlreadyBlockedAtRequest) {
+            log.info(
+                    "Sub-program limit already blocked at finance request subProgram={} borrower={} amount={}",
+                    limitSubProgramId,
+                    loan.getBorrowerId(),
+                    resolveLimitBlockedAmount(loan));
+        } else if (!limitAlreadyBlockedAtRequest) {
             if ("PAY_DAY_LOAN".equals(loan.getProductType())
                     || "INVOICE_DISCOUNTING".equals(loan.getProductType())) {
                 if (loan.isLegacyProgramLevelLimits()) {
@@ -578,6 +597,7 @@ public class LoanService {
             throw new RuntimeException("Repayment cannot be recorded. Loan status: " + loan.getStatus());
         }
         loan.setTotalRepaid(loan.getTotalRepaid().add(repaidAmount));
+        persistRepaymentRecord(loan, repaidAmount);
 
         boolean lmsEnabled = plpLmsOrchestrator.isLmsEnabledForLoan(loan);
         if (!lmsEnabled) {
@@ -685,19 +705,35 @@ public class LoanService {
         return loan.getOutstandingAmount();
     }
 
+    private void persistRepaymentRecord(Loan loan, BigDecimal repaidAmount) {
+        repaymentRepository.save(Repayment.builder()
+                .loanId(loan.getId())
+                .repaymentRef("RP-" + loan.getLoanNumber() + "-" + Instant.now().toEpochMilli())
+                .expectedAmount(repaidAmount)
+                .paidAmount(repaidAmount)
+                .paidDate(LocalDate.now())
+                .status(RepaymentStatus.SUCCESS)
+                .paymentMode("BORROWER_PORTAL")
+                .build());
+    }
+
     private void releaseLimitsOnClosure(Loan loan) {
+        BigDecimal releaseAmount = resolveLimitReleaseAmount(loan);
+        if (releaseAmount == null || releaseAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
         UUID limitSp = resolveLimitSubProgramIdForDisbursement(loan);
-        if (limitSp != null && loan.getDisbursedAmount() != null) {
+        if (limitSp != null) {
             try {
-                subProgramLimits.releaseSubProgramLimits(limitSp, loan.getBorrowerId(), loan.getDisbursedAmount());
+                subProgramLimits.releaseSubProgramLimits(limitSp, loan.getBorrowerId(), releaseAmount);
                 log.info("Sub-program limit released (LMS closure) subProgram={} borrower={} amount={}",
-                        limitSp, loan.getBorrowerId(), loan.getDisbursedAmount());
+                        limitSp, loan.getBorrowerId(), releaseAmount);
             } catch (Exception e) {
                 log.error("CRITICAL: Failed sub-program limit release subProgram={} borrower={} amount={}: {}",
-                        limitSp, loan.getBorrowerId(), loan.getDisbursedAmount(), e.getMessage());
+                        limitSp, loan.getBorrowerId(), releaseAmount, e.getMessage());
                 loanEventPublisher.publishLoanEvent("LIMIT_RELEASE_REQUIRED", loan);
             }
-        } else if (loan.getDisbursedAmount() != null) {
+        } else {
             try {
                 HttpEntity<Void> psPost = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
                 restTemplate.exchange(
@@ -707,15 +743,109 @@ public class LoanService {
                         Map.class,
                         loan.getBorrowerId(),
                         loan.getProgramId(),
-                        loan.getDisbursedAmount());
+                        releaseAmount);
                 log.info("Limit released (LMS closure) borrower={} program={} amount={}",
-                        loan.getBorrowerId(), loan.getProgramId(), loan.getDisbursedAmount());
+                        loan.getBorrowerId(), loan.getProgramId(), releaseAmount);
             } catch (Exception e) {
                 log.error("CRITICAL: Failed to release limit for borrower={} program={} amount={}: {}",
-                        loan.getBorrowerId(), loan.getProgramId(), loan.getDisbursedAmount(), e.getMessage());
+                        loan.getBorrowerId(), loan.getProgramId(), releaseAmount, e.getMessage());
                 loanEventPublisher.publishLoanEvent("LIMIT_RELEASE_REQUIRED", loan);
             }
         }
+        clearLimitBlockedSnapshot(loan);
+    }
+
+    private void blockInvoiceDiscountingLimitsAtRequest(Loan loan) {
+        UUID subProgramId = loan.getSubProgramId();
+        if (subProgramId == null) {
+            throw RestClientIntegrationMapper.noSubProgramForInvoiceDiscounting();
+        }
+        BigDecimal amount = loan.getRequestedAmount();
+        try {
+            subProgramLimits.blockSubProgramLimits(subProgramId, loan.getBorrowerId(), amount);
+            markLimitBlockedAtRequest(loan, amount);
+            log.info(
+                    "Invoice discounting limit blocked at finance request subProgram={} borrower={} amount={}",
+                    subProgramId,
+                    loan.getBorrowerId(),
+                    amount);
+        } catch (LendingBusinessException e) {
+            throw e;
+        }
+    }
+
+    private void releaseInvoiceDiscountingLimitsIfBlocked(Loan loan) {
+        if (!"INVOICE_DISCOUNTING".equals(loan.getProductType()) || !isLimitBlockedAtRequest(loan)) {
+            return;
+        }
+        BigDecimal amount = resolveLimitBlockedAmount(loan);
+        UUID subProgramId = resolveEffectiveInvoiceSubProgramId(loan);
+        if (subProgramId == null || amount == null) {
+            return;
+        }
+        try {
+            subProgramLimits.releaseSubProgramLimits(subProgramId, loan.getBorrowerId(), amount);
+            log.info(
+                    "Invoice discounting limit released subProgram={} borrower={} amount={}",
+                    subProgramId,
+                    loan.getBorrowerId(),
+                    amount);
+        } catch (Exception e) {
+            log.error(
+                    "CRITICAL: Failed to release invoice discounting limit subProgram={} borrower={} amount={}: {}",
+                    subProgramId,
+                    loan.getBorrowerId(),
+                    amount,
+                    e.getMessage());
+            loanEventPublisher.publishLoanEvent("LIMIT_RELEASE_REQUIRED", loan);
+        }
+        clearLimitBlockedSnapshot(loan);
+    }
+
+    private static final String SNAP_LIMIT_BLOCKED = "limitBlockedAtRequest";
+    private static final String SNAP_LIMIT_BLOCKED_AMOUNT = "limitBlockedAmount";
+
+    private void markLimitBlockedAtRequest(Loan loan, BigDecimal amount) {
+        Map<String, Object> snap = loan.getEligibilitySnapshot() == null
+                ? new HashMap<>()
+                : new HashMap<>(loan.getEligibilitySnapshot());
+        snap.put(SNAP_LIMIT_BLOCKED, Boolean.TRUE);
+        snap.put(SNAP_LIMIT_BLOCKED_AMOUNT, amount.toPlainString());
+        loan.setEligibilitySnapshot(snap);
+    }
+
+    private void clearLimitBlockedSnapshot(Loan loan) {
+        if (loan.getEligibilitySnapshot() == null) {
+            return;
+        }
+        Map<String, Object> snap = new HashMap<>(loan.getEligibilitySnapshot());
+        snap.remove(SNAP_LIMIT_BLOCKED);
+        snap.remove(SNAP_LIMIT_BLOCKED_AMOUNT);
+        loan.setEligibilitySnapshot(snap.isEmpty() ? null : snap);
+    }
+
+    private static boolean isLimitBlockedAtRequest(Loan loan) {
+        Map<String, Object> snap = loan.getEligibilitySnapshot();
+        return snap != null && Boolean.TRUE.equals(snap.get(SNAP_LIMIT_BLOCKED));
+    }
+
+    private static BigDecimal resolveLimitBlockedAmount(Loan loan) {
+        Map<String, Object> snap = loan.getEligibilitySnapshot();
+        if (snap == null || snap.get(SNAP_LIMIT_BLOCKED_AMOUNT) == null) {
+            return loan.getRequestedAmount();
+        }
+        try {
+            return new BigDecimal(String.valueOf(snap.get(SNAP_LIMIT_BLOCKED_AMOUNT)).trim());
+        } catch (NumberFormatException e) {
+            return loan.getRequestedAmount();
+        }
+    }
+
+    private static BigDecimal resolveLimitReleaseAmount(Loan loan) {
+        if (loan.getDisbursedAmount() != null && loan.getDisbursedAmount().compareTo(BigDecimal.ZERO) > 0) {
+            return loan.getDisbursedAmount();
+        }
+        return resolveLimitBlockedAmount(loan);
     }
 
     /**

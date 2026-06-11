@@ -80,9 +80,23 @@ See **[DOCKER-DESKTOP.md](./DOCKER-DESKTOP.md)** for `docker compose up` / `.\do
 
 ## Optional: LOS → PLP sync
 
-On LOS core only (env var, no code change):
+On LOS core (env vars when starting `los-core-service` with `local` profile):
 
 ```powershell
 $env:PLP_BASE_URL = "http://localhost:8180"
 $env:PLP_SYNC_ENABLED = "true"
+$env:PLP_INTEGRATION_EMAIL = "admin@credinnov.com"
+$env:PLP_INTEGRATION_PASSWORD = "Bltest@123"
+```
+
+Program-service (host JARs) must reach IAM on **8181** — `start-all.ps1` sets `PLP_IAM_BASE_URL=http://localhost:8181`. Without this, anchor sync hangs calling `iam-service:8081`.
+
+After Credinnov seed migration (`V3__seed_credinnov_users.sql`), `admin@plp.com` is **INACTIVE** in PLP IAM — LOS anchor/borrower push will fail with **401** if integration login still uses that account.
+
+Verify PLP login from the same machine as LOS:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8180/api/v1/auth/login" -Method POST `
+  -ContentType "application/json" `
+  -Body '{"email":"admin@credinnov.com","password":"Bltest@123"}'
 ```

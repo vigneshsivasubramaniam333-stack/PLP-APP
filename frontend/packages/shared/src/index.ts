@@ -14,3 +14,9 @@ export {
   PortalLoginPoweredBy,
   PortalPoweredByFooter,
 } from './components/portalBranding';
+export { CreditLimitDashboardSection } from './components/CreditLimitDisplay';
+export type { CreditLimitRow } from './components/CreditLimitDisplay';
+export { useBorrowerCreditLimits, useAnchorCreditLimits } from './hooks/useCreditLimits';
+export { fetchLoanPayoff, fetchLoanPayoffs, repaymentProgress } from './utils/loanPayoff';
+export type { LoanPayoffInfo } from './utils/loanPayoff';
+export { loanPrincipalAmount, loanHasLmsAccount } from './utils/loanDisplay';

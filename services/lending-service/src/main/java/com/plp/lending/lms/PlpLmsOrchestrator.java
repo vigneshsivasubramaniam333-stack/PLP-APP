@@ -105,6 +105,7 @@ public class PlpLmsOrchestrator {
             loan.setLmsAccountId(accountId);
             mergeKfs(loan, "lmsAccountId", accountId);
             loanRepository.save(loan);
+            refreshSummary(loan, accountId);
             recordOp(loan.getId(), OP_OPEN, accountId, STATUS_SUCCESS, requestJson, accountId, null);
             log.info("PLP LMS account opened loan={} accountId={}", loan.getLoanNumber(), accountId);
         } catch (Exception e) {
@@ -221,6 +222,7 @@ public class PlpLmsOrchestrator {
             if (summary == null) {
                 return;
             }
+            LmsSummaryAmountSync.apply(loan, summary);
             if (summary.has("maturityDate")) {
                 String md = summary.get("maturityDate").asText();
                 if (md != null && !md.isBlank()) {

@@ -1,15 +1,17 @@
 # Fix plp-rabbitmq ".erlang.cookie: eacces" on Windows Docker.
 Set-Location $PSScriptRoot
 
-Write-Host "Recreating PLP RabbitMQ (no data volume - Windows-safe)..." -ForegroundColor Cyan
-docker compose stop rabbitmq | Out-Null
+$compose = @("-f", "docker-compose.infra.yml")
+
+Write-Host "Recreating PLP RabbitMQ (Windows-safe, no data volume)..." -ForegroundColor Cyan
+docker compose @compose stop rabbitmq | Out-Null
 docker rm -f plp-rabbitmq | Out-Null
 
 foreach ($v in @("plp_plp_rabbitmq_data", "plp_rabbitmq_data")) {
     docker volume rm $v 2>$null | Out-Null
 }
 
-docker compose up -d rabbitmq
+docker compose @compose up -d rabbitmq
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Waiting for RabbitMQ (up to 90s)..." -ForegroundColor Yellow
@@ -33,7 +35,7 @@ else {
     Write-Host "Status: $(docker inspect plp-rabbitmq --format '{{.State.Status}} / health={{.State.Health.Status}}')" -ForegroundColor Yellow
 }
 
-Write-Host "Starting remaining PLP services..." -ForegroundColor Cyan
-docker compose up -d
+Write-Host "Starting remaining PLP infra..." -ForegroundColor Cyan
+docker compose @compose up -d
 
 Write-Host "Done. Check: docker compose ps" -ForegroundColor Green

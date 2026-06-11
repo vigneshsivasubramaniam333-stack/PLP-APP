@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiClient, extractApiErrorMessage, loanApi, useAuth } from '@plp/shared';
+import {
+  apiClient,
+  extractApiErrorMessage,
+  loanApi,
+  useAuth,
+  fetchLoanPayoffs,
+  repaymentProgress,
+  type LoanPayoffInfo,
+} from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 const REFRESH_STATS_EVENT = 'plp-borrower-loans-changed';
@@ -27,6 +35,7 @@ export default function RepaymentHistoryPage() {
   );
 
   const [loans, setLoans] = useState<LoanWithRepaymentTotals[]>([]);
+  const [payoffs, setPayoffs] = useState<Record<string, LoanPayoffInfo>>({});
   const [loading, setLoading] = useState(false);
   const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
   const [repayingId, setRepayingId] = useState<string | null>(null);
@@ -40,23 +49,31 @@ export default function RepaymentHistoryPage() {
     setLoading(true);
     loanApi
       .list({ borrowerId })
-      .then((res) => {
+      .then(async (res) => {
         const allLoans = (res.data?.data || []) as LoanWithRepaymentTotals[];
         const filtered = allLoans.filter((l) =>
           ['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE', 'CLOSED'].includes(String(l.status)),
         );
         setLoans(filtered);
+
+        const payoffMap = await fetchLoanPayoffs(filtered);
+        setPayoffs(payoffMap);
+
         setRepayAmounts((prev) => {
           const next = { ...prev };
           for (const l of filtered) {
             if (canRepayLoan(String(l.status)) && next[l.id] === undefined) {
-              next[l.id] = String(Number(l.outstandingAmount) || 0);
+              const payable = payoffMap[l.id]?.payoffAmount ?? (Number(l.outstandingAmount) || 0);
+              next[l.id] = String(payable);
             }
           }
           return next;
         });
       })
-      .catch(() => setLoans([]))
+      .catch(() => {
+        setLoans([]);
+        setPayoffs({});
+      })
       .finally(() => setLoading(false));
   }, [borrowerId]);
 
@@ -138,9 +155,11 @@ export default function RepaymentHistoryPage() {
       ) : (
         <div className="space-y-4">
           {loans.map((loan) => {
-            const tp = loan.totalRepayable ?? loan.outstandingAmount ?? 0;
-            const tr = loan.totalRepaid ?? 0;
-            const progress = tp > 0 ? Math.min(100, (tr / tp) * 100) : 0;
+            const payoff = payoffs[loan.id];
+            const payableAmount = payoff?.payoffAmount ?? (Number(loan.outstandingAmount) || 0);
+            const tr = Number(loan.totalRepaid) || 0;
+            const progress = repaymentProgress(tr, payableAmount);
+            const totalObligation = tr + payableAmount;
             return (
               <div key={loan.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                 <div className="flex justify-between items-start mb-4">
@@ -175,16 +194,20 @@ export default function RepaymentHistoryPage() {
                     <div className="text-sm font-bold text-slate-800 mt-0.5">{formatCurrency(loan.disbursedAmount)}</div>
                   </div>
                   <div className="bg-slate-50 rounded-lg p-3">
-                    <div className="text-xs text-slate-500">Total Repayable</div>
-                    <div className="text-sm font-bold text-slate-800 mt-0.5">{formatCurrency(loan.totalRepayable ?? 0)}</div>
+                    <div className="text-xs text-slate-500">
+                      {payoff?.fromLms ? 'Total obligation (LMS)' : 'Total obligation'}
+                    </div>
+                    <div className="text-sm font-bold text-slate-800 mt-0.5">{formatCurrency(totalObligation)}</div>
                   </div>
                   <div className="bg-emerald-50 rounded-lg p-3">
                     <div className="text-xs text-emerald-600">Repaid</div>
-                    <div className="text-sm font-bold text-emerald-700 mt-0.5">{formatCurrency(loan.totalRepaid ?? 0)}</div>
+                    <div className="text-sm font-bold text-emerald-700 mt-0.5">{formatCurrency(tr)}</div>
                   </div>
                   <div className="bg-red-50 rounded-lg p-3">
-                    <div className="text-xs text-red-600">Outstanding</div>
-                    <div className="text-sm font-bold text-red-700 mt-0.5">{formatCurrency(loan.outstandingAmount)}</div>
+                    <div className="text-xs text-red-600">
+                      {payoff?.fromLms ? 'Payable (LMS)' : 'Payable'}
+                    </div>
+                    <div className="text-sm font-bold text-red-700 mt-0.5">{formatCurrency(payableAmount)}</div>
                   </div>
                 </div>
 
@@ -210,7 +233,7 @@ export default function RepaymentHistoryPage() {
                           type="number"
                           step="0.01"
                           min={0}
-                          max={loan.outstandingAmount}
+                          max={payableAmount}
                           value={repayAmounts[loan.id] ?? ''}
                           onChange={(e) => setRepayAmounts((prev) => ({ ...prev, [loan.id]: e.target.value }))}
                           className="w-28 px-2 py-1 border border-slate-200 rounded text-xs text-right"

@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { portalApi, loanApi, extractApiErrorMessage, useAuth } from '@plp/shared';
+import {
+  portalApi,
+  loanApi,
+  extractApiErrorMessage,
+  useAuth,
+  fetchLoanPayoffs,
+  loanHasLmsAccount,
+  loanPrincipalAmount,
+  type LoanPayoffInfo,
+} from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 const REFRESH_STATS_EVENT = 'plp-borrower-loans-changed';
@@ -24,6 +33,7 @@ export default function MyLoansPage() {
   );
 
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [payoffs, setPayoffs] = useState<Record<string, LoanPayoffInfo>>({});
   const [loading, setLoading] = useState(true);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
@@ -41,11 +51,15 @@ export default function MyLoansPage() {
       const r = await portalApi.borrowerLoans(borrowerId);
       const rows = (r.data.data || []) as Loan[];
       setLoans(rows);
+      const repayable = rows.filter((l) => canBorrowerRepay(l.status));
+      const payoffMap = await fetchLoanPayoffs(repayable);
+      setPayoffs(payoffMap);
       setRepayAmounts((prev) => {
         const next = { ...prev };
         for (const l of rows) {
           if (canBorrowerRepay(l.status) && next[l.id] === undefined) {
-            next[l.id] = String(Number(l.outstandingAmount) || 0);
+            const payable = payoffMap[l.id]?.payoffAmount ?? (Number(l.outstandingAmount) || 0);
+            next[l.id] = String(payable);
           }
         }
         return next;
@@ -140,7 +154,7 @@ export default function MyLoansPage() {
                   Amount
                 </th>
                 <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Outstanding
+                  Payable
                 </th>
                 <th className="px-5 py-3.5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Tenure
@@ -157,7 +171,10 @@ export default function MyLoansPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loans.map((loan) => (
+              {loans.map((loan) => {
+                const payoff = payoffs[loan.id];
+                const payableAmount = payoff?.payoffAmount ?? (Number(loan.outstandingAmount) || 0);
+                return (
                 <tr key={loan.id} className="hover:bg-slate-50/80">
                   <td className="px-5 py-3.5 font-mono text-xs font-medium text-slate-700">{loan.loanNumber}</td>
                   <td className="px-5 py-3.5">
@@ -169,8 +186,18 @@ export default function MyLoansPage() {
                       {loan.productType === 'PAY_DAY_LOAN' ? 'PDL' : 'ID'}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-700">{formatCurrency(loan.requestedAmount)}</td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-700">{formatCurrency(loan.outstandingAmount)}</td>
+                  <td className="px-5 py-3.5 text-right font-medium text-slate-700">
+                    {formatCurrency(loanPrincipalAmount(loan))}
+                    {loanHasLmsAccount(loan) ? (
+                      <span className="block text-[10px] text-sky-600 font-normal">LMS</span>
+                    ) : null}
+                  </td>
+                  <td className="px-5 py-3.5 text-right font-medium text-slate-700">
+                    {formatCurrency(payableAmount)}
+                    {payoff?.fromLms ? (
+                      <span className="block text-[10px] text-sky-600 font-normal">LMS</span>
+                    ) : null}
+                  </td>
                   <td className="px-5 py-3.5 text-center text-slate-600">{loan.tenureDays}d</td>
                   <td className="px-5 py-3.5 text-center">
                     <LoanBadge status={loan.status} />
@@ -183,7 +210,7 @@ export default function MyLoansPage() {
                           type="number"
                           step="0.01"
                           min={0}
-                          max={loan.outstandingAmount}
+                          max={payableAmount}
                           value={repayAmounts[loan.id] ?? ''}
                           onChange={(e) =>
                             setRepayAmounts((prev) => ({ ...prev, [loan.id]: e.target.value }))
@@ -204,7 +231,8 @@ export default function MyLoansPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

@@ -18,7 +18,7 @@ const navGroups = [
   {
     label: 'Invoice Discounting',
     items: [
-      { path: '/invoice-upload', label: 'Invoice Upload', icon: DocIcon },
+      { path: '/invoices', label: 'Invoices', icon: DocIcon },
     ],
   },
   {
@@ -29,6 +29,11 @@ const navGroups = [
     ],
   },
 ];
+
+function isNavActive(pathname: string, itemPath: string): boolean {
+  if (itemPath === '/') return pathname === '/';
+  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+}
 
 export default function AnchorLayout() {
   const { user, logout } = useAuth();
@@ -49,7 +54,7 @@ export default function AnchorLayout() {
                 {group.label}
               </div>
               {group.items.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = isNavActive(location.pathname, item.path);
                 return (
                   <Link key={item.path} to={item.path}
                     className={`flex items-center gap-3 mx-2 px-3 py-2 rounded-lg text-[13px] font-medium ${
