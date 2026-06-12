@@ -10,6 +10,7 @@ import com.plp.lending.integration.ProgramServiceInvoiceSubProgramValidator;
 import com.plp.lending.integration.ProgramServiceProgramConfigClient;
 import com.plp.lending.integration.ProgramServiceSalarySlipClient;
 import com.plp.lending.integration.ProgramServiceSubProgramLimits;
+import com.plp.lending.lms.LmsPayableAmounts;
 import com.plp.lending.lms.PlpLmsOrchestrator;
 import com.plp.lending.security.LenderRoleAuthorization;
 import com.plp.lending.security.LoanAccessGuard;
@@ -702,7 +703,19 @@ public class LoanService {
         if (lmsPayoff != null) {
             return lmsPayoff;
         }
+        if (LmsPayableAmounts.shouldUsePrincipalFallback(loan)) {
+            return LmsPayableAmounts.principalOutstanding(loan);
+        }
         return loan.getOutstandingAmount();
+    }
+
+    /**
+     * Adjusts in-memory loan amounts for API responses when LMS summary sync failed (detached entities only).
+     */
+    public void applyResolvedAmountsForApi(Loan loan) {
+        if (LmsPayableAmounts.shouldUsePrincipalFallback(loan)) {
+            LmsPayableAmounts.applyPrincipalFallback(loan);
+        }
     }
 
     private void persistRepaymentRecord(Loan loan, BigDecimal repaidAmount) {

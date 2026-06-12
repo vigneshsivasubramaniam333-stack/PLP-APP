@@ -169,6 +169,7 @@ public class LoanController {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.FORBIDDEN, LoanAccessGuard.MSG_ACCESS_DENIED);
         }
+        loans.forEach(loanService::applyResolvedAmountsForApi);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", loans));
     }
 

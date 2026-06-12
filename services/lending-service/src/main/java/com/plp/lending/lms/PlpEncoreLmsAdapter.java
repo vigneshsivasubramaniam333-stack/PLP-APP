@@ -55,6 +55,8 @@ public class PlpEncoreLmsAdapter {
         acc.put("operationalStatus", "active");
         BigDecimal penalRate = p.penalInterestRate() != null ? p.penalInterestRate() : BigDecimal.ZERO;
         acc.put("penalInterestRate", penalRate.toPlainString());
+        // Encore findSummaries NPEs when preclosureFeeRate is null on the account (Credinnov sandbox).
+        acc.put("preclosureFeeRate", "0");
 
         String productCode = p.productCode() != null && !p.productCode().isBlank()
                 ? p.productCode()

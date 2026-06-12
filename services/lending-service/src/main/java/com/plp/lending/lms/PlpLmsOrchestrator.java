@@ -253,6 +253,12 @@ public class PlpLmsOrchestrator {
             recordOp(loan.getId(), OP_SUMMARY, accountId, STATUS_SUCCESS, null, summary.toString(), null);
         } catch (Exception e) {
             log.warn("PLP LMS summary refresh failed for {}: {}", loan.getLoanNumber(), e.getMessage());
+            if (LmsPayableAmounts.shouldUsePrincipalFallback(loan)) {
+                LmsPayableAmounts.applyPrincipalFallback(loan);
+                loanRepository.save(loan);
+                log.info("PLP LMS summary unavailable — using principal-based outstanding for {}: {}",
+                        loan.getLoanNumber(), loan.getOutstandingAmount());
+            }
         }
     }
 
