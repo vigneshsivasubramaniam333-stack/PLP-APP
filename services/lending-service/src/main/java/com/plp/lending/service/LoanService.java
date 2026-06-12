@@ -307,7 +307,7 @@ public class LoanService {
                     invId);
             try {
                 markInvoiceFinancingRequested(invId);
-            } catch (RuntimeException | LendingBusinessException e) {
+            } catch (RuntimeException e) {
                 releaseInvoiceDiscountingLimitsIfBlocked(loan);
                 throw e;
             }
