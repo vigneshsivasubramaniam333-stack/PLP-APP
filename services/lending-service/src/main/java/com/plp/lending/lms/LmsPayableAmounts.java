@@ -10,7 +10,7 @@ import java.math.BigDecimal;
  * Before LMS sync, PLP stores principal + projected interest on {@code outstandingAmount}; that estimate
  * must not be shown once disbursement has posted to Encore.
  */
-final class LmsPayableAmounts {
+public final class LmsPayableAmounts {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
 
@@ -43,7 +43,7 @@ final class LmsPayableAmounts {
         return loan.getRequestedAmount();
     }
 
-    static BigDecimal principalOutstanding(Loan loan) {
+    public static BigDecimal principalOutstanding(Loan loan) {
         BigDecimal principal = principalBase(loan);
         if (principal == null) {
             return ZERO;
@@ -55,7 +55,7 @@ final class LmsPayableAmounts {
     /**
      * True when stored outstanding still reflects the pre-LMS finance estimate (principal + projected interest/fees).
      */
-    static boolean shouldUsePrincipalFallback(Loan loan) {
+    public static boolean shouldUsePrincipalFallback(Loan loan) {
         if (!hasLmsAccount(loan) || !isDisbursedOrDue(loan)) {
             return false;
         }
@@ -70,7 +70,7 @@ final class LmsPayableAmounts {
         return stored.compareTo(principal) > 0;
     }
 
-    static void applyPrincipalFallback(Loan loan) {
+    public static void applyPrincipalFallback(Loan loan) {
         BigDecimal payable = principalOutstanding(loan);
         loan.setOutstandingAmount(payable);
         BigDecimal repaid = loan.getTotalRepaid() != null ? loan.getTotalRepaid() : ZERO;
