@@ -13,10 +13,13 @@ COPY services/notification-service/pom.xml services/notification-service/pom.xml
 COPY services/program-service/pom.xml services/program-service/pom.xml
 COPY services/report-service/pom.xml services/report-service/pom.xml
 COPY services/lending-service/src services/lending-service/src
-RUN for i in 1 2 3 4 5; do ./mvnw package -DskipTests -q -pl services/lending-service && break || echo "Attempt $i failed, retrying in 10s..." && sleep 10; done
+RUN ./mvnw dependency:go-offline -q -pl services/lending-service
+RUN ./mvnw package -DskipTests -q -pl services/lending-service
+RUN test -f services/lending-service/target/lending-service-*.jar
+
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 RUN addgroup -S plp && adduser -S plp -G plp
+COPY --from=builder --chown=plp:plp /build/services/lending-service/target/lending-service-*.jar app.jar
 USER plp
-COPY --from=builder /build/services/lending-service/target/*.jar app.jar
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
