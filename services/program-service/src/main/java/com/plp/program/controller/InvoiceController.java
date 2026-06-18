@@ -126,12 +126,25 @@ public class InvoiceController {
     }
 
     @GetMapping("/borrower/{borrowerId}")
-    public ResponseEntity<List<Invoice>> getByBorrower(
+    public ResponseEntity<?> getByBorrower(
             @PathVariable UUID borrowerId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         InvoiceAccessGuard.requireBorrowerPathMatchesOrLender(borrowerId, rolesHeader, linkedEntityId, linkedEntityType);
+        if (page != null || size != null) {
+            Map<String, Object> paged = invoiceService.listBorrowerInvoicesPaged(
+                    borrowerId,
+                    search,
+                    status,
+                    page != null ? page : 0,
+                    size != null ? size : 20);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
+        }
         return ResponseEntity.ok(invoiceService.getByBorrower(borrowerId));
     }
 

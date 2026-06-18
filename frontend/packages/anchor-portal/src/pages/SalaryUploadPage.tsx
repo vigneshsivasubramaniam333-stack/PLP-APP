@@ -264,7 +264,7 @@ export default function SalaryUploadPage() {
             <button
               onClick={() => void handleUpload()}
               disabled={uploading || !umbrellaProgramId}
-              className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              className="px-5 py-2.5 bt-btn bt-btn-primary disabled:opacity-50"
             >
               {uploading ? 'Uploading...' : 'Upload CSV'}
             </button>
@@ -391,7 +391,7 @@ export default function SalaryUploadPage() {
               <button
                 type="submit"
                 disabled={!umbrellaProgramId || borrowersPick.length === 0 || !manual.borrowerId}
-                className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                className="px-5 py-2.5 bt-btn bt-btn-primary disabled:opacity-50"
               >
                 Save entry
               </button>

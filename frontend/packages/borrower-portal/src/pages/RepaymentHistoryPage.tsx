@@ -242,7 +242,7 @@ export default function RepaymentHistoryPage() {
                           type="button"
                           disabled={repayingId === loan.id}
                           onClick={() => void handleRepay(loan)}
-                          className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50"
+                          className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-50"
                         >
                           {repayingId === loan.id ? 'Recording…' : 'Repay'}
                         </button>

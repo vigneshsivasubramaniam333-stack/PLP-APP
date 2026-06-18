@@ -61,6 +61,29 @@ public class ProgramService {
         if (program.getMaxBorrowerLimit() == null) {
             throw new RuntimeException("maxBorrowerLimit is required");
         }
+        if (program.getParameters() == null) {
+            program.setParameters(defaultProgramParameters());
+        } else {
+            program.setParameters(mergeProgramParameters(defaultProgramParameters(), program.getParameters()));
+        }
+        if (program.getLmsEntryIn() == null || program.getLmsEntryIn().isBlank()) {
+            program.setLmsEntryIn("NO");
+        }
+    }
+
+    private static Map<String, Object> defaultProgramParameters() {
+        Map<String, Object> p = new HashMap<>();
+        p.put("enablePaymentForBorrower", false);
+        p.put("autoDiscounting", false);
+        p.put("discountingDay", 1);
+        p.put("gapBetweenDiscountingDays", 0);
+        return p;
+    }
+
+    private static Map<String, Object> mergeProgramParameters(Map<String, Object> defaults, Map<String, Object> incoming) {
+        Map<String, Object> merged = new HashMap<>(defaults);
+        merged.putAll(incoming);
+        return merged;
     }
 
     private String generateUniqueProgramCode() {
@@ -154,6 +177,27 @@ public class ProgramService {
                 }
             }
             program.setConfig(merged);
+        }
+        if (dto.getParameters() != null && !dto.getParameters().isEmpty()) {
+            Map<String, Object> merged =
+                    program.getParameters() == null ? new HashMap<>() : new HashMap<>(program.getParameters());
+            for (Map.Entry<String, Object> e : dto.getParameters().entrySet()) {
+                if (e.getValue() != null) {
+                    merged.put(e.getKey(), e.getValue());
+                }
+            }
+            program.setParameters(merged);
+        }
+        if (dto.getLmsEntryIn() != null && !dto.getLmsEntryIn().isBlank()) {
+            String v = dto.getLmsEntryIn().trim().toUpperCase();
+            if (!"YES".equals(v) && !"NO".equals(v)) {
+                throw new RuntimeException("lmsEntryIn must be YES or NO");
+            }
+            program.setLmsEntryIn(v);
+        }
+        if (dto.getEncoreProductCode() != null) {
+            String code = dto.getEncoreProductCode().trim();
+            program.setEncoreProductCode(code.isEmpty() ? null : code);
         }
         Program saved = programRepository.save(program);
         log.info("Program {} metadata/config updated", saved.getProgramCode());

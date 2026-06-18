@@ -1,0 +1,12 @@
+@import './fonts.css';
+@import './tokens.css';
+@import './components.css';
+@import './layouts.css';
+@import './content-theme.css';
+
+/* Shared PLP portal base — import after tailwind in each portal index.css */
+:root {
+  --brand-accent: var(--bt-orange);
+  --brand-navy: var(--bt-gray-900);
+  --surface: var(--bt-gray-50);
+}

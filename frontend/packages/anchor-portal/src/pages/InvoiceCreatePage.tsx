@@ -7,6 +7,9 @@ import {
   portalApi,
   subProgramApi,
   useAuth,
+  BtPageHeader,
+  BtCard,
+  BtButton,
 } from '@plp/shared';
 import type { Program, Invoice, Borrower, SubProgram } from '@plp/shared';
 import {
@@ -197,15 +200,17 @@ export default function InvoiceCreatePage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <Link to="/invoices" className="text-sm font-medium text-emerald-600 hover:text-emerald-700 mb-2 inline-block">
-          ← Back to invoices
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-800">Create invoice</h1>
-        <p className="text-sm text-slate-500 mt-1">Upload a CSV batch or enter a single invoice manually</p>
-      </div>
+      <BtPageHeader
+        title="Create invoice"
+        description="Upload a CSV batch or enter a single invoice manually"
+        breadcrumb={
+          <Link to="/invoices" className="text-sm font-medium text-[var(--bt-orange)] hover:underline">
+            ← Back to invoices
+          </Link>
+        }
+      />
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <BtCard className="mb-6 p-5">
         <div className="max-w-xl">
           <label className={labelCls}>Sub-program (invoice discounting) *</label>
           <select
@@ -229,17 +234,15 @@ export default function InvoiceCreatePage() {
             <p className="text-xs text-amber-700 mt-1.5">No active invoice-discounting sub-programs for your anchor.</p>
           ) : null}
         </div>
-      </div>
+      </BtCard>
 
-      <div className="flex gap-1 mb-5 border-b border-slate-200">
+      <div className="bt-tabs">
         {(['upload', 'manual'] as const).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setMode(t)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px ${
-              mode === t ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
+            className={`bt-tab${mode === t ? ' active' : ''}`}
           >
             {t === 'upload' ? 'CSV upload' : 'Manual entry'}
           </button>
@@ -247,8 +250,8 @@ export default function InvoiceCreatePage() {
       </div>
 
       {mode === 'upload' ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Upload invoice CSV</h3>
+        <BtCard className="p-6">
+          <h3 className="text-sm font-semibold text-[var(--bt-gray-800)] mb-3">Upload invoice CSV</h3>
           <p className="text-xs text-slate-500 mb-4">
             Format:{' '}
             <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">
@@ -261,18 +264,14 @@ export default function InvoiceCreatePage() {
               type="button"
               onClick={() => void handleUpload()}
               disabled={uploading || !umbrellaProgramId}
-              className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              className="bt-btn bt-btn-primary disabled:opacity-50"
             >
               {uploading ? 'Uploading...' : 'Upload CSV'}
             </button>
           </div>
           {uploadResult ? (
             <div
-              className={`mt-4 p-4 rounded-lg text-sm ${
-                uploadResult.error
-                  ? 'bg-red-50 text-red-700 border border-red-200'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              }`}
+              className={`mt-4 p-4 rounded-lg text-sm bt-alert ${uploadResult.error ? 'bt-alert-error' : 'bt-alert-success'}`}
             >
               {uploadResult.error || (
                 <>
@@ -284,10 +283,11 @@ export default function InvoiceCreatePage() {
               )}
             </div>
           ) : null}
-        </div>
+        </BtCard>
       ) : (
-        <form onSubmit={handleManualSubmit} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Manual invoice entry</h3>
+        <BtCard className="p-6">
+          <form onSubmit={handleManualSubmit}>
+          <h3 className="text-sm font-semibold text-[var(--bt-gray-800)] mb-4">Manual invoice entry</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Invoice number *</label>
@@ -404,24 +404,16 @@ export default function InvoiceCreatePage() {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
-            <button
-              type="submit"
-              disabled={!umbrellaProgramId || borrowersPick.length === 0 || !manual.borrowerId}
-              className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-            >
+            <BtButton type="submit" disabled={!umbrellaProgramId || borrowersPick.length === 0 || !manual.borrowerId}>
               Save invoice
-            </button>
-            <Link to="/invoices" className="text-sm font-medium text-slate-500 hover:text-slate-700">
+            </BtButton>
+            <Link to="/invoices" className="text-sm font-medium text-[var(--bt-gray-500)] hover:text-[var(--bt-gray-700)]">
               Cancel
             </Link>
           </div>
           {manualMsg ? (
             <div
-              className={`mt-4 p-4 rounded-lg text-sm ${
-                manualMsg.startsWith('Error')
-                  ? 'bg-red-50 text-red-700 border border-red-200'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              }`}
+              className={`mt-4 p-4 rounded-lg text-sm bt-alert ${manualMsg.startsWith('Error') ? 'bt-alert-error' : 'bt-alert-success'}`}
             >
               {manualMsg}
               {!manualMsg.startsWith('Error') ? (
@@ -434,7 +426,8 @@ export default function InvoiceCreatePage() {
               ) : null}
             </div>
           ) : null}
-        </form>
+          </form>
+        </BtCard>
       )}
     </div>
   );

@@ -76,6 +76,16 @@ export default function SubProgramsPage() {
   const [addBorrowerForm, setAddBorrowerForm] = useState({ borrowerId: '', borrowerLimit: '' });
   const [actionMsg, setActionMsg] = useState('');
   const [busySubProgramId, setBusySubProgramId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editForm, setEditForm] = useState({
+    name: '',
+    interestRate: '',
+    marginPercent: '',
+    maxTenureDays: '',
+    subProgramLimit: '',
+  });
 
   const [form, setForm] = useState({
     programId: '',
@@ -146,6 +156,47 @@ export default function SubProgramsPage() {
 
   const openDetail = (sp: SubProgram) => {
     setDetail(sp);
+  };
+
+  const openEdit = (sp: SubProgram) => {
+    setDetail(sp);
+    setEditError('');
+    setEditForm({
+      name: sp.name,
+      interestRate: sp.interestRate != null ? String(sp.interestRate) : '',
+      marginPercent: sp.marginPercent != null ? String(sp.marginPercent) : '',
+      maxTenureDays: sp.maxTenureDays != null ? String(sp.maxTenureDays) : '',
+      subProgramLimit: sp.subProgramLimit != null ? String(sp.subProgramLimit) : '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detail) return;
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const payload: Record<string, unknown> = {
+        name: editForm.name.trim(),
+      };
+      if (editForm.interestRate.trim()) payload.interestRate = parseFloat(editForm.interestRate);
+      if (editForm.marginPercent.trim()) payload.marginPercent = parseFloat(editForm.marginPercent);
+      if (editForm.maxTenureDays.trim()) payload.maxTenureDays = parseInt(editForm.maxTenureDays, 10);
+      if (detail.status === 'DRAFT' && editForm.subProgramLimit.trim()) {
+        payload.subProgramLimit = parseFloat(editForm.subProgramLimit);
+      }
+      const res = await subProgramApi.update(detail.id, payload);
+      const updated = res.data.data as SubProgram;
+      setDetail(updated);
+      setEditOpen(false);
+      refreshSubProgramList();
+      setActionMsg('Sub-program updated.');
+    } catch (err: unknown) {
+      setEditError(extractApiErrorMessage(err, 'Failed to update sub-program'));
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const closeDetail = () => {
@@ -671,13 +722,24 @@ export default function SubProgramsPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold text-slate-800">Sub-program details</h2>
-              <button
-                type="button"
-                onClick={closeDetail}
-                className="text-slate-400 hover:text-slate-600 text-xl leading-none"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                {portalCaps.canEditProgramConfig && detail.status !== 'INACTIVE' ? (
+                  <button
+                    type="button"
+                    onClick={() => openEdit(detail)}
+                    className="text-xs font-semibold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={closeDetail}
+                  className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="p-6 space-y-3 text-sm border-b border-slate-100">
               <DetailRow label="ID" value={detail.id} mono />
@@ -767,6 +829,61 @@ export default function SubProgramsPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {detail && editOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-slate-800">Edit sub-program</h2>
+              <button type="button" onClick={() => setEditOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl">
+                ×
+              </button>
+            </div>
+            <form onSubmit={(e) => void handleEditSave(e)} className="p-6 space-y-4">
+              {editError ? (
+                <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{editError}</div>
+              ) : null}
+              <div>
+                <label className={labelCls}>Name</label>
+                <input className={inputCls} value={editForm.name} required
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Interest %</label>
+                  <input type="number" step="0.01" className={inputCls} value={editForm.interestRate}
+                    onChange={(e) => setEditForm({ ...editForm, interestRate: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelCls}>Margin %</label>
+                  <input type="number" step="0.01" className={inputCls} value={editForm.marginPercent}
+                    onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelCls}>Max tenure (days)</label>
+                  <input type="number" className={inputCls} value={editForm.maxTenureDays}
+                    onChange={(e) => setEditForm({ ...editForm, maxTenureDays: e.target.value })} />
+                </div>
+                {detail.status === 'DRAFT' ? (
+                  <div>
+                    <label className={labelCls}>Sub-program limit</label>
+                    <input type="number" step="0.01" className={inputCls} value={editForm.subProgramLimit}
+                      onChange={(e) => setEditForm({ ...editForm, subProgramLimit: e.target.value })} />
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setEditOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
+                  Cancel
+                </button>
+                <button type="submit" disabled={editSaving} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                  {editSaving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

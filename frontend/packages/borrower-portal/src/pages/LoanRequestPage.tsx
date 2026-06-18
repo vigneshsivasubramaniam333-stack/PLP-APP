@@ -440,7 +440,7 @@ export default function LoanRequestPage() {
                       payLoanSubmitSuccessLocked ||
                       !eligibility.eligible
                     }
-                    className="w-full bg-sky-600 text-white py-2.5 px-4 rounded-lg text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
+                    className="bt-btn bt-btn-primary w-full justify-center disabled:opacity-50"
                   >
                     {requesting || refreshingEligibilityAfterSubmit ? 'Submitting…' : 'Request Pay Loan'}
                   </button>

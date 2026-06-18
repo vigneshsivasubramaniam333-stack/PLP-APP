@@ -100,6 +100,8 @@ export const subProgramApi = {
     apiClient.get(`/api/v1/programs/${programId}/sub-programs`),
   create: (payload: Record<string, unknown>) =>
     apiClient.post('/api/v1/sub-programs', payload, { headers: lenderLoanActionHeaders() }),
+  update: (id: string, payload: Record<string, unknown>) =>
+    apiClient.put(`/api/v1/sub-programs/${id}`, payload, { headers: lenderLoanActionHeaders() }),
   approve: (id: string) =>
     apiClient.post(`/api/v1/sub-programs/${id}/approve`, {}, { headers: lenderLoanActionHeaders() }),
   deactivate: (id: string) =>
@@ -240,6 +242,7 @@ export const loanApi = {
   repay: (id: string, amount: number) =>
     apiClient.post(`/api/v1/loans/${id}/repay`, { amount }, { headers: loanRepayHeaders() }),
   getPayoff: (id: string) => apiClient.get(`/api/v1/loans/${id}/payoff`),
+  listRepayments: (id: string) => apiClient.get(`/api/v1/loans/${id}/repayments`),
 };
 
 export const salaryApi = {
@@ -296,8 +299,20 @@ export const portalApi = {
   borrowerInvoiceEligibility: (borrowerId: string, programId: string, invoiceId: string, requestedAmount: number) =>
     apiClient.get('/api/v1/portal/borrower/invoice-eligibility', { params: { borrowerId, programId, invoiceId, requestedAmount } }),
   borrowerRequestLoan: (data: Record<string, unknown>) => apiClient.post('/api/v1/portal/borrower/loans/request', data),
-  anchorInvoices: (anchorId: string, programId?: string) =>
-    apiClient.get('/api/v1/portal/anchor/invoices', { params: { anchorId, ...(programId ? { programId } : {}) } }),
+  anchorInvoices: (
+    anchorId: string,
+    opts?: { programId?: string; search?: string; status?: string; page?: number; size?: number },
+  ) =>
+    apiClient.get('/api/v1/portal/anchor/invoices', {
+      params: {
+        anchorId,
+        ...(opts?.programId ? { programId: opts.programId } : {}),
+        ...(opts?.search ? { search: opts.search } : {}),
+        ...(opts?.status ? { status: opts.status } : {}),
+        ...(opts?.page != null ? { page: opts.page } : {}),
+        ...(opts?.size != null ? { size: opts.size } : {}),
+      },
+    }),
   anchorCreateInvoice: (data: Record<string, unknown>) =>
     apiClient.post('/api/v1/portal/anchor/invoices', data),
   anchorUploadDigitalInvoice: (invoiceId: string, file: File) => {

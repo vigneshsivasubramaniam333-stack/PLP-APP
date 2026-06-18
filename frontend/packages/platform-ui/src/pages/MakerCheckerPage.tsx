@@ -3,6 +3,9 @@ import {
   anchorApi,
   borrowerApi,
   extractApiErrorMessage,
+  notifyErrorMessage,
+  notifyError,
+  notifySuccess,
   loanApi,
   programApi,
   subProgramApi,
@@ -87,18 +90,18 @@ export default function MakerCheckerPage() {
   }, [refreshAll, role]);
 
   const showSuccess = (msg: string) => {
-    setSuccessBanner(msg);
-    window.setTimeout(() => setSuccessBanner(''), 6000);
+    notifySuccess(msg);
   };
 
   const runAction = async (key: string, fn: () => Promise<unknown>, okMsg: string) => {
     setActingKey(key);
+    setPageError('');
     try {
       await fn();
       showSuccess(okMsg);
       await refreshAll();
     } catch (e: unknown) {
-      setPageError(extractApiErrorMessage(e, 'Action failed'));
+      notifyError(e, 'Action failed');
     } finally {
       setActingKey(null);
     }
@@ -231,7 +234,7 @@ export default function MakerCheckerPage() {
                               onClick={() =>
                                 runAction(key, () => programApi.updateStatus(p.id, 'ACTIVE'), 'Program approved')
                               }
-                              className="mr-2 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-40"
+                              className="bt-btn bt-btn-primary bt-btn-sm mr-2 disabled:opacity-40"
                             >
                               Approve
                             </button>
@@ -293,7 +296,7 @@ export default function MakerCheckerPage() {
                               onClick={() =>
                                 runAction(key, () => subProgramApi.approve(s.id), 'Sub-program approved')
                               }
-                              className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-40"
+                              className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-40"
                             >
                               Approve
                             </button>
@@ -348,7 +351,7 @@ export default function MakerCheckerPage() {
                               onClick={() =>
                                 runAction(key, () => anchorApi.updateStatus(a.id, 'ACTIVE'), 'Anchor approved')
                               }
-                              className="mr-2 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-40"
+                              className="bt-btn bt-btn-primary bt-btn-sm mr-2 disabled:opacity-40"
                             >
                               Approve
                             </button>
@@ -411,7 +414,7 @@ export default function MakerCheckerPage() {
                               onClick={() =>
                                 runAction(key, () => borrowerApi.updateStatus(b.id, 'ACTIVE'), 'Borrower approved')
                               }
-                              className="mr-2 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-40"
+                              className="bt-btn bt-btn-primary bt-btn-sm mr-2 disabled:opacity-40"
                             >
                               Approve
                             </button>
@@ -481,7 +484,7 @@ export default function MakerCheckerPage() {
                               onClick={() =>
                                 runAction(key, () => loanApi.approve(loan.id), 'Loan sanctioned')
                               }
-                              className="mr-2 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-40"
+                              className="bt-btn bt-btn-primary bt-btn-sm mr-2 disabled:opacity-40"
                             >
                               Sanction
                             </button>
@@ -493,7 +496,7 @@ export default function MakerCheckerPage() {
                                 if (reason == null) return;
                                 const t = reason.trim();
                                 if (!t) {
-                                  window.alert('Reason is required.');
+                                  notifyErrorMessage('Reason is required.');
                                   return;
                                 }
                                 void runAction(key, () => loanApi.reject(loan.id, t), 'Loan rejected');

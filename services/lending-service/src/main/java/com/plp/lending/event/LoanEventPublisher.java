@@ -1,6 +1,7 @@
 package com.plp.lending.event;
 
 import com.plp.lending.config.RabbitMQConfig;
+import com.plp.lending.integration.BorrowerContactClient;
 import com.plp.lending.model.entity.Loan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,15 +23,20 @@ import java.util.Map;
 public class LoanEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
+    private final BorrowerContactClient borrowerContactClient;
 
     @Async
     public void publishLoanEvent(String eventType, Loan loan) {
         try {
+            BorrowerContactClient.BorrowerContact contact =
+                    borrowerContactClient.fetch(loan.getBorrowerId());
             Map<String, Object> event = new HashMap<>();
             event.put("eventType", eventType);
             event.put("loanId", loan.getId().toString());
             event.put("loanNumber", loan.getLoanNumber());
             event.put("borrowerId", loan.getBorrowerId().toString());
+            event.put("borrowerName", contact.name());
+            event.put("borrowerEmail", contact.email());
             event.put("programId", loan.getProgramId() != null ? loan.getProgramId().toString() : null);
             event.put("anchorId", loan.getAnchorId() != null ? loan.getAnchorId().toString() : null);
             event.put("productType", loan.getProductType());

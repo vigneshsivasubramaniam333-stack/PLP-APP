@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loanApi, useAuth, CreditLimitDashboardSection, useBorrowerCreditLimits } from '@plp/shared';
+import {
+  loanApi,
+  useAuth,
+  CreditLimitDashboardSection,
+  useBorrowerCreditLimits,
+  BtPageHeader,
+  BtCard,
+  BtCardHeader,
+  BtStatCard,
+} from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 const REFRESH_EVENT = 'plp-borrower-loans-changed';
@@ -79,13 +88,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">Welcome back, {user?.fullName || 'Borrower'}</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage your loans and repayments</p>
-      </div>
+      <BtPageHeader
+        title={`Welcome back, ${user?.fullName || 'Borrower'}`}
+        description="Manage your loans and repayments"
+      />
 
       {!borrowerId ? (
-        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-8">
+        <p className="bt-alert bt-alert-warning text-sm mb-8">
           Your profile is not linked as a borrower. Contact support if this is unexpected.
         </p>
       ) : null}
@@ -101,25 +110,24 @@ export default function DashboardPage() {
 
       {borrowerId && !loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <StatCard label="Loans" value={String(stats.loanCount)} sub="All records" accent="slate" />
-          <StatCard label="Total outstanding" value={formatCurrency(stats.totalOutstanding)} sub="DISBURSED + due" accent="amber" />
-          <StatCard label="Amount due" value={formatCurrency(stats.amountDue)} sub="REPAYMENT_DUE" accent="orange" />
-          <StatCard label="Overdue" value={formatCurrency(stats.overdueAmount)} sub="OVERDUE" accent="red" />
-          <StatCard label="Pending requests" value={String(stats.pendingRequests)} sub="REQUESTED" accent="sky" />
+          <BtStatCard title="Loans" value={String(stats.loanCount)} subtitle="All records" accent="gray" />
+          <BtStatCard title="Total outstanding" value={formatCurrency(stats.totalOutstanding)} subtitle="DISBURSED + due" accent="amber" />
+          <BtStatCard title="Amount due" value={formatCurrency(stats.amountDue)} subtitle="REPAYMENT_DUE" accent="orange" />
+          <BtStatCard title="Overdue" value={formatCurrency(stats.overdueAmount)} subtitle="OVERDUE" accent="red" />
+          <BtStatCard title="Pending requests" value={String(stats.pendingRequests)} subtitle="REQUESTED" accent="blue" />
         </div>
       ) : borrowerId && loading ? (
         <div className="flex justify-center py-8 mb-8">
-          <div className="animate-pulse text-slate-400 text-sm">Loading loan summary…</div>
+          <div className="animate-pulse text-[var(--bt-gray-400)] text-sm">Loading loan summary…</div>
         </div>
       ) : null}
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Link
           to="/request-loan"
-          className="group bg-white rounded-xl border border-slate-200 p-5 hover:border-sky-300 hover:shadow-md"
+          className="group bt-card p-5 hover:border-[var(--bt-orange)] hover:shadow-md transition-colors"
         >
-          <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center mb-3 group-hover:bg-sky-100">
+          <div className="w-10 h-10 rounded-lg bg-[var(--bt-orange-light)] text-[var(--bt-orange)] flex items-center justify-center mb-3 group-hover:opacity-90">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path
                 strokeLinecap="round"
@@ -128,15 +136,15 @@ export default function DashboardPage() {
               />
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">Request Pay Day Loan</h3>
-          <p className="text-xs text-slate-500 mt-1">Check eligibility and apply for a salary advance</p>
+          <h3 className="text-sm font-semibold text-[var(--bt-gray-800)]">Request Pay Day Loan</h3>
+          <p className="text-xs text-[var(--bt-gray-500)] mt-1">Check eligibility and apply for a salary advance</p>
         </Link>
 
         <Link
           to="/invoice-discounting"
-          className="group bg-white rounded-xl border border-slate-200 p-5 hover:border-purple-300 hover:shadow-md"
+          className="group bt-card p-5 hover:border-[var(--bt-orange)] hover:shadow-md transition-colors"
         >
-          <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center mb-3 group-hover:bg-purple-100">
+          <div className="w-10 h-10 rounded-lg bg-[var(--bt-blue-bg)] text-[var(--bt-blue)] flex items-center justify-center mb-3 group-hover:opacity-90">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path
                 strokeLinecap="round"
@@ -145,15 +153,15 @@ export default function DashboardPage() {
               />
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">Invoice Discounting</h3>
-          <p className="text-xs text-slate-500 mt-1">Discount eligible invoices for immediate funds</p>
+          <h3 className="text-sm font-semibold text-[var(--bt-gray-800)]">Invoice Discounting</h3>
+          <p className="text-xs text-[var(--bt-gray-500)] mt-1">Discount eligible invoices for immediate funds</p>
         </Link>
 
         <Link
           to="/my-loans"
-          className="group bg-white rounded-xl border border-slate-200 p-5 hover:border-emerald-300 hover:shadow-md"
+          className="group bt-card p-5 hover:border-[var(--bt-green)] hover:shadow-md transition-colors"
         >
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:bg-emerald-100">
+          <div className="w-10 h-10 rounded-lg bg-[var(--bt-green-bg)] text-[var(--bt-green)] flex items-center justify-center mb-3 group-hover:opacity-90">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path
                 strokeLinecap="round"
@@ -162,15 +170,14 @@ export default function DashboardPage() {
               />
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-800">View My Loans</h3>
-          <p className="text-xs text-slate-500 mt-1">Track status, outstanding amounts, and repay</p>
+          <h3 className="text-sm font-semibold text-[var(--bt-gray-800)]">View My Loans</h3>
+          <p className="text-xs text-[var(--bt-gray-500)] mt-1">Track status, outstanding amounts, and repay</p>
         </Link>
       </div>
 
-      {/* How it works */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4">How Pay Day Loans Work</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+      <BtCard className="p-6">
+        <BtCardHeader title="How Pay Day Loans Work" />
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 mt-4">
           {[
             { step: '1', title: 'Salary Upload', desc: 'Your employer uploads salary data for the pay period' },
             { step: '2', title: 'Eligibility', desc: 'Eligible amount is calculated based on accumulated salary' },
@@ -179,42 +186,15 @@ export default function DashboardPage() {
             { step: '5', title: 'Repayment', desc: 'Amount is deducted from your next salary' },
           ].map((s) => (
             <div key={s.step} className="text-center">
-              <div className="w-8 h-8 rounded-full bg-sky-50 text-sky-600 font-bold text-sm mx-auto mb-2 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-[var(--bt-orange-light)] text-[var(--bt-orange)] font-bold text-sm mx-auto mb-2 flex items-center justify-center">
                 {s.step}
               </div>
-              <h4 className="text-xs font-semibold text-slate-700">{s.title}</h4>
-              <p className="text-[11px] text-slate-500 mt-1">{s.desc}</p>
+              <h4 className="text-xs font-semibold text-[var(--bt-gray-700)]">{s.title}</h4>
+              <p className="text-[11px] text-[var(--bt-gray-500)] mt-1">{s.desc}</p>
             </div>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  accent: 'slate' | 'amber' | 'orange' | 'red' | 'sky';
-}) {
-  const ring: Record<typeof accent, string> = {
-    slate: 'bg-slate-50 text-slate-700 ring-slate-200',
-    amber: 'bg-amber-50 text-amber-800 ring-amber-200',
-    orange: 'bg-orange-50 text-orange-800 ring-orange-200',
-    red: 'bg-red-50 text-red-800 ring-red-200',
-    sky: 'bg-sky-50 text-sky-800 ring-sky-200',
-  };
-  return (
-    <div className={`rounded-xl border shadow-sm p-5 ring-1 ${ring[accent]}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</div>
-      <div className="text-xl font-bold mt-1 tabular-nums">{value}</div>
-      <div className="text-[11px] opacity-70 mt-1">{sub}</div>
+      </BtCard>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 package com.plp.report.service;
 
+import com.plp.report.config.ReportServiceInternalHeaders;
 import com.plp.report.model.dto.DisbursementSummary;
 import com.plp.report.model.dto.OverdueReport;
 import com.plp.report.model.dto.PortfolioSummary;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -236,40 +238,32 @@ public class ReportGeneratorService {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchAllLoans() {
-        try {
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    "http://lending-service/api/v1/loans",
-                    HttpMethod.GET, null,
-                    new ParameterizedTypeReference<>() {});
-            Map<String, Object> body = response.getBody();
-            if (body != null && body.containsKey("data")) {
-                Object data = body.get("data");
-                if (data instanceof List) return (List<Map<String, Object>>) data;
-            }
-            return List.of();
-        } catch (Exception e) {
-            log.error("Failed to fetch loans: {}", e.getMessage());
-            return List.of();
+        HttpEntity<Void> entity = new HttpEntity<>(ReportServiceInternalHeaders.trustedInternalHeaders());
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                "http://lending-service/api/v1/loans",
+                HttpMethod.GET, entity,
+                new ParameterizedTypeReference<>() {});
+        Map<String, Object> body = response.getBody();
+        if (body != null && body.containsKey("data")) {
+            Object data = body.get("data");
+            if (data instanceof List) return (List<Map<String, Object>>) data;
         }
+        return List.of();
     }
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchAllPrograms() {
-        try {
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    "http://program-service/api/v1/programs",
-                    HttpMethod.GET, null,
-                    new ParameterizedTypeReference<>() {});
-            Map<String, Object> body = response.getBody();
-            if (body != null && body.containsKey("data")) {
-                Object data = body.get("data");
-                if (data instanceof List) return (List<Map<String, Object>>) data;
-            }
-            return List.of();
-        } catch (Exception e) {
-            log.error("Failed to fetch programs: {}", e.getMessage());
-            return List.of();
+        HttpEntity<Void> entity = new HttpEntity<>(ReportServiceInternalHeaders.trustedInternalHeaders());
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                "http://program-service/api/v1/programs",
+                HttpMethod.GET, entity,
+                new ParameterizedTypeReference<>() {});
+        Map<String, Object> body = response.getBody();
+        if (body != null && body.containsKey("data")) {
+            Object data = body.get("data");
+            if (data instanceof List) return (List<Map<String, Object>>) data;
         }
+        return List.of();
     }
 
     private BigDecimal toBigDecimal(Object value) {

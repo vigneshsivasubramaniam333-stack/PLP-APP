@@ -3,6 +3,7 @@ package com.plp.program.service;
 import com.plp.program.model.enums.ProductType;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.dto.SubProgramEditDto;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.repository.AnchorRepository;
@@ -187,6 +188,43 @@ public class SubProgramService {
     public List<SubProgramBorrower> listBorrowers(UUID subProgramId) {
         getSubProgram(subProgramId);
         return subProgramBorrowerRepository.findBySubProgramId(subProgramId);
+    }
+
+    @Transactional
+    public SubProgram updateSubProgram(UUID id, SubProgramEditDto dto) {
+        SubProgram sp = getSubProgram(id);
+        if ("INACTIVE".equals(sp.getStatus())) {
+            throw new RuntimeException("Inactive sub-programs cannot be edited");
+        }
+        if (dto.getName() != null && !dto.getName().isBlank()) {
+            sp.setName(dto.getName().trim());
+        }
+        if (dto.getInterestRate() != null) {
+            sp.setInterestRate(dto.getInterestRate());
+        }
+        if (dto.getMarginPercent() != null) {
+            sp.setMarginPercent(dto.getMarginPercent());
+        }
+        if (dto.getMaxTenureDays() != null) {
+            sp.setMaxTenureDays(dto.getMaxTenureDays());
+        }
+        if (dto.getSubProgramLimit() != null) {
+            if (!"DRAFT".equals(sp.getStatus())) {
+                throw new RuntimeException("Sub-program limit can only be changed while in DRAFT status");
+            }
+            if (dto.getSubProgramLimit().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("subProgramLimit must be greater than zero");
+            }
+            sp.setSubProgramLimit(dto.getSubProgramLimit());
+            if (sp.getUtilizedLimit() != null) {
+                sp.setAvailableLimit(dto.getSubProgramLimit().subtract(sp.getUtilizedLimit()).max(BigDecimal.ZERO));
+            } else {
+                sp.setAvailableLimit(dto.getSubProgramLimit());
+            }
+        }
+        SubProgram saved = subProgramRepository.save(sp);
+        log.info("Sub program updated: {} ({})", saved.getCode(), saved.getId());
+        return saved;
     }
 
     private static String normalizeToken(String s) {

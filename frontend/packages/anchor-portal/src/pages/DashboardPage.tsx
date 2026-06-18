@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { anchorApi, portalApi, useAuth, CreditLimitDashboardSection, useAnchorCreditLimits } from '@plp/shared';
+import {
+  anchorApi,
+  portalApi,
+  useAuth,
+  CreditLimitDashboardSection,
+  useAnchorCreditLimits,
+  BtPageHeader,
+  BtBadge,
+  BtCard,
+  BtCardHeader,
+  BtStatCard,
+} from '@plp/shared';
 import type { Anchor, Program, Invoice, Borrower } from '@plp/shared';
 
 function isAnchorUser(linkedType: string | null | undefined): boolean {
@@ -90,7 +101,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-slate-400 text-sm">Loading dashboard...</div>
+        <div className="animate-pulse text-[var(--bt-gray-400)] text-sm">Loading dashboard...</div>
       </div>
     );
   }
@@ -98,8 +109,8 @@ export default function DashboardPage() {
   if (!anchorId) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Anchor Dashboard</h1>
-        <p className="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+        <BtPageHeader title="Anchor Dashboard" description="Overview for your organisation" />
+        <p className="mt-4 bt-alert bt-alert-warning text-sm">
           Your account is not linked to an anchor organisation. Contact support.
         </p>
       </div>
@@ -109,14 +120,15 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Anchor Dashboard</h1>
-        <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</p>
+        <BtPageHeader title="Anchor Dashboard" description="Overview for your organisation" />
+        <p className="mt-4 bt-alert bt-alert-error text-sm">{error}</p>
       </div>
     );
   }
 
   const pdlPrograms = programs.filter((p) => p.productType === 'PAY_DAY_LOAN');
   const idPrograms = programs.filter((p) => p.productType === 'INVOICE_DISCOUNTING');
+  const payPeriod = new Date().toISOString().slice(0, 7);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
@@ -125,15 +137,10 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Anchor Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Overview for{' '}
-          <span className="font-medium text-slate-700">
-            {anchorInfo?.entityName ?? anchorInfo?.anchorCode ?? 'your organisation'}
-          </span>
-        </p>
-      </div>
+      <BtPageHeader
+        title="Anchor Dashboard"
+        description={`Overview for ${anchorInfo?.entityName ?? anchorInfo?.anchorCode ?? 'your organisation'}`}
+      />
 
       <CreditLimitDashboardSection
         rows={limitRows}
@@ -142,215 +149,67 @@ export default function DashboardPage() {
         subtitle="Limit, utilized, and available headroom for your programs and sub-programs"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-800">{programs.length}</div>
-              <div className="text-xs text-slate-500">Programs (your anchor)</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-800">{employees.length}</div>
-              <div className="text-xs text-slate-500">Employees / borrowers</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-800">{invoices.length}</div>
-              <div className="text-xs text-slate-500">Invoices</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-800">
-                {salaryRowCount === null ? '—' : salaryRowCount}
-              </div>
-              <div className="text-xs text-slate-500">Salary rows ({new Date().toISOString().slice(0, 7)})</div>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <BtStatCard title="Programs" value={String(programs.length)} subtitle="Your anchor programs" accent="orange" />
+        <BtStatCard title="Employees" value={String(employees.length)} subtitle="Linked borrowers" accent="green" />
+        <BtStatCard title="Invoices" value={String(invoices.length)} subtitle="Total submitted" accent="blue" />
+        <BtStatCard
+          title="Salary rows"
+          value={salaryRowCount === null ? '—' : String(salaryRowCount)}
+          subtitle={`Current period (${payPeriod})`}
+          accent="amber"
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-sm font-bold">
-            PDL
-          </div>
-          <div>
-            <div className="text-xl font-bold text-slate-800">{pdlPrograms.length}</div>
-            <div className="text-xs text-slate-500">Pay Day Loan programs</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-sm font-bold">
-            ID
-          </div>
-          <div>
-            <div className="text-xl font-bold text-slate-800">{idPrograms.length}</div>
-            <div className="text-xs text-slate-500">Invoice discounting programs</div>
-          </div>
-        </div>
+        <BtStatCard title="Pay Day Loan" value={String(pdlPrograms.length)} subtitle="PDL programs" accent="orange" />
+        <BtStatCard title="Invoice Discounting" value={String(idPrograms.length)} subtitle="ID programs" accent="purple" />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700">Your programs</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Tenant-scoped to your linked anchor only</p>
-        </div>
+      <BtCard className="overflow-hidden p-0 mb-8">
+        <BtCardHeader
+          title="Your programs"
+          actions={<span className="text-xs text-[var(--bt-gray-400)]">{programs.length} total</span>}
+        />
+        <p className="px-5 -mt-3 pb-4 text-xs text-[var(--bt-gray-500)] border-b border-[var(--bt-gray-100)]">
+          Tenant-scoped to your linked anchor only
+        </p>
         {programs.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Program
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Limit
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Utilized
-                </th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Available
-                </th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {programs.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50/80">
-                  <td className="px-5 py-3.5">
-                    <div className="font-medium text-slate-800">{p.programName}</div>
-                    <div className="text-xs text-slate-400 font-mono mt-0.5">{p.programCode}</div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${
-                        p.productType === 'PAY_DAY_LOAN' ? 'bg-sky-50 text-sky-700' : 'bg-purple-50 text-purple-700'
-                      }`}
-                    >
-                      {p.productType === 'PAY_DAY_LOAN' ? 'Pay Day Loan' : 'Invoice Discounting'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-700 tabular-nums">{formatCurrency(p.programLimit)}</td>
-                  <td className="px-5 py-3.5 text-right font-medium text-amber-700 tabular-nums">
-                    {formatCurrency(Number(p.utilizedLimit) || 0)}
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-medium text-emerald-700 tabular-nums">
-                    {formatCurrency(
-                      Number(p.availableLimit) || Math.max(0, Number(p.programLimit) - (Number(p.utilizedLimit) || 0)),
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-center">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        p.status === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                          : 'bg-slate-50 text-slate-600 ring-1 ring-slate-500/20'
-                      }`}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="px-5 py-12 text-center">
-            <div className="text-slate-400 text-sm">No programs found for your anchor</div>
-            <p className="text-xs text-slate-400 mt-1">Programs are provisioned by your lender</p>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700">Recent invoices</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Latest rows for your anchor (up to 8)</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-400">{invoices.length} total</span>
-            <Link to="/invoices" className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
-              View all →
-            </Link>
-          </div>
-        </div>
-        {recentInvoices.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="bt-table w-full">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Invoice #
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Net
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Status
-                  </th>
+                <tr>
+                  <th>Program</th>
+                  <th>Product</th>
+                  <th className="text-right">Limit</th>
+                  <th className="text-right">Utilized</th>
+                  <th className="text-right">Available</th>
+                  <th className="text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {recentInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50/80">
-                    <td className="px-5 py-3 font-mono text-xs font-medium text-slate-800">{inv.invoiceNumber}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{formatCurrency(inv.netAmount)}</td>
-                    <td className="px-5 py-3 text-center">
-                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
-                        {inv.status}
-                      </span>
+              <tbody>
+                {programs.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <div className="font-medium text-sm">{p.programName}</div>
+                      <div className="text-xs text-[var(--bt-gray-400)] font-mono">{p.programCode}</div>
+                    </td>
+                    <td>
+                      <BtBadge tone={p.productType === 'PAY_DAY_LOAN' ? 'blue' : 'gray'}>
+                        {p.productType === 'PAY_DAY_LOAN' ? 'Pay Day Loan' : 'Invoice Discounting'}
+                      </BtBadge>
+                    </td>
+                    <td className="text-right font-medium tabular-nums">{formatCurrency(p.programLimit)}</td>
+                    <td className="text-right font-medium tabular-nums text-[var(--bt-amber)]">
+                      {formatCurrency(Number(p.utilizedLimit) || 0)}
+                    </td>
+                    <td className="text-right font-medium tabular-nums text-[var(--bt-green)]">
+                      {formatCurrency(
+                        Number(p.availableLimit) || Math.max(0, Number(p.programLimit) - (Number(p.utilizedLimit) || 0)),
+                      )}
+                    </td>
+                    <td className="text-center">
+                      <BtBadge status={p.status}>{p.status}</BtBadge>
                     </td>
                   </tr>
                 ))}
@@ -358,9 +217,55 @@ export default function DashboardPage() {
             </table>
           </div>
         ) : (
-          <div className="px-5 py-10 text-center text-slate-400 text-sm">No invoices yet</div>
+          <div className="p-12 text-center">
+            <div className="text-[var(--bt-gray-400)] text-sm">No programs found for your anchor</div>
+            <p className="text-xs text-[var(--bt-gray-400)] mt-1">Programs are provisioned by your lender</p>
+          </div>
         )}
-      </div>
+      </BtCard>
+
+      <BtCard className="overflow-hidden p-0">
+        <BtCardHeader
+          title="Recent invoices"
+          actions={
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[var(--bt-gray-400)]">{invoices.length} total</span>
+              <Link to="/invoices" className="text-xs font-semibold text-[var(--bt-orange)] hover:underline">
+                View all →
+              </Link>
+            </div>
+          }
+        />
+        <p className="px-5 -mt-3 pb-4 text-xs text-[var(--bt-gray-500)] border-b border-[var(--bt-gray-100)]">
+          Latest rows for your anchor (up to 8)
+        </p>
+        {recentInvoices.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="bt-table w-full">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th className="text-right">Net</th>
+                  <th className="text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentInvoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td className="font-mono text-xs font-medium">{inv.invoiceNumber}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(inv.netAmount)}</td>
+                    <td className="text-center">
+                      <BtBadge status={inv.status}>{inv.status}</BtBadge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-10 text-center text-[var(--bt-gray-400)] text-sm">No invoices yet</div>
+        )}
+      </BtCard>
     </div>
   );
 }

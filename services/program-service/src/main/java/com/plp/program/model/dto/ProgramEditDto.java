@@ -18,4 +18,13 @@ public class ProgramEditDto {
 
     /** Partial eligibility-related entries merged into {@code Program.config}; null values skipped. */
     private Map<String, Object> config;
+
+    /** Operational toggles merged into {@code Program.parameters}. */
+    private Map<String, Object> parameters;
+
+    /** YES / NO — post disbursed invoice loans to Encore LMS. */
+    private String lmsEntryIn;
+
+    /** Encore product code when {@code lmsEntryIn=YES}. */
+    private String encoreProductCode;
 }

@@ -28,6 +28,26 @@ spring:
     port: 5672
     username: plp_rabbit
     password: plp_rabbit_2026
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:billiontechuat@gmail.com}
+    password: ${SMTP_PASSWORD:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+plp:
+  notification:
+    email:
+      from-address: ${EMAIL_FROM_ADDRESS:billiontechuat@gmail.com}
+      from-name: ${EMAIL_FROM_NAME:PLP Platform}
+      simulation-enabled: ${EMAIL_SIMULATION_ENABLED:false}
 
 eureka:
   client:

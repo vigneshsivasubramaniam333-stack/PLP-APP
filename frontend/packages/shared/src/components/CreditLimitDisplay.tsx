@@ -1,3 +1,5 @@
+import { BtCard, BtCardHeader } from './ui/BtCard';
+
 export interface CreditLimitRow {
   label: string;
   limit: number;
@@ -16,20 +18,6 @@ function utilizationPct(limit: number, utilized: number): number {
   return Math.min(100, Math.max(0, (utilized / limit) * 100));
 }
 
-type MetricAccent = 'slate' | 'amber' | 'emerald';
-
-const cardStyles: Record<MetricAccent, string> = {
-  slate: 'bg-slate-50 text-slate-800 ring-slate-200',
-  amber: 'bg-amber-50 text-amber-800 ring-amber-200',
-  emerald: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-};
-
-const labelStyles: Record<MetricAccent, string> = {
-  slate: 'text-slate-500',
-  amber: 'text-amber-600',
-  emerald: 'text-emerald-600',
-};
-
 /** Single dashboard card — each program has Limit / Utilized / Available as three cards side by side. */
 export function CreditLimitDashboardSection({
   rows,
@@ -44,105 +32,88 @@ export function CreditLimitDashboardSection({
 }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
-          {subtitle ? <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p> : null}
+      <BtCard className="overflow-hidden p-0 mb-8">
+        <BtCardHeader title={title} />
+        {subtitle ? (
+          <p className="px-5 -mt-3 pb-4 text-xs text-[var(--bt-gray-500)]">{subtitle}</p>
+        ) : null}
+        <div className="px-5 pb-8">
+          <div className="animate-pulse text-[var(--bt-gray-400)] text-sm">Loading limit details…</div>
         </div>
-        <div className="px-5 py-8">
-          <div className="animate-pulse text-slate-400 text-sm">Loading limit details…</div>
-        </div>
-      </div>
+      </BtCard>
     );
   }
   if (rows.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-      <div className="px-5 py-4 border-b border-slate-100">
-        <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
-        {subtitle ? <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p> : null}
-      </div>
+    <BtCard className="overflow-hidden p-0 mb-8">
+      <BtCardHeader title={title} />
+      {subtitle ? (
+        <p className="px-5 -mt-3 pb-4 text-xs text-[var(--bt-gray-500)] border-b border-[var(--bt-gray-100)]">
+          {subtitle}
+        </p>
+      ) : (
+        <div className="border-b border-[var(--bt-gray-100)]" />
+      )}
 
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-[var(--bt-gray-100)]">
         {rows.map((row) => (
           <ProgramLimitBlock key={row.label} row={row} />
         ))}
       </div>
-    </div>
+    </BtCard>
   );
 }
 
 function ProgramLimitBlock({ row }: { row: CreditLimitRow }) {
   const pct = utilizationPct(row.limit, row.utilized);
-  const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-sky-500';
+  const barColor = pct >= 90 ? 'bg-[var(--bt-red)]' : pct >= 70 ? 'bg-[var(--bt-amber)]' : 'bg-[var(--bt-orange)]';
   const badgeClass =
     pct >= 90
-      ? 'bg-red-50 text-red-700 ring-1 ring-red-600/20'
+      ? 'bt-badge bt-badge-red'
       : pct >= 70
-        ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
-        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20';
+        ? 'bt-badge bt-badge-amber'
+        : 'bt-badge bt-badge-green';
 
   return (
     <div className="px-5 py-5">
       <div className="mb-4">
-        <div className="text-sm font-semibold text-slate-800 leading-snug" title={row.label}>
+        <div className="text-sm font-semibold text-[var(--bt-gray-800)] leading-snug" title={row.label}>
           {row.label}
         </div>
-        <span className={`inline-flex items-center mt-2 px-2.5 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>
+        <span className={`inline-flex items-center mt-2 ${badgeClass}`}>
           {pct.toFixed(1)}% utilized
         </span>
-        <div className="w-full bg-slate-100 rounded-full h-2 mt-3">
+        <div className="w-full bg-[var(--bt-gray-100)] rounded-full h-2 mt-3">
           <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
 
-      <div
-        className="w-full"
-        style={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: '12px' }}
-      >
-        <LimitMetricCard
-          label="Limit"
-          value={formatInr(row.limit)}
-          sub="Sanctioned credit limit"
-          accent="slate"
-        />
-        <LimitMetricCard
-          label="Utilized"
-          value={formatInr(row.utilized)}
-          sub="Amount currently in use"
-          accent="amber"
-        />
-        <LimitMetricCard
-          label="Available"
-          value={formatInr(row.available)}
-          sub="Remaining headroom"
-          accent="emerald"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <LimitMetric title="Limit" value={formatInr(row.limit)} subtitle="Sanctioned credit limit" />
+        <LimitMetric title="Utilized" value={formatInr(row.utilized)} subtitle="Amount currently in use" valueClass="orange" />
+        <LimitMetric title="Available" value={formatInr(row.available)} subtitle="Remaining headroom" valueClass="green" />
       </div>
     </div>
   );
 }
 
-function LimitMetricCard({
-  label,
+function LimitMetric({
+  title,
   value,
-  sub,
-  accent,
+  subtitle,
+  valueClass,
 }: {
-  label: string;
+  title: string;
   value: string;
-  accent: MetricAccent;
-  sub: string;
+  subtitle: string;
+  valueClass?: 'orange' | 'green';
 }) {
   return (
-    <div
-      className={`rounded-xl border shadow-sm p-4 ring-1 flex flex-col min-w-0 ${cardStyles[accent]}`}
-      style={{ flex: '1 1 0%', minWidth: 0 }}
-    >
-      <span className={`text-xs font-medium uppercase tracking-wide ${labelStyles[accent]}`}>{label}</span>
-      <span className="text-base sm:text-lg font-bold tabular-nums mt-1 break-words">{value}</span>
-      <span className="text-[11px] opacity-70 mt-1 leading-snug">{sub}</span>
+    <div className="bt-stat min-w-0">
+      <div className="bt-stat-label">{title}</div>
+      <div className={`bt-stat-value ${valueClass ?? ''}`.trim()}>{value}</div>
+      <div className="bt-stat-sub">{subtitle}</div>
     </div>
   );
 }

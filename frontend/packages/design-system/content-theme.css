@@ -1,0 +1,281 @@
+/**
+ * Auto-themes legacy PLP slate/blue markup inside BillionTech app shells.
+ * Payment-Terms look: white cards, uppercase gray table headers, orange accents.
+ */
+
+.bt-app-canvas main {
+  color: var(--bt-gray-700);
+}
+
+/* Legacy page titles → BT page header typography */
+.bt-app-canvas main h1.text-2xl,
+.bt-app-canvas main h1.text-2xl.font-bold {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--bt-gray-900) !important;
+  letter-spacing: normal !important;
+  line-height: 1.3 !important;
+}
+
+.bt-app-canvas main h1.text-2xl + p.text-slate-500,
+.bt-app-canvas main h1.text-2xl + p.text-sm.text-slate-500,
+.bt-app-canvas main .text-slate-500.text-sm.mb-6 {
+  color: var(--bt-gray-500) !important;
+  font-size: 12.5px !important;
+}
+
+.bt-app-canvas main h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bt-gray-900);
+}
+
+.bt-app-canvas main h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bt-gray-800);
+}
+
+/* Cards — rounded-lg and rounded-xl legacy panels */
+.bt-app-canvas main .rounded-lg.border.border-slate-200.bg-white,
+.bt-app-canvas main .rounded-lg.border.border-slate-200.bg-white.shadow-sm,
+.bt-app-canvas main .bg-white.rounded-xl.border.border-slate-200,
+.bt-app-canvas main .bg-white.rounded-xl.border.border-slate-200.shadow-sm,
+.bt-app-canvas main .bg-white.rounded-xl.shadow-sm.border.border-slate-200 {
+  border-color: var(--bt-gray-200) !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.bt-app-canvas main .rounded-xl.border.border-slate-200.bg-white {
+  border-color: var(--bt-gray-200) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.bt-app-canvas main ul.divide-y.rounded-lg.border.border-slate-200.bg-white {
+  border-color: var(--bt-gray-200) !important;
+  border-radius: 10px !important;
+}
+
+/* Tables */
+.bt-app-canvas main table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bt-app-canvas main table thead th,
+.bt-app-canvas main table tr.bg-slate-50 th,
+.bt-app-canvas main .table-th {
+  background: var(--bt-gray-50) !important;
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--bt-gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--bt-gray-200);
+  white-space: nowrap;
+}
+
+.bt-app-canvas main table thead th:first-child,
+.bt-app-canvas main table tbody td:first-child {
+  padding-left: 16px;
+}
+
+.bt-app-canvas main table thead th:last-child,
+.bt-app-canvas main table tbody td:last-child {
+  padding-right: 16px;
+}
+
+.bt-app-canvas main table tbody td,
+.bt-app-canvas main .table-td {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--bt-gray-700);
+  border-bottom: 1px solid var(--bt-gray-100);
+  vertical-align: middle;
+}
+
+.bt-app-canvas main table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.bt-app-canvas main table tbody tr:hover td,
+.bt-app-canvas main table tbody tr.hover\:bg-slate-50\/80:hover {
+  background: var(--bt-gray-50) !important;
+}
+
+.bt-app-canvas main table a,
+.bt-app-canvas main a.text-blue-600,
+.bt-app-canvas main a.text-blue-700 {
+  color: var(--bt-orange) !important;
+  font-weight: 600;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.bt-app-canvas main table a:hover {
+  text-decoration: underline;
+}
+
+.bt-app-canvas main .overflow-x-auto.rounded-lg.border.border-slate-200.bg-white {
+  border-color: var(--bt-gray-200) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+/* Form controls */
+.bt-app-canvas main select:not(.bt-input),
+.bt-app-canvas main input[type='text']:not(.bt-input),
+.bt-app-canvas main input[type='email']:not(.bt-input),
+.bt-app-canvas main input[type='password']:not(.bt-input),
+.bt-app-canvas main input[type='number']:not(.bt-input),
+.bt-app-canvas main input[type='date']:not(.bt-input),
+.bt-app-canvas main input[type='search']:not(.bt-input),
+.bt-app-canvas main textarea:not(.bt-input) {
+  padding: 8px 11px;
+  border: 1px solid var(--bt-gray-300) !important;
+  border-radius: 7px !important;
+  font-size: 13px;
+  color: var(--bt-gray-900);
+  background: #fff !important;
+  outline: none;
+  font-family: inherit;
+}
+
+.bt-app-canvas main input.bg-slate-50,
+.bt-app-canvas main select.bg-slate-50,
+.bt-app-canvas main textarea.bg-slate-50 {
+  background: #fff !important;
+}
+
+.bt-app-canvas main select:not(.bt-input):focus,
+.bt-app-canvas main input:not(.bt-input):focus,
+.bt-app-canvas main textarea:not(.bt-input):focus {
+  border-color: var(--bt-orange) !important;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12) !important;
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.bt-app-canvas main label span.text-xs.text-slate-500,
+.bt-app-canvas main label.text-xs.text-slate-500,
+.bt-app-canvas main .block.text-xs.text-slate-500 {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--bt-gray-600) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 5px;
+}
+
+/* Primary actions — blue/slate/navy → orange BT */
+.bt-app-canvas main .bg-blue-600,
+.bt-app-canvas main button.bg-blue-600,
+.bt-app-canvas main a.bg-blue-600 {
+  background-color: var(--bt-orange) !important;
+  border-color: var(--bt-orange) !important;
+  color: #fff !important;
+  border-radius: 7px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.bt-app-canvas main .hover\:bg-blue-700:hover,
+.bt-app-canvas main button.hover\:bg-blue-700:hover {
+  background-color: var(--bt-orange-hover) !important;
+}
+
+.bt-app-canvas main button.bg-slate-900,
+.bt-app-canvas main .bg-slate-900.text-white {
+  background-color: var(--bt-orange) !important;
+  border-color: var(--bt-orange) !important;
+}
+
+.bt-app-canvas main button.border-slate-800.bg-slate-900,
+.bt-app-canvas main button.bg-slate-900 {
+  background: var(--bt-orange) !important;
+  border-color: var(--bt-orange) !important;
+  color: #fff !important;
+  border-radius: 7px !important;
+}
+
+/* Secondary buttons */
+.bt-app-canvas main button.border.border-slate-300.bg-white,
+.bt-app-canvas main .border-slate-300.bg-white.text-slate-700 {
+  border-color: var(--bt-gray-300) !important;
+  border-radius: 7px !important;
+  color: var(--bt-gray-700) !important;
+}
+
+.bt-app-canvas main button.border.border-slate-300.bg-white:hover,
+.bt-app-canvas main .hover\:bg-slate-50:hover {
+  background: var(--bt-gray-50) !important;
+}
+
+/* Tab / segment controls */
+.bt-app-canvas main .bg-slate-100.rounded-lg,
+.bt-app-canvas main .bg-slate-100.p-1.rounded-lg {
+  background: var(--bt-gray-100) !important;
+  border-radius: 8px !important;
+}
+
+.bt-app-canvas main button.bg-blue-600.text-white.shadow-sm,
+.bt-app-canvas main .bg-blue-600.text-white {
+  background: var(--bt-orange) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Status chips — keep semantic colors but soften to BT badge style */
+.bt-app-canvas main span.inline-flex.rounded.border.border-slate-200,
+.bt-app-canvas main .rounded-md.text-xs.font-medium.bg-slate-100 {
+  border: none !important;
+  background: var(--bt-gray-100) !important;
+  color: var(--bt-gray-700) !important;
+  border-radius: 5px !important;
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+/* Selection highlights — sky/blue → orange tint */
+.bt-app-canvas main .border-sky-500.bg-sky-50,
+.bt-app-canvas main .border-blue-500.bg-blue-50 {
+  border-color: var(--bt-orange) !important;
+  background: var(--bt-orange-light) !important;
+}
+
+/* Stat / summary blocks */
+.bt-app-canvas main .rounded.border.border-slate-200.bg-slate-50,
+.bt-app-canvas main .bg-slate-50.rounded-lg,
+.bt-app-canvas main .rounded-lg.border.border-slate-100.bg-slate-50 {
+  border-color: var(--bt-gray-200) !important;
+  background: var(--bt-gray-50) !important;
+  border-radius: 10px !important;
+}
+
+.bt-app-canvas main .text-xs.font-semibold.uppercase.text-slate-500 {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--bt-gray-400) !important;
+  letter-spacing: 0.05em;
+}
+
+/* Modal overlays inside main */
+.bt-app-canvas main .rounded-lg.border.border-slate-200.bg-white.p-5.shadow-lg,
+.bt-app-canvas main .fixed.inset-0 .bg-white.rounded-lg {
+  border-radius: 10px !important;
+  border-color: var(--bt-gray-200) !important;
+}
+
+/* Progress bars */
+.bt-app-canvas main .bg-sky-500,
+.bt-app-canvas main .bg-blue-500 {
+  background-color: var(--bt-orange) !important;
+}

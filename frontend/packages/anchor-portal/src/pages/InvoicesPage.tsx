@@ -6,16 +6,21 @@ import {
   subProgramApi,
   useAuth,
   openDigitalInvoiceDownload,
-  extractApiErrorMessage,
+  notifyError,
+  BtPageHeader,
+  BtCard,
+  BtCardHeader,
+  BtButton,
+  BtBadge,
+  InvoiceListToolbar,
 } from '@plp/shared';
-import type { Program, Invoice, SubProgram } from '@plp/shared';
+import type { Program, Invoice, SubProgram, InvoicePageMeta } from '@plp/shared';
 import {
   anchorIdFromUser,
   isInvoiceDiscountingSubProgram,
   isCheckerCannotConfirmOwnUpload,
   CONFIRM_SELF_UPLOAD_TOOLTIP,
   formatInvoiceCurrency,
-  invoiceStatusBadgeClass,
   inputCls,
   labelCls,
 } from '../invoice/invoiceShared';
@@ -31,6 +36,8 @@ export default function InvoicesPage() {
   const [subPrograms, setSubPrograms] = useState<SubProgram[]>([]);
   const [selectedSubProgramId, setSelectedSubProgramId] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
+  const [listFilters, setListFilters] = useState({ search: '', status: '', page: 0, size: 20 });
   const [loading, setLoading] = useState(false);
 
   const idSubPrograms = useMemo(() => {
@@ -53,15 +60,27 @@ export default function InvoicesPage() {
     if (!anchorId) return;
     setLoading(true);
     portalApi
-      .anchorInvoices(anchorId, umbrellaProgramId || undefined)
-      .then((r) => setInvoices(r.data.data || []))
-      .catch(() => setInvoices([]))
+      .anchorInvoices(anchorId, {
+        programId: umbrellaProgramId || undefined,
+        search: listFilters.search || undefined,
+        status: listFilters.status || undefined,
+        page: listFilters.page,
+        size: listFilters.size,
+      })
+      .then((r) => {
+        setInvoices(r.data.data || []);
+        setPageMeta(r.data.page ?? null);
+      })
+      .catch(() => {
+        setInvoices([]);
+        setPageMeta(null);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     if (anchorId) loadInvoices();
-  }, [anchorId, umbrellaProgramId]);
+  }, [anchorId, umbrellaProgramId, listFilters]);
 
   const handleVerify = async (id: string) => {
     try {
@@ -94,23 +113,22 @@ export default function InvoicesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Invoices</h1>
-          <p className="text-sm text-slate-500 mt-1">View, verify, and confirm invoices for your anchor</p>
-        </div>
-        <Link
-          to="/invoices/create"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Create invoice
-        </Link>
-      </div>
+      <BtPageHeader
+        title="Invoices"
+        description="View, verify, and confirm invoices for your anchor"
+        actions={
+          <Link to="/invoices/create">
+            <BtButton>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Create invoice
+            </BtButton>
+          </Link>
+        }
+      />
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <BtCard className="mb-6 p-5">
         <div className="max-w-xl">
           <label className={labelCls}>Sub-program (invoice discounting)</label>
           <select
@@ -130,52 +148,48 @@ export default function InvoicesPage() {
             })}
           </select>
         </div>
-      </div>
+      </BtCard>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-sm font-semibold text-slate-700">Invoice list</h3>
-          <span className="text-xs text-slate-400">{invoices.length} records</span>
-        </div>
+      <InvoiceListToolbar
+        filters={listFilters}
+        pageMeta={pageMeta}
+        onChange={(next) => setListFilters((f) => ({ ...f, ...next }))}
+      />
+
+      <BtCard className="overflow-hidden p-0">
+        <BtCardHeader
+          title="Invoice list"
+          actions={
+            <span className="text-xs text-[var(--bt-gray-400)]">
+              {pageMeta?.totalElements ?? invoices.length} records
+            </span>
+          }
+        />
 
         {loading ? (
-          <div className="px-5 py-16 text-center text-slate-400 text-sm animate-pulse">Loading invoices…</div>
+          <div className="px-5 py-16 text-center text-[var(--bt-gray-400)] text-sm animate-pulse">Loading invoices…</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="bt-table w-full">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Invoice #
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Dates
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Net
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Digital
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Dates</th>
+                  <th className="text-right">Amount</th>
+                  <th className="text-right">Net</th>
+                  <th>Digital</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {invoices.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-5 py-16 text-center">
-                      <div className="text-slate-400 text-sm">No invoices found</div>
+                      <div className="text-[var(--bt-gray-400)] text-sm">No invoices found</div>
                       <Link
                         to="/invoices/create"
-                        className="inline-block mt-3 text-sm font-semibold text-emerald-600 hover:text-emerald-700"
+                        className="inline-block mt-3 text-sm font-semibold text-[var(--bt-orange)] hover:underline"
                       >
                         Create your first invoice →
                       </Link>
@@ -185,71 +199,62 @@ export default function InvoicesPage() {
                   invoices.map((inv) => {
                     const confirmBlocked = isCheckerCannotConfirmOwnUpload(inv, user);
                     return (
-                      <tr key={inv.id} className="hover:bg-slate-50/80">
-                        <td className="px-5 py-3">
-                          <div className="font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</div>
-                          {inv.poNumber ? <div className="text-[11px] text-slate-400 mt-0.5">PO: {inv.poNumber}</div> : null}
+                      <tr key={inv.id}>
+                        <td>
+                          <div className="font-mono text-xs font-medium text-[var(--bt-gray-800)]">{inv.invoiceNumber}</div>
+                          {inv.poNumber ? <div className="text-[11px] text-[var(--bt-gray-400)] mt-0.5">PO: {inv.poNumber}</div> : null}
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="text-xs text-slate-600">{inv.invoiceDate}</div>
-                          <div className="text-[11px] text-slate-400 mt-0.5">Due: {inv.dueDate}</div>
+                        <td>
+                          <div className="text-xs text-[var(--bt-gray-600)]">{inv.invoiceDate}</div>
+                          <div className="text-[11px] text-[var(--bt-gray-400)] mt-0.5">Due: {inv.dueDate}</div>
                         </td>
-                        <td className="px-5 py-3 text-right text-slate-700">{formatInvoiceCurrency(inv.invoiceAmount)}</td>
-                        <td className="px-5 py-3 text-right font-medium text-slate-800">{formatInvoiceCurrency(inv.netAmount)}</td>
-                        <td className="px-5 py-3 text-xs text-slate-600 max-w-[200px]">
+                        <td className="text-right text-[var(--bt-gray-700)]">{formatInvoiceCurrency(inv.invoiceAmount)}</td>
+                        <td className="text-right font-medium text-[var(--bt-gray-900)]">{formatInvoiceCurrency(inv.netAmount)}</td>
+                        <td className="text-xs text-[var(--bt-gray-600)] max-w-[200px]">
                           {inv.digitalInvoiceFileName ? (
                             <button
                               type="button"
                               onClick={() => {
                                 void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  window.alert(extractApiErrorMessage(e, 'Could not open digital invoice'));
+                                  notifyError(e, 'Could not open digital invoice');
                                 });
                               }}
-                              className="text-left text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline"
+                              className="text-left text-xs font-semibold text-[var(--bt-orange)] hover:underline"
                             >
                               View / Download
                             </button>
                           ) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-[var(--bt-gray-400)]">—</span>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${invoiceStatusBadgeClass(inv.status)}`}
-                          >
-                            {inv.status}
-                          </span>
+                        <td className="text-center">
+                          <BtBadge tone="gray">{inv.status}</BtBadge>
                         </td>
-                        <td className="px-5 py-3 text-center">
+                        <td className="text-center">
                           <div className="flex items-center justify-center gap-2">
                             {inv.status === 'UPLOADED' ? (
                               <button
+                                type="button"
                                 onClick={() => void handleVerify(inv.id)}
-                                className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
+                                className="bt-btn bt-btn-secondary bt-btn-sm"
                               >
                                 Verify
                               </button>
                             ) : null}
                             {inv.status === 'VERIFIED' ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <span title={confirmBlocked ? CONFIRM_SELF_UPLOAD_TOOLTIP : undefined}>
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleConfirm(inv.id)}
-                                    disabled={confirmBlocked}
-                                    className={`px-2.5 py-1 text-xs font-semibold rounded ${
-                                      confirmBlocked
-                                        ? 'text-emerald-400 bg-emerald-50/80 cursor-not-allowed opacity-70'
-                                        : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                                    }`}
-                                  >
-                                    Confirm
-                                  </button>
-                                </span>
-                              </div>
+                              <span title={confirmBlocked ? CONFIRM_SELF_UPLOAD_TOOLTIP : undefined}>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleConfirm(inv.id)}
+                                  disabled={confirmBlocked}
+                                  className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-50"
+                                >
+                                  Confirm
+                                </button>
+                              </span>
                             ) : null}
                             {!['UPLOADED', 'VERIFIED'].includes(inv.status) ? (
-                              <span className="text-xs text-slate-400">—</span>
+                              <span className="text-xs text-[var(--bt-gray-400)]">—</span>
                             ) : null}
                           </div>
                         </td>
@@ -261,7 +266,7 @@ export default function InvoicesPage() {
             </table>
           </div>
         )}
-      </div>
+      </BtCard>
     </div>
   );
 }

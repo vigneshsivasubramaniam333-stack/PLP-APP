@@ -3,6 +3,7 @@ package com.plp.program.controller;
 import com.plp.program.audit.AuditBridge;
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.model.dto.SubProgramEditDto;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.repository.SubProgramBorrowerRepository;
@@ -95,6 +96,30 @@ public class SubProgramController {
         SubProgramAccessGuard.requireSubProgramReadAccess(
                 sp, rolesHeader, linkedEntityId, linkedEntityType, subProgramBorrowerRepository);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", sp));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> update(
+            @PathVariable UUID id,
+            @RequestBody SubProgramEditDto dto,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        SubProgramAccessGuard.requireSubProgramWriteAccess(rolesHeader);
+        SubProgram updated = subProgramService.updateSubProgram(id, dto);
+        auditService.logEvent(
+                "SUBPROGRAM_UPDATED",
+                "SUBPROGRAM",
+                updated.getId().toString(),
+                "UPDATE",
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "SUCCESS",
+                null);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
     }
 
     @GetMapping("/{id}/limit-summary")

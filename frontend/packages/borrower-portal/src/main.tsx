@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from '@plp/shared';
+import { AuthProvider, useAuth, BtToastHost } from '@plp/shared';
 import './index.css';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -63,6 +63,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      <BtToastHost />
     </AuthProvider>
   );
 }

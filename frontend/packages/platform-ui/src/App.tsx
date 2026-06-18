@@ -12,6 +12,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import SubProgramsPage from './pages/SubProgramsPage';
 import BorrowersPage from './pages/BorrowersPage';
 import UsersPage from './pages/UsersPage';
+import DesignPreviewPage from './pages/DesignPreviewPage';
 import MakerCheckerPage, { canViewWorkbench } from './pages/MakerCheckerPage';
 
 const LENDER_PORTAL_ROLES = new Set([
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="workbench" element={<WorkbenchRoute />} />
         <Route path="audit" element={<AuditTrailPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="design-preview" element={<DesignPreviewPage />} />
       </Route>
     </Routes>
   );

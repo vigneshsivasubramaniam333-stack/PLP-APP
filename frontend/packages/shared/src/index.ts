@@ -13,10 +13,34 @@ export {
   PortalLoginBrandHeader,
   PortalLoginPoweredBy,
   PortalPoweredByFooter,
+  BrandLogo,
+  BrandedAuthFrame,
+  PortalAuthShell,
+  PoweredByFooter,
 } from './components/portalBranding';
+export {
+  BtButton,
+  BtInput,
+  BtSelect,
+  BtTextarea,
+  BtCard,
+  BtCardHeader,
+  BtBadge,
+  BtPageHeader,
+  BtStatCard,
+  statAccentAt,
+  btButtonClass,
+  btBadgeClass,
+  badgeToneForStatus,
+} from './components/ui';
+export { BtToastHost } from './components/ui/BtToastHost';
+export { notifySuccess, notifyError, notifyErrorMessage, notifyInfo } from './lib/notify';
+export type { BtButtonVariant, BtButtonSize, BadgeTone, BtStatAccent } from './components/ui';
 export { CreditLimitDashboardSection } from './components/CreditLimitDisplay';
 export type { CreditLimitRow } from './components/CreditLimitDisplay';
 export { useBorrowerCreditLimits, useAnchorCreditLimits } from './hooks/useCreditLimits';
 export { fetchLoanPayoff, fetchLoanPayoffs, repaymentProgress } from './utils/loanPayoff';
 export type { LoanPayoffInfo } from './utils/loanPayoff';
 export { loanPrincipalAmount, loanHasLmsAccount } from './utils/loanDisplay';
+export { InvoiceListToolbar } from './components/InvoiceListToolbar';
+export type { InvoiceListFilters } from './components/InvoiceListToolbar';

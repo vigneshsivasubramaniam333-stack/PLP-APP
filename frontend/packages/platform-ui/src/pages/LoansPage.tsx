@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { extractApiErrorMessage, getStoredAuthUser, lenderLoanCapabilities, loanApi, loanHasLmsAccount, loanPrincipalAmount } from '@plp/shared';
+import { getStoredAuthUser, lenderLoanCapabilities, loanApi, loanHasLmsAccount, loanPrincipalAmount, notifyError, notifySuccess, notifyErrorMessage } from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 function humanizeStatus(status: string): string {
@@ -26,7 +26,6 @@ function defaultRepaymentAmountInput(loan: Loan): string {
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionMsg, setActionMsg] = useState('');
   const [repayModalLoan, setRepayModalLoan] = useState<Loan | null>(null);
   const [repayAmount, setRepayAmount] = useState('');
   const [repaySubmitting, setRepaySubmitting] = useState(false);
@@ -34,7 +33,7 @@ export default function LoansPage() {
   const caps = lenderLoanCapabilities(getStoredAuthUser()?.role);
 
   const reload = () => {
-    loanApi.list().then((res) => setLoans(res.data.data || [])).catch(console.error);
+    loanApi.list().then((res) => setLoans(res.data.data || [])).catch((err) => notifyError(err, 'Could not load loans'));
   };
 
   useEffect(() => {
@@ -43,64 +42,59 @@ export default function LoansPage() {
       .then((res) => {
         setLoans(res.data.data || []);
       })
-      .catch(console.error)
+      .catch((err) => notifyError(err, 'Could not load loans'))
       .finally(() => setLoading(false));
   }, []);
 
   const handleSanction = async (loan: Loan) => {
-    setActionMsg('');
     try {
       await loanApi.approve(loan.id, { sanctionedAmount: loan.requestedAmount });
-      setActionMsg(`Loan ${loan.loanNumber} sanctioned`);
+      notifySuccess(`Loan ${loan.loanNumber} sanctioned`);
       reload();
     } catch (err) {
-      setActionMsg(`Sanction failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Sanction failed');
     }
   };
 
   const handleInitiateDisbursement = async (loan: Loan) => {
-    setActionMsg('');
     try {
       const amount = loan.sanctionedAmount ?? loan.requestedAmount;
       await loanApi.initiateDisbursement(loan.id, amount);
-      setActionMsg(`Disbursement initiated for ${loan.loanNumber}`);
+      notifySuccess(`Disbursement initiated for ${loan.loanNumber}`);
       reload();
     } catch (err) {
-      setActionMsg(`Initiate disbursement failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Initiate disbursement failed');
     }
   };
 
   const handleApproveDisbursement = async (loan: Loan) => {
-    setActionMsg('');
     try {
       const amount = parsePendingDisburseAmount(loan);
       await loanApi.disburse(loan.id, amount);
-      setActionMsg(`Loan ${loan.loanNumber} disbursement approved`);
+      notifySuccess(`Loan ${loan.loanNumber} disbursement approved`);
       reload();
     } catch (err) {
-      setActionMsg(`Approve disbursement failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Approve disbursement failed');
     }
   };
 
   const handleCancelDisbursement = async (loan: Loan) => {
-    setActionMsg('');
     try {
       await loanApi.cancelDisbursement(loan.id);
-      setActionMsg('Disbursement cancelled successfully');
+      notifySuccess('Disbursement cancelled successfully');
       reload();
     } catch (err) {
-      setActionMsg(`Cancel disbursement failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Cancel disbursement failed');
     }
   };
 
   const handleReject = async (loan: Loan) => {
-    setActionMsg('');
     try {
       await loanApi.reject(loan.id, 'Rejected by lender');
-      setActionMsg(`Loan ${loan.loanNumber} rejected`);
+      notifySuccess(`Loan ${loan.loanNumber} rejected`);
       reload();
     } catch (err) {
-      setActionMsg(`Reject failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Reject failed');
     }
   };
 
@@ -119,19 +113,18 @@ export default function LoansPage() {
     if (!repayModalLoan) return;
     const amount = Number.parseFloat(repayAmount.replace(/,/g, ''));
     if (!Number.isFinite(amount) || amount <= 0) {
-      setActionMsg('Repayment failed: Enter a valid repayment amount greater than zero');
+      notifyErrorMessage('Enter a valid repayment amount greater than zero');
       return;
     }
     setRepaySubmitting(true);
-    setActionMsg('');
     try {
       await loanApi.repay(repayModalLoan.id, amount);
-      setActionMsg(`Repayment recorded for ${repayModalLoan.loanNumber}`);
+      notifySuccess(`Repayment recorded for ${repayModalLoan.loanNumber}`);
       setRepayModalLoan(null);
       setRepayAmount('');
       reload();
     } catch (err) {
-      setActionMsg(`Repayment failed: ${extractApiErrorMessage(err, 'Request failed')}`);
+      notifyError(err, 'Repayment failed');
     } finally {
       setRepaySubmitting(false);
     }
@@ -156,18 +149,6 @@ export default function LoansPage() {
         <h1 className="text-2xl font-bold text-slate-800">Loans</h1>
         <p className="text-sm text-slate-500 mt-1">All loan applications and active loans</p>
       </div>
-
-      {actionMsg && (
-        <div
-          className={`mb-4 p-3 rounded-lg text-sm ${
-            actionMsg.includes('failed')
-              ? 'bg-red-50 text-red-700 border border-red-200'
-              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          }`}
-        >
-          {actionMsg}
-        </div>
-      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[

@@ -5,9 +5,8 @@ export const NO_LINKED_BORROWERS =
 
 export const CONFIRM_SELF_UPLOAD_TOOLTIP = 'You cannot approve an invoice uploaded by you';
 
-export const inputCls =
-  'w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white outline-none';
-export const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5';
+export const inputCls = 'bt-input w-full';
+export const labelCls = 'bt-label';
 
 export function anchorIdFromUser(linkedType: string | null | undefined, linkedId: string | null | undefined): string {
   if ((linkedType ?? '').trim().toUpperCase() !== 'ANCHOR') return '';

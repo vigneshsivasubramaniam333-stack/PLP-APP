@@ -57,33 +57,22 @@ export default function MainLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    <div className="min-h-screen bt-app-canvas flex flex-col">
       <div className="flex flex-1 min-h-0">
-        <aside
-          className="w-64 flex flex-col shrink-0 text-white"
-          style={{ backgroundColor: 'var(--brand-navy)' }}
-        >
-          <div className="border-b border-white/10">
-            <PortalSidebarBrand portalTitle="Platform Admin" />
-          </div>
+        <aside className="bt-sidebar-wide w-64 shrink-0 flex flex-col">
+          <PortalSidebarBrand portalTitle="Platform Admin" />
 
-          <nav className="flex-1 py-3 overflow-y-auto">
+          <nav className="bt-sidebar-wide-nav flex-1">
             {navGroups.map((group) => (
               <div key={group.label} className="mb-1">
-                <div className="px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  {group.label}
-                </div>
+                <div className="bt-sidebar-group-label">{group.label}</div>
                 {group.items.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-3 mx-2 px-3 py-2 rounded-r-lg text-[13px] font-medium border-l-[3px] transition-colors ${
-                        isActive
-                          ? 'border-[#2563EB] bg-[rgba(255,255,255,0.07)] text-white'
-                          : 'border-transparent text-[rgba(255,255,255,0.55)] hover:bg-white/[0.05] hover:text-white/90'
-                      }`}
+                      className={`${isActive ? 'bt-sidebar-link active' : 'bt-sidebar-link'} flex items-center gap-3`}
                     >
                       <item.icon active={isActive} />
                       {item.label}
@@ -95,15 +84,13 @@ export default function MainLayout() {
           </nav>
         </aside>
 
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--surface)]">
-          <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-6 border-b border-slate-200/90 bg-white">
-            <h2 className="text-lg font-semibold text-slate-900 font-sans tracking-tight">{pageTitle}</h2>
+        <main className="bt-main-shell">
+          <header className="bt-app-header h-16 shrink-0 flex items-center justify-between gap-4 px-6 bg-white">
+            <h2 className="bt-page-title">{pageTitle}</h2>
             <HeaderUserMenu user={user} onSignOut={logout} />
           </header>
-          <div className="flex-1 overflow-auto min-h-0">
-            <div className="max-w-7xl mx-auto px-6 py-6">
-              <Outlet />
-            </div>
+          <div className="bt-main-content">
+            <Outlet />
           </div>
         </main>
       </div>
@@ -178,7 +165,7 @@ function HeaderUserMenu({
 function DashboardIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -192,7 +179,7 @@ function DashboardIcon({ active }: { active: boolean }) {
 function UsersIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -206,7 +193,7 @@ function UsersIcon({ active }: { active: boolean }) {
 function ProgramsIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -220,7 +207,7 @@ function ProgramsIcon({ active }: { active: boolean }) {
 function SubProgramsIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -234,7 +221,7 @@ function SubProgramsIcon({ active }: { active: boolean }) {
 function AnchorsIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -248,7 +235,7 @@ function AnchorsIcon({ active }: { active: boolean }) {
 function BorrowersIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -262,7 +249,7 @@ function BorrowersIcon({ active }: { active: boolean }) {
 function LoansIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -276,7 +263,7 @@ function LoansIcon({ active }: { active: boolean }) {
 function ReportsIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -290,7 +277,7 @@ function ReportsIcon({ active }: { active: boolean }) {
 function WorkbenchIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -304,7 +291,7 @@ function WorkbenchIcon({ active }: { active: boolean }) {
 function AuditIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -318,7 +305,7 @@ function AuditIcon({ active }: { active: boolean }) {
 function NotificationsIcon({ active }: { active: boolean }) {
   return (
     <svg
-      className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-[rgba(255,255,255,0.55)]'}`}
+      className={`w-4 h-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"

@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -442,6 +443,61 @@ public class InvoiceService {
 
     public List<Invoice> getByProgram(UUID programId) {
         return invoiceRepository.findByProgramId(programId);
+    }
+
+    public Map<String, Object> listBorrowerInvoicesPaged(
+            UUID borrowerId, String search, String status, int page, int size) {
+        return paginateInvoices(getByBorrower(borrowerId), search, status, page, size);
+    }
+
+    public Map<String, Object> listAnchorInvoicesPaged(
+            UUID anchorId, UUID programId, String search, String status, int page, int size) {
+        List<Invoice> base =
+                programId != null ? getByAnchorAndProgram(anchorId, programId) : getByAnchor(anchorId);
+        return paginateInvoices(base, search, status, page, size);
+    }
+
+    private Map<String, Object> paginateInvoices(
+            List<Invoice> source, String search, String status, int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        int safePage = Math.max(page, 0);
+        String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        String st = status == null || status.isBlank() ? null : status.trim().toUpperCase(Locale.ROOT);
+
+        List<Invoice> filtered = source.stream()
+                .filter(inv -> st == null || st.equalsIgnoreCase(String.valueOf(inv.getStatus())))
+                .filter(inv -> {
+                    if (q.isEmpty()) return true;
+                    String num = inv.getInvoiceNumber() == null ? "" : inv.getInvoiceNumber().toLowerCase(Locale.ROOT);
+                    String borrower = inv.getBorrowerId() == null ? "" : inv.getBorrowerId().toString().toLowerCase(Locale.ROOT);
+                    return num.contains(q) || borrower.contains(q);
+                })
+                .sorted((a, b) -> {
+                    Instant ca = a.getCreatedAt();
+                    Instant cb = b.getCreatedAt();
+                    if (ca == null && cb == null) return 0;
+                    if (ca == null) return 1;
+                    if (cb == null) return -1;
+                    return cb.compareTo(ca);
+                })
+                .toList();
+
+        int total = filtered.size();
+        int from = Math.min(safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        List<Invoice> slice = filtered.subList(from, to);
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+
+        Map<String, Object> pageMeta = new LinkedHashMap<>();
+        pageMeta.put("number", safePage);
+        pageMeta.put("size", safeSize);
+        pageMeta.put("totalElements", total);
+        pageMeta.put("totalPages", totalPages);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("data", slice);
+        out.put("page", pageMeta);
+        return out;
     }
 
     private static String sanitizeDigitalInvoiceFileName(String name) {

@@ -1,5 +1,6 @@
 package com.plp.notification.service;
 
+import com.plp.notification.config.EmailNotificationProperties;
 import com.plp.notification.model.entity.Notification;
 import com.plp.notification.model.entity.NotificationTemplate;
 import com.plp.notification.model.enums.NotificationChannel;
@@ -10,10 +11,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.mail.internet.MimeMessage;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,8 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationTemplateRepository templateRepository;
     private final TemplateRenderer templateRenderer;
+    private final JavaMailSender mailSender;
+    private final EmailNotificationProperties emailProperties;
 
     @Transactional
     public Notification sendNotification(String templateCode, UUID recipientId,
@@ -107,9 +113,32 @@ public class NotificationService {
     }
 
     private void deliverEmail(Notification notification) {
-        log.info("[EMAIL] To: {} Subject: {} Body: {}",
-                notification.getRecipientEmail(), notification.getSubject(),
-                notification.getBody() != null ? notification.getBody().substring(0, Math.min(100, notification.getBody().length())) : "");
+        String to = notification.getRecipientEmail();
+        if (to == null || to.isBlank()) {
+            throw new IllegalStateException("Recipient email is required for EMAIL notifications");
+        }
+        if (emailProperties.isSimulationEnabled()) {
+            log.info("[EMAIL-SIMULATED] To: {} Subject: {}", to, notification.getSubject());
+            return;
+        }
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setTo(to.trim());
+            helper.setSubject(notification.getSubject() != null ? notification.getSubject() : "PLP Notification");
+            String from = emailProperties.getFromAddress();
+            String fromName = emailProperties.getFromName();
+            if (fromName != null && !fromName.isBlank()) {
+                helper.setFrom(from, fromName);
+            } else {
+                helper.setFrom(from);
+            }
+            helper.setText(notification.getBody() != null ? notification.getBody() : "", false);
+            mailSender.send(message);
+            log.info("[EMAIL] Sent to {} subject={}", to, notification.getSubject());
+        } catch (Exception e) {
+            throw new RuntimeException("SMTP delivery failed: " + e.getMessage(), e);
+        }
     }
 
     private void deliverSms(Notification notification) {

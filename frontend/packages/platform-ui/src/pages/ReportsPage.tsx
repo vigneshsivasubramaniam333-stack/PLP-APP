@@ -13,9 +13,11 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('disbursement');
   const [data, setData] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setError('');
     const fetcher = activeTab === 'disbursement'
       ? reportApi.disbursementSummary()
       : activeTab === 'portfolio'
@@ -23,8 +25,11 @@ export default function ReportsPage() {
         : reportApi.overdueReport();
 
     fetcher
-      .then((res) => setData(Array.isArray(res.data) ? res.data : res.data.data || []))
-      .catch(() => setData([]))
+      .then((res) => setData(Array.isArray(res.data?.data) ? res.data.data : []))
+      .catch((err: unknown) => {
+        setData([]);
+        setError(err instanceof Error ? err.message : 'Failed to load report data');
+      })
       .finally(() => setLoading(false));
   }, [activeTab]);
 
@@ -89,6 +94,13 @@ export default function ReportsPage() {
         {loading ? (
           <div className="flex items-center justify-center h-48">
             <div className="animate-pulse text-slate-400 text-sm">Generating report...</div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-48 px-6">
+            <div className="text-center">
+              <div className="text-red-600 text-sm">{error}</div>
+              <p className="text-xs text-slate-400 mt-1">Ensure report-service can reach lending-service with lender headers.</p>
+            </div>
           </div>
         ) : data.length === 0 ? (
           <div className="flex items-center justify-center h-48">

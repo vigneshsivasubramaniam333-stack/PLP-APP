@@ -180,12 +180,26 @@ public class AnchorPortalController {
     public ResponseEntity<Map<String, Object>> getInvoices(
             @RequestParam(required = false) UUID anchorId,
             @RequestParam(required = false) UUID programId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestHeader(value = "X-Linked-Entity-Type", required = false) String linkedEntityType,
             @RequestHeader(value = "X-Linked-Entity-Id", required = false) String linkedEntityId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
         UUID resolvedAnchorId = requireAnchorFromHeaders(linkedEntityType, linkedEntityId, anchorId, userId);
         if (programId != null) {
             requireProgramBelongsToAnchor(programId, resolvedAnchorId);
+        }
+        if (page != null || size != null || (search != null && !search.isBlank()) || (status != null && !status.isBlank())) {
+            Map<String, Object> paged = invoiceService.listAnchorInvoicesPaged(
+                    resolvedAnchorId,
+                    programId,
+                    search,
+                    status,
+                    page != null ? page : 0,
+                    size != null ? size : 20);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
         }
         List<Invoice> invoices;
         if (programId != null) {

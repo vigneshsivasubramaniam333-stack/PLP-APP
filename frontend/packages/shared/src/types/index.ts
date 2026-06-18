@@ -70,6 +70,13 @@ export interface ProgramEligibilityConfig {
   minDaysToDueDate?: number;
 }
 
+export interface ProgramOperationalParameters {
+  enablePaymentForBorrower?: boolean;
+  autoDiscounting?: boolean;
+  discountingDay?: number;
+  gapBetweenDiscountingDays?: number;
+}
+
 export interface Program {
   id: string;
   programCode: string;
@@ -94,6 +101,9 @@ export interface Program {
   availableLimit?: number | null;
   /** Server merges partial eligibility-related entries on PUT. */
   config?: ProgramEligibilityConfig | Record<string, unknown> | null;
+  parameters?: ProgramOperationalParameters | Record<string, unknown> | null;
+  lmsEntryIn?: 'YES' | 'NO' | string | null;
+  encoreProductCode?: string | null;
 }
 
 export type SubProgramStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';
@@ -168,6 +178,7 @@ export interface Loan {
   loanNumber: string;
   borrowerId: string;
   programId: string;
+  invoiceId?: string | null;
   productType: string;
   requestedAmount: number;
   sanctionedAmount: number;
@@ -175,6 +186,7 @@ export interface Loan {
   interestRate: number;
   tenureDays: number;
   totalRepayable: number;
+  totalRepaid?: number | null;
   outstandingAmount: number;
   status: LoanStatus;
   requestDate: string;
@@ -236,6 +248,7 @@ export interface Invoice {
   anchorId: string;
   borrowerId: string;
   programId: string;
+  subProgramId?: string | null;
   invoiceDate: string;
   dueDate: string;
   invoiceAmount: number;
@@ -270,6 +283,22 @@ export interface Invoice {
   digitalInvoiceFileName?: string | null;
   digitalInvoiceContentType?: string | null;
   digitalInvoiceUploadedAt?: string | null;
+}
+
+export interface InvoicePageMeta {
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface LoanRepaymentRow {
+  id: string;
+  amount: number;
+  paidAt?: string | null;
+  paymentMode?: string | null;
+  reference?: string | null;
+  status?: string | null;
 }
 
 export interface EligibilityResult {

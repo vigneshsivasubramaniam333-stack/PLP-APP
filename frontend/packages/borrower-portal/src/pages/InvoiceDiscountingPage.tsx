@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { portalApi, invoiceApi, extractApiErrorMessage, useAuth, apiClient, loanApi, openDigitalInvoiceDownload } from '@plp/shared';
-import type { Invoice } from '@plp/shared';
+import {
+  portalApi,
+  invoiceApi,
+  useAuth,
+  apiClient,
+  loanApi,
+  openDigitalInvoiceDownload,
+  notifyError,
+  InvoiceListToolbar,
+} from '@plp/shared';
+import type { Invoice, InvoicePageMeta, Loan } from '@plp/shared';
+import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
 
 const FLOW_PURCHASE = 'PURCHASE_BILL_DISCOUNTING';
 const FLOW_SALES = 'SALES_BILL_DISCOUNTING';
@@ -39,7 +49,21 @@ export default function InvoiceDiscountingPage() {
   }, [user?.linkedEntityType, user?.linkedEntityId]);
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
+  const [listFilters, setListFilters] = useState({ search: '', status: '', page: 0, size: 20 });
+  const [loansByInvoice, setLoansByInvoice] = useState<Record<string, Loan[]>>({});
   const [loading, setLoading] = useState(true);
+  const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
+  const [expandedLoanInvoiceIds, setExpandedLoanInvoiceIds] = useState<Set<string>>(() => new Set());
+
+  const toggleLoanDetails = (invoiceId: string) => {
+    setExpandedLoanInvoiceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) next.delete(invoiceId);
+      else next.add(invoiceId);
+      return next;
+    });
+  };
 
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [requestedAmount, setRequestedAmount] = useState('');
@@ -55,11 +79,33 @@ export default function InvoiceDiscountingPage() {
       setLoading(true);
       try {
         await portalApi.borrowerLoans(borrowerId).catch(() => null);
-        const invoiceRes = await apiClient.get<Invoice[]>(`/api/v1/invoices/borrower/${borrowerId}`, {
-          params: opts?.bustCache ? { _nocache: Date.now() } : undefined,
-        });
-        const rows = invoiceRes.data || [];
+        const invoiceRes = await apiClient.get<{ data?: Invoice[]; page?: InvoicePageMeta }>(
+          `/api/v1/invoices/borrower/${borrowerId}`,
+          {
+            params: {
+              search: listFilters.search || undefined,
+              status: listFilters.status || undefined,
+              page: listFilters.page,
+              size: listFilters.size,
+              ...(opts?.bustCache ? { _nocache: Date.now() } : {}),
+            },
+          },
+        );
+        const body = invoiceRes.data;
+        const rows = Array.isArray(body) ? body : body?.data || [];
         setInvoices(rows);
+        setPageMeta(Array.isArray(body) ? null : body?.page ?? null);
+
+        const loanRes = await loanApi.list({ borrowerId });
+        const loans = (loanRes.data?.data || []) as Loan[];
+        const grouped: Record<string, Loan[]> = {};
+        for (const loan of loans) {
+          const invId = loan.invoiceId;
+          if (!invId) continue;
+          if (!grouped[invId]) grouped[invId] = [];
+          grouped[invId].push(loan);
+        }
+        setLoansByInvoice(grouped);
       } catch (err) {
         console.error(err);
         setInvoices([]);
@@ -67,7 +113,7 @@ export default function InvoiceDiscountingPage() {
         setLoading(false);
       }
     },
-    [borrowerId],
+    [borrowerId, listFilters],
   );
 
   useEffect(() => {
@@ -100,7 +146,7 @@ export default function InvoiceDiscountingPage() {
       await loadInvoices();
       window.dispatchEvent(new Event('plp-borrower-loans-changed'));
     } catch (err: unknown) {
-      setRequestMsg('Error: ' + extractApiErrorMessage(err, 'Failed to accept invoice'));
+      notifyError(err, 'Failed to accept invoice');
     } finally {
       setAcceptingId(null);
     }
@@ -122,7 +168,7 @@ export default function InvoiceDiscountingPage() {
       );
       setEligibilityResult(res.data.data);
     } catch (err: unknown) {
-      setRequestMsg('Error: ' + extractApiErrorMessage(err, 'Eligibility check failed'));
+      notifyError(err, 'Eligibility check failed');
     }
   };
 
@@ -148,9 +194,24 @@ export default function InvoiceDiscountingPage() {
       await loadInvoices({ bustCache: true });
       window.dispatchEvent(new Event('plp-borrower-loans-changed'));
     } catch (err: unknown) {
-      setRequestMsg('Error: ' + extractApiErrorMessage(err, 'Request failed'));
+      notifyError(err, 'Request failed');
     } finally {
       setRequesting(false);
+    }
+  };
+
+  const handleRepayLoan = async (loanId: string, amount: number) => {
+    setRepayingLoanId(loanId);
+    try {
+      await loanApi.repay(loanId, amount);
+      setRequestMsg('Repayment recorded successfully.');
+      await loadInvoices({ bustCache: true });
+      window.dispatchEvent(new Event('plp-borrower-loans-changed'));
+    } catch (err: unknown) {
+      notifyError(err, 'Repayment failed');
+      throw err;
+    } finally {
+      setRepayingLoanId(null);
     }
   };
 
@@ -202,6 +263,12 @@ export default function InvoiceDiscountingPage() {
         </div>
       )}
 
+      <InvoiceListToolbar
+        filters={listFilters}
+        pageMeta={pageMeta}
+        onChange={(next) => setListFilters((f) => ({ ...f, ...next }))}
+      />
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
         <div className="px-5 py-4 border-b border-slate-100">
           <h3 className="text-sm font-semibold text-slate-700">Your invoices</h3>
@@ -231,8 +298,10 @@ export default function InvoiceDiscountingPage() {
                   </td>
                 </tr>
               ) : (
-                invoices.map((inv) => (
-                  <tr key={inv.id} className={`hover:bg-slate-50/80 ${selectedInvoice?.id === inv.id ? 'bg-sky-50/50' : ''}`}>
+                invoices.flatMap((inv) => {
+                  const linkedLoans = loansByInvoice[inv.id] ?? [];
+                  const rows = [
+                    <tr key={inv.id} className={`hover:bg-slate-50/80 ${selectedInvoice?.id === inv.id ? 'bg-sky-50/50' : ''}`}>
                     <td className="px-5 py-3 font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</td>
                     <td className="px-5 py-3 text-xs text-slate-600">
                       {isSalesFlow(inv) ? 'Sales' : 'Purchase'}
@@ -250,7 +319,7 @@ export default function InvoiceDiscountingPage() {
                               type="button"
                               onClick={() => {
                                 void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  window.alert(extractApiErrorMessage(e, 'Could not open digital invoice'));
+                                  notifyError(e, 'Could not open digital invoice');
                                 });
                               }}
                               className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline"
@@ -261,7 +330,7 @@ export default function InvoiceDiscountingPage() {
                               type="button"
                               onClick={() => {
                                 void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  window.alert(extractApiErrorMessage(e, 'Could not download digital invoice'));
+                                  notifyError(e, 'Could not download digital invoice');
                                 });
                               }}
                               className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline"
@@ -279,12 +348,32 @@ export default function InvoiceDiscountingPage() {
                     </td>
                     <td className="px-5 py-3 text-center">
                       <div className="flex flex-col items-center gap-1.5">
+                        {linkedLoans.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleLoanDetails(inv.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                            title={expandedLoanInvoiceIds.has(inv.id) ? 'Hide linked loan details' : 'View linked loan details'}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                              {expandedLoanInvoiceIds.has(inv.id) ? (
+                                <path fillRule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.5 1.5 0 0 0 0-1.5 10.029 10.029 0 0 0-3.3-4.38 1.5 1.5 0 0 0-1.5 0 10.029 10.029 0 0 0-3.3 4.38 1.5 1.5 0 0 0 0 1.5 10.029 10.029 0 0 0 3.3 4.38 1.5 1.5 0 0 0 1.5 0 10.029 10.029 0 0 0 4.38 3.3l1.745 1.745a.75.75 0 0 0 1.06-1.06l-14.5-14.5Z" clipRule="evenodd" />
+                              ) : (
+                                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                              )}
+                              {!expandedLoanInvoiceIds.has(inv.id) && (
+                                <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+                              )}
+                            </svg>
+                            {expandedLoanInvoiceIds.has(inv.id) ? 'Hide loan' : 'View loan'}
+                          </button>
+                        )}
                         {canShowAcceptInvoice(inv) && (
                           <button
                             type="button"
                             disabled={!borrowerId || acceptingId === inv.id}
                             onClick={() => void handleAcceptInvoice(inv)}
-                            className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50"
+                            className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-50"
                           >
                             {acceptingId === inv.id ? 'Accepting...' : 'Accept Invoice'}
                           </button>
@@ -297,18 +386,37 @@ export default function InvoiceDiscountingPage() {
                               setRequestedAmount(inv.availableAmount?.toString() || '');
                               setEligibilityResult(null);
                             }}
-                            className="px-3 py-1.5 text-xs font-semibold bg-sky-600 text-white rounded-md hover:bg-sky-700"
+                            className="bt-btn bt-btn-primary bt-btn-sm"
                           >
                             Select
                           </button>
                         )}
-                        {!canShowAcceptInvoice(inv) && !canRequestDiscounting(inv) && (
+                        {!canShowAcceptInvoice(inv) && !canRequestDiscounting(inv) && linkedLoans.length === 0 && (
                           <span className="text-[11px] text-slate-400">—</span>
                         )}
                       </div>
                     </td>
-                  </tr>
-                ))
+                  </tr>,
+                  ];
+                  if (linkedLoans.length > 0 && expandedLoanInvoiceIds.has(inv.id)) {
+                    rows.push(
+                      <tr key={`${inv.id}-loans`}>
+                        <td colSpan={9} className="px-5 pb-4 bg-slate-50/40">
+                          {linkedLoans.map((loan) => (
+                            <InvoiceLoanRepaymentCard
+                              key={loan.id}
+                              invoice={inv}
+                              loan={loan}
+                              repaying={repayingLoanId === loan.id}
+                              onRepay={handleRepayLoan}
+                            />
+                          ))}
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  return rows;
+                })
               )}
             </tbody>
           </table>
@@ -342,7 +450,7 @@ export default function InvoiceDiscountingPage() {
                 type="button"
                 onClick={() => {
                   void openDigitalInvoiceDownload(selectedInvoice.id).catch((e: unknown) => {
-                    window.alert(extractApiErrorMessage(e, 'Could not open digital invoice'));
+                    notifyError(e, 'Could not open digital invoice');
                   });
                 }}
                 className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline"
@@ -353,7 +461,7 @@ export default function InvoiceDiscountingPage() {
                 type="button"
                 onClick={() => {
                   void openDigitalInvoiceDownload(selectedInvoice.id).catch((e: unknown) => {
-                    window.alert(extractApiErrorMessage(e, 'Could not download digital invoice'));
+                    notifyError(e, 'Could not download digital invoice');
                   });
                 }}
                 className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline"
@@ -414,7 +522,7 @@ export default function InvoiceDiscountingPage() {
                 !requestedAmount ||
                 (eligibilityResult !== null && !eligibilityResult.eligible)
               }
-              className="px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
+              className="bt-btn bt-btn-primary disabled:opacity-50"
             >
               {requesting ? 'Submitting...' : 'Request Discounting'}
             </button>
