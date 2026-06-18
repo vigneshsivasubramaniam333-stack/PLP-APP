@@ -6,12 +6,14 @@ COPY .npmrc.docker /root/.npmrc
 
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/design-system/package.json packages/design-system/package.json
 COPY packages/platform-ui/package.json packages/platform-ui/package.json
 
 # Install workspace deps (lockfile at frontend root)
 RUN npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund
 
 COPY packages/shared ./packages/shared
+COPY packages/design-system ./packages/design-system
 COPY packages/platform-ui ./packages/platform-ui
 
 WORKDIR /app/packages/platform-ui
