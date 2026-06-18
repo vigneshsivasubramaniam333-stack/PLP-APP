@@ -173,13 +173,13 @@ export default function InvoicesPage() {
             <table className="bt-table w-full">
               <thead>
                 <tr>
-                  <th>Invoice #</th>
-                  <th>Dates</th>
-                  <th className="text-right">Amount</th>
-                  <th className="text-right">Net</th>
-                  <th>Digital</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-center">Actions</th>
+                  <th className="min-w-[140px]">Invoice #</th>
+                  <th className="min-w-[120px]">Dates</th>
+                  <th className="text-right whitespace-nowrap">Amount</th>
+                  <th className="text-right whitespace-nowrap">Net</th>
+                  <th className="min-w-[100px]">Digital</th>
+                  <th className="text-center whitespace-nowrap">Status</th>
+                  <th className="text-center whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,9 +208,9 @@ export default function InvoicesPage() {
                           <div className="text-xs text-[var(--bt-gray-600)]">{inv.invoiceDate}</div>
                           <div className="text-[11px] text-[var(--bt-gray-400)] mt-0.5">Due: {inv.dueDate}</div>
                         </td>
-                        <td className="text-right text-[var(--bt-gray-700)]">{formatInvoiceCurrency(inv.invoiceAmount)}</td>
-                        <td className="text-right font-medium text-[var(--bt-gray-900)]">{formatInvoiceCurrency(inv.netAmount)}</td>
-                        <td className="text-xs text-[var(--bt-gray-600)] max-w-[200px]">
+                        <td className="text-right tabular-nums whitespace-nowrap text-[var(--bt-gray-700)]">{formatInvoiceCurrency(inv.invoiceAmount)}</td>
+                        <td className="text-right tabular-nums whitespace-nowrap font-medium text-[var(--bt-gray-900)]">{formatInvoiceCurrency(inv.netAmount)}</td>
+                        <td className="text-xs text-[var(--bt-gray-600)]">
                           {inv.digitalInvoiceFileName ? (
                             <button
                               type="button"
@@ -227,11 +227,11 @@ export default function InvoicesPage() {
                             <span className="text-[var(--bt-gray-400)]">—</span>
                           )}
                         </td>
-                        <td className="text-center">
+                        <td className="text-center whitespace-nowrap">
                           <BtBadge tone="gray">{inv.status}</BtBadge>
                         </td>
-                        <td className="text-center">
-                          <div className="flex items-center justify-center gap-2">
+                        <td className="text-center whitespace-nowrap">
+                          <div className="inline-flex items-center justify-center gap-2">
                             {inv.status === 'UPLOADED' ? (
                               <button
                                 type="button"

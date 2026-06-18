@@ -179,12 +179,12 @@ export default function DashboardPage() {
             <table className="bt-table w-full">
               <thead>
                 <tr>
-                  <th>Program</th>
-                  <th>Product</th>
-                  <th className="text-right">Limit</th>
-                  <th className="text-right">Utilized</th>
-                  <th className="text-right">Available</th>
-                  <th className="text-center">Status</th>
+                  <th className="min-w-[180px]">Program</th>
+                  <th className="min-w-[140px]">Product</th>
+                  <th className="text-right whitespace-nowrap">Limit</th>
+                  <th className="text-right whitespace-nowrap">Utilized</th>
+                  <th className="text-right whitespace-nowrap">Available</th>
+                  <th className="text-center whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,16 +199,16 @@ export default function DashboardPage() {
                         {p.productType === 'PAY_DAY_LOAN' ? 'Pay Day Loan' : 'Invoice Discounting'}
                       </BtBadge>
                     </td>
-                    <td className="text-right font-medium tabular-nums">{formatCurrency(p.programLimit)}</td>
-                    <td className="text-right font-medium tabular-nums text-[var(--bt-amber)]">
+                    <td className="text-right font-medium tabular-nums whitespace-nowrap">{formatCurrency(p.programLimit)}</td>
+                    <td className="text-right font-medium tabular-nums whitespace-nowrap text-[var(--bt-amber)]">
                       {formatCurrency(Number(p.utilizedLimit) || 0)}
                     </td>
-                    <td className="text-right font-medium tabular-nums text-[var(--bt-green)]">
+                    <td className="text-right font-medium tabular-nums whitespace-nowrap text-[var(--bt-green)]">
                       {formatCurrency(
                         Number(p.availableLimit) || Math.max(0, Number(p.programLimit) - (Number(p.utilizedLimit) || 0)),
                       )}
                     </td>
-                    <td className="text-center">
+                    <td className="text-center whitespace-nowrap">
                       <BtBadge status={p.status}>{p.status}</BtBadge>
                     </td>
                   </tr>
@@ -244,17 +244,17 @@ export default function DashboardPage() {
             <table className="bt-table w-full">
               <thead>
                 <tr>
-                  <th>Invoice #</th>
-                  <th className="text-right">Net</th>
-                  <th className="text-center">Status</th>
+                  <th className="min-w-[140px]">Invoice #</th>
+                  <th className="text-right whitespace-nowrap">Net</th>
+                  <th className="text-center whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {recentInvoices.map((inv) => (
                   <tr key={inv.id}>
                     <td className="font-mono text-xs font-medium">{inv.invoiceNumber}</td>
-                    <td className="text-right tabular-nums">{formatCurrency(inv.netAmount)}</td>
-                    <td className="text-center">
+                    <td className="text-right tabular-nums whitespace-nowrap">{formatCurrency(inv.netAmount)}</td>
+                    <td className="text-center whitespace-nowrap">
                       <BtBadge status={inv.status}>{inv.status}</BtBadge>
                     </td>
                   </tr>

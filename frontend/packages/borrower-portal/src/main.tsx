@@ -10,6 +10,7 @@ import MyLoansPage from './pages/MyLoansPage';
 import InvoiceDiscountingPage from './pages/InvoiceDiscountingPage';
 import RepaymentHistoryPage from './pages/RepaymentHistoryPage';
 import NotificationsPage from './pages/NotificationsPage';
+import ProgramsPage from './pages/ProgramsPage';
 import BorrowerLayout from './layouts/BorrowerLayout';
 
 window.__PLP_TOKEN_KEY__ = 'plp_borrower_token';
@@ -55,6 +56,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><BorrowerLayout /></ProtectedRoute>}>
             <Route index element={<DashboardPage />} />
+            <Route path="programs" element={<ProgramsPage />} />
             <Route path="request-loan" element={<LoanRequestPage />} />
             <Route path="my-loans" element={<MyLoansPage />} />
             <Route path="invoice-discounting" element={<InvoiceDiscountingPage />} />

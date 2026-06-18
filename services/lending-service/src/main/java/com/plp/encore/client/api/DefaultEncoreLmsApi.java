@@ -108,6 +108,7 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
         loanAccount.put("normalInterestRate", request.interestRate().toPlainString());
         loanAccount.put("operationalStatus", "active");
         loanAccount.put("penalInterestRate", "0");
+        loanAccount.put("preclosureFeeRate", "0");
         String productCode = request.productCode() != null && !request.productCode().isBlank()
                 ? request.productCode()
                 : EncoreTemporaryOverrides.DEFAULT_ENCORE_PRODUCT_CODE;
@@ -271,50 +272,40 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
             return Collections.emptyList();
         }
         try {
-            if (properties.getBlCoreParity().isScheduleViaFindSummary()) {
-                JsonNode summary = findSummaryFirstObject(encoreAccountId, false);
-                return EncoreRepaymentScheduleParser.parseFromSummaryRoot(summary);
+            List<Map<String, Object>> fromWebservice = findRepaymentScheduleViaFindSummaries(encoreAccountId);
+            if (!fromWebservice.isEmpty()) {
+                return fromWebservice;
             }
-            Map<String, String> params = new LinkedHashMap<>();
-            params.put("accountId", objectMapper.writeValueAsString(List.of(encoreAccountId)));
-            params.put("ignoreTransactions", "false");
-            String response = transport.httpGet(properties.getApi().getFindSummaries(), params);
-            JsonNode summaryArray = objectMapper.readTree(response);
-            List<Map<String, Object>> schedules = new ArrayList<>();
-            if (summaryArray.isArray() && summaryArray.size() > 0) {
-                JsonNode summary = summaryArray.get(0);
-                JsonNode repaymentSchedule = summary.path("repaymentSchedule");
-                if (repaymentSchedule.isArray()) {
-                    for (JsonNode entry : repaymentSchedule) {
-                        Map<String, Object> scheduleEntry = new LinkedHashMap<>();
-                        scheduleEntry.put("sequenceNum", entry.path("sequenceNum").asInt());
-                        scheduleEntry.put("description", entry.path("description").asText());
-                        scheduleEntry.put("installmentAmount", entry.path("amount1").asText());
-                        scheduleEntry.put("amountDue", entry.path("amount3").asText());
-                        scheduleEntry.put("valueDateStr", entry.path("valueDateStr").asText());
-                        scheduleEntry.put("normalInterestRate", entry.path("part1").asDouble());
-                        scheduleEntry.put("principalRate", entry.path("part2").asDouble());
-                        scheduleEntry.put("penalInterestRate", entry.path("part3").asDouble());
-                        scheduleEntry.put("balance", entry.path("amount2").asText());
-                        double installment = entry.path("amount1").asDouble(0);
-                        double interestRatePct = entry.path("part1").asDouble(0);
-                        double principalRatePct = entry.path("part2").asDouble(0);
-                        double totalRatePct = interestRatePct + principalRatePct;
-                        if (totalRatePct > 0 && installment > 0) {
-                            scheduleEntry.put("interestAmount", installment * interestRatePct / totalRatePct);
-                            scheduleEntry.put("principalAmount", installment * principalRatePct / totalRatePct);
-                        } else {
-                            scheduleEntry.put("interestAmount", 0.0);
-                            scheduleEntry.put("principalAmount", installment);
-                        }
-                        schedules.add(scheduleEntry);
-                    }
-                }
-            }
-            return schedules;
         } catch (Exception e) {
-            throw new RuntimeException("Encore findRepaymentSchedule failed: " + e.getMessage(), e);
+            log.warn("[Encore] findSummaries repayment schedule failed for accountId={}: {} — trying REST loan-od-accounts",
+                    encoreAccountId, e.getMessage());
         }
+        List<Map<String, Object>> fromRest = findRepaymentScheduleViaLoanOdAccount(encoreAccountId);
+        if (!fromRest.isEmpty()) {
+            return fromRest;
+        }
+        return Collections.emptyList();
+    }
+
+    private List<Map<String, Object>> findRepaymentScheduleViaFindSummaries(String encoreAccountId) throws Exception {
+        if (properties.getBlCoreParity().isScheduleViaFindSummary()) {
+            JsonNode summary = findSummaryFirstObject(encoreAccountId, false);
+            return EncoreRepaymentScheduleParser.parseFromSummaryRoot(summary);
+        }
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("accountId", objectMapper.writeValueAsString(List.of(encoreAccountId)));
+        params.put("ignoreTransactions", "false");
+        String response = transport.httpGet(properties.getApi().getFindSummaries(), params);
+        JsonNode summaryArray = objectMapper.readTree(response);
+        if (summaryArray.isArray() && !summaryArray.isEmpty()) {
+            return EncoreRepaymentScheduleParser.parseFromSummaryRoot(summaryArray.get(0));
+        }
+        return Collections.emptyList();
+    }
+
+    private List<Map<String, Object>> findRepaymentScheduleViaLoanOdAccount(String encoreAccountId) {
+        JsonNode root = getLoanOdAccountDetails(encoreAccountId);
+        return EncoreRepaymentScheduleParser.parseFromSummaryRoot(root);
     }
 
     @Override
@@ -339,6 +330,40 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
             return Collections.emptyList();
         }
         try {
+            if (hasRestAuthToken()) {
+                List<Map<String, Object>> composite = getCompositeStatement(encoreAccountId);
+                if (!composite.isEmpty()) {
+                    return composite;
+                }
+                List<Map<String, Object>> accountStatement = fetchAccountStatementFromLoanOd(encoreAccountId);
+                if (!accountStatement.isEmpty()) {
+                    return accountStatement;
+                }
+            }
+            List<Map<String, Object>> legacy = fetchFindAccountStatements(encoreAccountId, fromDate, toDate);
+            if (!legacy.isEmpty()) {
+                return legacy;
+            }
+            if (!hasRestAuthToken()) {
+                List<Map<String, Object>> composite = getCompositeStatement(encoreAccountId);
+                if (!composite.isEmpty()) {
+                    return composite;
+                }
+            }
+            return Collections.emptyList();
+        } catch (Exception e) {
+            throw new RuntimeException("Encore getAccountStatement failed: " + e.getMessage(), e);
+        }
+    }
+
+    private boolean hasRestAuthToken() {
+        String token = properties.getRestAuthToken();
+        return token != null && !token.isBlank();
+    }
+
+    private List<Map<String, Object>> fetchFindAccountStatements(
+            String encoreAccountId, String fromDate, String toDate) {
+        try {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("accountId", encoreAccountId);
             if (fromDate != null) {
@@ -359,7 +384,68 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
             }
             return entries;
         } catch (Exception e) {
-            throw new RuntimeException("Encore getAccountStatement failed: " + e.getMessage(), e);
+            log.warn("[Encore] findAccountStatements failed for accountId={}: {}", encoreAccountId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<Map<String, Object>> fetchAccountStatementFromLoanOd(String encoreAccountId) {
+        try {
+            JsonNode root = getLoanOdAccountDetails(encoreAccountId);
+            JsonNode stmtArray = root != null ? root.path("accountStatement") : null;
+            if (stmtArray == null || !stmtArray.isArray() || stmtArray.isEmpty()) {
+                return Collections.emptyList();
+            }
+            List<Map<String, Object>> entries = new ArrayList<>();
+            for (JsonNode node : stmtArray) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> row = objectMapper.convertValue(node, Map.class);
+                entries.add(row);
+            }
+            return entries;
+        } catch (Exception e) {
+            log.warn("[Encore] accountStatement from loan-od-accounts failed for accountId={}: {}",
+                    encoreAccountId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public JsonNode getLoanOdAccountDetails(String encoreAccountId) {
+        if (!isActive()) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            String path = properties.getApi().getLoanOdAccountDetails() + "/" + encoreAccountId;
+            String response = transport.httpGet(path, null);
+            return objectMapper.readTree(response);
+        } catch (Exception e) {
+            log.warn("[Encore] getLoanOdAccountDetails failed for accountId={}: {}", encoreAccountId, e.getMessage());
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    @Override
+    public List<Map<String, Object>> getCompositeStatement(String encoreAccountId) {
+        if (!isActive()) {
+            return Collections.emptyList();
+        }
+        try {
+            JsonNode root = getLoanOdAccountDetails(encoreAccountId);
+            JsonNode composite = root != null ? root.get("compositeStatement") : null;
+            if (composite == null || !composite.isArray() || composite.isEmpty()) {
+                return Collections.emptyList();
+            }
+            List<Map<String, Object>> entries = new ArrayList<>();
+            for (JsonNode node : composite) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> row = objectMapper.convertValue(node, Map.class);
+                entries.add(row);
+            }
+            return entries;
+        } catch (Exception e) {
+            log.warn("[Encore] getCompositeStatement failed for accountId={}: {}", encoreAccountId, e.getMessage());
+            return Collections.emptyList();
         }
     }
 

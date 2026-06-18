@@ -11,6 +11,7 @@ import InvoicesPage from './pages/InvoicesPage';
 import InvoiceCreatePage from './pages/InvoiceCreatePage';
 import SettlementsPage from './pages/SettlementsPage';
 import ReportsPage from './pages/ReportsPage';
+import ProgramsPage from './pages/ProgramsPage';
 import AnchorLayout from './layouts/AnchorLayout';
 
 window.__PLP_TOKEN_KEY__ = 'plp_anchor_token';
@@ -62,6 +63,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><AnchorLayout /></ProtectedRoute>}>
             <Route index element={<DashboardPage />} />
+            <Route path="programs" element={<ProgramsPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="salary-upload" element={<SalaryUploadPage />} />
             <Route path="invoices" element={<InvoicesPage />} />

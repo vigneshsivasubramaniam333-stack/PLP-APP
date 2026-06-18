@@ -13,6 +13,7 @@ Mirror LOS Encore settings (Credinnov sandbox):
 
 - `ENCORE_BASE_URL` — `http://credinnov-sandbox.senseitech.com/credinnov-encore-server/` (via host nginx; **not** `...:8091/encore/` alone — that returns HTTP 404)
 - `ENCORE_API_USERNAME` / `ENCORE_API_PASSWORD` — `admin` / `password1` (same as Encore UI at `/encore-client/`)
+- `ENCORE_REST_AUTH_TOKEN` — session token from Encore UI (`X-Auth-Token` header) for REST paths like `api/loan-od-accounts` (repayment schedule + SOA when `findSummaries` fails)
 - `ENCORE_ADMIN_BRANCH`, `ENCORE_CURRENCY` (optional)
 
 Configured under `plp.lms.encore.*` in `lending-service` `application.yml` and `docker-compose.yml` (`lending-service` env).

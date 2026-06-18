@@ -101,6 +101,7 @@ public class EncoreHttpTransport {
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
                         .header("Authorization", buildBasicAuthHeader());
+                applyRestAuthHeader(b, apiPath);
 
                 HttpRequest request;
                 if ("POST".equals(method)) {
@@ -205,6 +206,16 @@ public class EncoreHttpTransport {
     private String buildBasicAuthHeader() {
         String credentials = properties.getApiUsername() + ":" + properties.getApiPassword();
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void applyRestAuthHeader(HttpRequest.Builder builder, String apiPath) {
+        if (apiPath == null || !apiPath.startsWith("api/")) {
+            return;
+        }
+        String token = properties.getRestAuthToken();
+        if (token != null && !token.isBlank()) {
+            builder.header("X-Auth-Token", token.trim());
+        }
     }
 
     /**

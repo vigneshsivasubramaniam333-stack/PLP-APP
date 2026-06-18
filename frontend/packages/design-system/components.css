@@ -210,13 +210,12 @@
 .bt-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .bt-table thead th {
   background: var(--bt-gray-50);
   padding: 9px 12px;
-  text-align: left;
   font-size: 10.5px;
   font-weight: 600;
   color: var(--bt-gray-400);
@@ -224,12 +223,21 @@
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--bt-gray-200);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .bt-table thead th:first-child { padding-left: 16px; }
 .bt-table thead th:last-child  { padding-right: 16px; }
+
+.bt-table thead th.text-right,
+.bt-table tbody td.text-right {
+  text-align: right;
+}
+
+.bt-table thead th.text-center,
+.bt-table tbody td.text-center {
+  text-align: center;
+}
 
 .bt-table tbody td {
   padding: 10px 12px;
@@ -237,8 +245,13 @@
   color: var(--bt-gray-700);
   border-bottom: 1px solid var(--bt-gray-100);
   vertical-align: middle;
+}
+
+.bt-table tbody td.bt-cell-truncate {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
 }
 
 .bt-table tbody td:first-child { padding-left: 16px; }

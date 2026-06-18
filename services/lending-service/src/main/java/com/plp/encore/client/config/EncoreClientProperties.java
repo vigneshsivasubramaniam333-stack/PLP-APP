@@ -27,6 +27,12 @@ public class EncoreClientProperties {
     private String apiUsername = "admin";
     private String apiPassword = "password1";
 
+    /**
+     * Optional session token for Encore REST paths under {@code api/} (e.g. loan-od-accounts).
+     * Webservices paths continue to use Basic auth. Set {@code ENCORE_REST_AUTH_TOKEN} in env.
+     */
+    private String restAuthToken = "";
+
     private EncoreApiEndpoints api = new EncoreApiEndpoints();
 
     private String currency = "INR";
@@ -95,6 +101,7 @@ public class EncoreClientProperties {
         private String findODProductInfo = "webservices/loans/accounts/findLoanOdProduct";
         private String findPreOpenSummary = "webservices/findPreOpenSummary";
         private String findLoanInfo = "webservices/findLoanInfo";
+        private String loanOdAccountDetails = "api/loan-od-accounts";
     }
 
     @Data

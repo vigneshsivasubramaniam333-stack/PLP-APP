@@ -109,6 +109,23 @@ export default function SubProgramsPage() {
     });
   }, [allSubPrograms, filterProgramId, filterAnchorId]);
 
+  const borrowerById = useMemo(() => {
+    const map = new Map<string, Borrower>();
+    for (const b of programBorrowersPick) map.set(b.id, b);
+    return map;
+  }, [programBorrowersPick]);
+
+  function borrowerDisplayName(borrowerId: string): string {
+    const b = borrowerById.get(borrowerId);
+    if (!b) return borrowerId;
+    return b.name?.trim() || b.borrowerCode?.trim() || borrowerId;
+  }
+
+  function borrowerDisplayCode(borrowerId: string): string | null {
+    const b = borrowerById.get(borrowerId);
+    return b?.borrowerCode?.trim() || null;
+  }
+
   const refreshSubProgramList = () => {
     setListRefreshing(true);
     subProgramApi
@@ -787,7 +804,7 @@ export default function SubProgramsPage() {
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200">
                         <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">
-                          Borrower ID
+                          Borrower
                         </th>
                         <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase">
                           Limit
@@ -806,7 +823,12 @@ export default function SubProgramsPage() {
                     <tbody className="divide-y divide-slate-100">
                       {detailBorrowers.map((row) => (
                         <tr key={row.id} className="hover:bg-slate-50/80">
-                          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{row.borrowerId}</td>
+                          <td className="px-4 py-2.5 text-slate-700">
+                            <div className="text-sm font-medium">{borrowerDisplayName(row.borrowerId)}</div>
+                            {borrowerDisplayCode(row.borrowerId) ? (
+                              <div className="text-xs text-slate-400 font-mono">{borrowerDisplayCode(row.borrowerId)}</div>
+                            ) : null}
+                          </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{formatNum(row.borrowerLimit)}</td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{formatNum(row.utilizedLimit)}</td>
                           <td className="px-4 py-2.5 text-right tabular-nums">{formatNum(row.availableLimit)}</td>
