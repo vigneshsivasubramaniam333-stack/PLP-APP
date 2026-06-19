@@ -30,4 +30,9 @@ public interface SubProgramRepository extends JpaRepository<SubProgram, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM SubProgram s WHERE s.id = :id")
     Optional<SubProgram> findByIdForUpdate(@Param("id") UUID id);
+
+    long countByProgramId(UUID programId);
+
+    @Query("SELECT COALESCE(SUM(s.utilizedLimit), 0) FROM SubProgram s WHERE s.programId = :programId")
+    java.math.BigDecimal sumUtilizedByProgramId(@Param("programId") UUID programId);
 }

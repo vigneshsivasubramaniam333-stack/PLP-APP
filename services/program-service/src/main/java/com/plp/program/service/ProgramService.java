@@ -5,6 +5,7 @@ import com.plp.program.model.entity.Program;
 import com.plp.program.model.enums.ProgramStatus;
 import com.plp.program.repository.BorrowerLimitRepository;
 import com.plp.program.repository.ProgramRepository;
+import com.plp.program.repository.SubProgramRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class ProgramService {
 
     private final ProgramRepository programRepository;
     private final BorrowerLimitRepository borrowerLimitRepository;
+    private final SubProgramRepository subProgramRepository;
 
     @Transactional
     public Program createProgram(Program program) {
@@ -142,14 +144,24 @@ public class ProgramService {
 
     private void attachProgramLimitHeadroom(List<Program> programs) {
         for (Program p : programs) {
-            BigDecimal sum = borrowerLimitRepository.sumUtilizedByProgramId(p.getId());
-            if (sum == null) {
-                sum = ZERO;
-            }
+            BigDecimal sum = resolveProgramUtilized(p.getId());
             BigDecimal cap = p.getProgramLimit() != null ? p.getProgramLimit() : ZERO;
             p.setUtilizedLimit(sum);
             p.setAvailableLimit(cap.subtract(sum).max(ZERO));
         }
+    }
+
+    /**
+     * When a program has sub-programs, aggregate utilization from {@code sub_programs.utilized_limit}.
+     * Legacy programs without sub-programs continue to use {@code borrower_limits}.
+     */
+    private BigDecimal resolveProgramUtilized(UUID programId) {
+        if (subProgramRepository.countByProgramId(programId) > 0) {
+            BigDecimal subSum = subProgramRepository.sumUtilizedByProgramId(programId);
+            return subSum != null ? subSum : ZERO;
+        }
+        BigDecimal legacySum = borrowerLimitRepository.sumUtilizedByProgramId(programId);
+        return legacySum != null ? legacySum : ZERO;
     }
 
     /**
@@ -217,10 +229,7 @@ public class ProgramService {
 
     public Map<String, Object> getUtilization(UUID programId) {
         Program program = getProgram(programId);
-        BigDecimal totalUtilized = borrowerLimitRepository.sumUtilizedByProgramId(programId);
-        if (totalUtilized == null) {
-            totalUtilized = ZERO;
-        }
+        BigDecimal totalUtilized = resolveProgramUtilized(programId);
         BigDecimal available = program.getProgramLimit().subtract(totalUtilized);
         BigDecimal utilizationPercent = totalUtilized
                 .multiply(BigDecimal.valueOf(100))
