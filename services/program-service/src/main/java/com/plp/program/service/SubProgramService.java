@@ -3,9 +3,11 @@ package com.plp.program.service;
 import com.plp.program.model.enums.ProductType;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.dto.SubProgramBorrowerTermsDto;
 import com.plp.program.model.dto.SubProgramEditDto;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
+import com.plp.program.validation.SubProgramBorrowerTermsValidator;
 import com.plp.program.repository.AnchorRepository;
 import com.plp.program.repository.BorrowerRepository;
 import com.plp.program.repository.ProgramRepository;
@@ -179,6 +181,7 @@ public class SubProgramService {
         }
 
         applyBorrowerLimitDefaults(membership);
+        SubProgramBorrowerTermsValidator.validateAndApplyDefaults(membership, subProgram);
 
         SubProgramBorrower saved = subProgramBorrowerRepository.save(membership);
         log.info("Sub program borrower enrolled: subProgram={} borrower={}", subProgramId, membership.getBorrowerId());
@@ -188,6 +191,46 @@ public class SubProgramService {
     public List<SubProgramBorrower> listBorrowers(UUID subProgramId) {
         getSubProgram(subProgramId);
         return subProgramBorrowerRepository.findBySubProgramId(subProgramId);
+    }
+
+    @Transactional
+    public SubProgramBorrower updateBorrowerTerms(UUID subProgramId, UUID borrowerId, SubProgramBorrowerTermsDto dto) {
+        SubProgram subProgram = getSubProgram(subProgramId);
+        SubProgramBorrower membership = subProgramBorrowerRepository
+                .findBySubProgramIdAndBorrowerId(subProgramId, borrowerId)
+                .orElseThrow(() -> new RuntimeException("Borrower not enrolled in this sub program"));
+
+        if (dto.getBorrowerLimit() != null) {
+            membership.setBorrowerLimit(dto.getBorrowerLimit());
+            if (membership.getUtilizedLimit() != null) {
+                membership.setAvailableLimit(dto.getBorrowerLimit().subtract(membership.getUtilizedLimit()).max(BigDecimal.ZERO));
+            } else {
+                membership.setAvailableLimit(dto.getBorrowerLimit());
+            }
+        }
+        if (dto.getInterestRate() != null) {
+            membership.setInterestRate(dto.getInterestRate());
+        }
+        if (dto.getDiscountMarginPercent() != null) {
+            membership.setDiscountMarginPercent(dto.getDiscountMarginPercent());
+        }
+        if (dto.getCreditPeriodDays() != null) {
+            membership.setCreditPeriodDays(dto.getCreditPeriodDays());
+        }
+        if (dto.getDiscountHold() != null) {
+            membership.setDiscountHold(dto.getDiscountHold());
+        }
+        if (dto.getPaymentMethod() != null) {
+            membership.setPaymentMethod(dto.getPaymentMethod());
+        }
+        if (dto.getOverdueInterestRate() != null) {
+            membership.setOverdueInterestRate(dto.getOverdueInterestRate());
+        }
+
+        SubProgramBorrowerTermsValidator.validateAndApplyDefaults(membership, subProgram);
+        SubProgramBorrower saved = subProgramBorrowerRepository.save(membership);
+        log.info("Sub program borrower terms updated: subProgram={} borrower={}", subProgramId, borrowerId);
+        return saved;
     }
 
     @Transactional

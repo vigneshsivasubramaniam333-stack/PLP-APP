@@ -3,12 +3,15 @@ package com.plp.program.controller;
 import com.plp.program.audit.AuditBridge;
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.model.dto.EffectiveBorrowerTermsDto;
+import com.plp.program.model.dto.SubProgramBorrowerTermsDto;
 import com.plp.program.model.dto.SubProgramEditDto;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.security.LenderPortalRoleAuthorization;
 import com.plp.program.security.SubProgramAccessGuard;
+import com.plp.program.service.SubProgramBorrowerTermsResolver;
 import com.plp.program.service.SubProgramLimitService;
 import com.plp.program.service.SubProgramService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ public class SubProgramController {
     private final SubProgramService subProgramService;
     private final SubProgramLimitService subProgramLimitService;
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
+    private final SubProgramBorrowerTermsResolver borrowerTermsResolver;
     private final AuditService auditService;
 
     @PostMapping
@@ -245,6 +249,39 @@ public class SubProgramController {
         try {
             SubProgram sp = subProgramService.deactivateSubProgram(id);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", sp));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/borrowers/{borrowerId}")
+    public ResponseEntity<Map<String, Object>> updateBorrowerTerms(
+            @PathVariable UUID id,
+            @PathVariable UUID borrowerId,
+            @RequestBody SubProgramBorrowerTermsDto dto,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader) {
+        SubProgramAccessGuard.requireSubProgramWriteAccess(rolesHeader);
+        try {
+            SubProgramBorrower updated = subProgramService.updateBorrowerTerms(id, borrowerId, dto);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/borrowers/{borrowerId}/effective-terms")
+    public ResponseEntity<Map<String, Object>> effectiveBorrowerTerms(
+            @PathVariable UUID id,
+            @PathVariable UUID borrowerId,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        SubProgram sp = subProgramService.getSubProgram(id);
+        SubProgramAccessGuard.requireSubProgramReadAccess(
+                sp, rolesHeader, linkedEntityId, linkedEntityType, subProgramBorrowerRepository);
+        try {
+            EffectiveBorrowerTermsDto terms = borrowerTermsResolver.resolveEffectiveTerms(id, borrowerId);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", terms));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
         }

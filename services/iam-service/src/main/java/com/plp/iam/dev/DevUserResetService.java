@@ -9,12 +9,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DevUserResetService {
 
-    public static final String PRESERVED_ADMIN_EMAIL = "admin@plp.com";
-
     private final UserRepository userRepository;
+    private final DevPreservedUserEmails devPreservedUserEmails;
 
     @Transactional
-    public void deleteAllUsersExceptPlatformAdmin() {
-        userRepository.deleteAllExceptEmail(PRESERVED_ADMIN_EMAIL);
+    public int deleteAllUsersExceptPreserved() {
+        var preserved = devPreservedUserEmails.preservedEmailsLower();
+        if (preserved.isEmpty()) {
+            return 0;
+        }
+        return userRepository.deleteAllExceptEmails(preserved);
     }
 }

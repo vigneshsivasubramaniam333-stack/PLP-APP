@@ -49,7 +49,8 @@ management:
 
 plp:
   dev-reset:
-    enabled: false
+    # Local/docker default true; set PLP_DEV_RESET_ENABLED=false in production.
+    enabled: ${PLP_DEV_RESET_ENABLED:true}
 
   lms:
     encore:

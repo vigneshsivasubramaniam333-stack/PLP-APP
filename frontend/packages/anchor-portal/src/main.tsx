@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { AuthProvider, useAuth, BtToastHost } from '@plp/shared';
 import './index.css';
 import LoginPage from './pages/LoginPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import SalaryUploadPage from './pages/SalaryUploadPage';
@@ -52,7 +53,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (!isAnchorPortalRole(user.role)) return <UnauthorizedPortalAccess />;
+  if (user.passwordResetRequired) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
+}
+
+function ChangePasswordRoute() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isAnchorPortalRole(user.role)) return <UnauthorizedPortalAccess />;
+  if (!user.passwordResetRequired) return <Navigate to="/" replace />;
+  return <ChangePasswordPage />;
 }
 
 function App() {
@@ -61,6 +71,7 @@ function App() {
       <BrowserRouter basename="/plp-anchor">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/change-password" element={<ChangePasswordRoute />} />
           <Route path="/" element={<ProtectedRoute><AnchorLayout /></ProtectedRoute>}>
             <Route index element={<DashboardPage />} />
             <Route path="programs" element={<ProgramsPage />} />

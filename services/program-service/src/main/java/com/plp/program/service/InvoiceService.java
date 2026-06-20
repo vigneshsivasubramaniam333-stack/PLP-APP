@@ -1,11 +1,13 @@
 package com.plp.program.service;
 
+import com.plp.program.integration.LendingServiceFinanceClient;
 import com.plp.program.model.dto.InvoiceDigitalAttachmentResult;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.entity.Program;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.enums.InvoiceStatus;
+import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.repository.BorrowerRepository;
 import com.plp.program.repository.InvoiceRepository;
 import com.plp.program.repository.ProgramRepository;
@@ -28,7 +30,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -49,6 +53,14 @@ public class InvoiceService {
     private final SubProgramRepository subProgramRepository;
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final DigitalInvoiceObjectStorage digitalInvoiceObjectStorage;
+    private final ProgramService programService;
+    private final LendingServiceFinanceClient lendingServiceFinanceClient;
+
+    private static final List<String> GAP_BLOCKING_STATUSES = List.of(
+            InvoiceStatus.FINANCING_REQUESTED.name(),
+            "PARTIALLY_DISCOUNTED",
+            "FULLY_DISCOUNTED");
+    private static final List<String> DELETABLE_STATUSES = List.of("UPLOADED", "VERIFIED");
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -68,6 +80,7 @@ public class InvoiceService {
             applyFlowTypeDefaultOrValidate(invoice);
         }
         computeEligibleAmount(invoice);
+        enforceGapBetweenPreviousInvoices(invoice);
         invoice.setStatus("UPLOADED");
         invoice.setSource("MANUAL");
         invoice.setUploadedByUserId(uploadedByUserId);
@@ -251,7 +264,46 @@ public class InvoiceService {
         invoice.setAnchorConfirmed(true);
         invoice.setAnchorConfirmedAt(Instant.now());
         invoice.setStatus("ELIGIBLE");
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        return applyPostEligibleAutomation(invoice);
+    }
+
+    private Invoice applyPostEligibleAutomation(Invoice invoice) {
+        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
+        if (ProgramParametersValidator.parseYesNo(params.get("autoAcceptInvoices"), false)) {
+            String flow = invoice.getFlowType();
+            boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
+            if (purchaseFlow && "ELIGIBLE".equals(invoice.getStatus())) {
+                invoice = borrowerAcceptInvoice(invoice.getId(), invoice.getBorrowerId());
+            } else if (FLOW_SALES_BILL_DISCOUNTING.equals(flow) && "ELIGIBLE".equals(invoice.getStatus())) {
+                maybeAutoPullFinance(invoice);
+            }
+        } else if (ProgramParametersValidator.parseYesNo(params.get("autoPullOption"), false)) {
+            maybeAutoPullFinance(invoice);
+        }
+        return invoice;
+    }
+
+    private void maybeAutoPullFinance(Invoice invoice) {
+        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
+        if (!ProgramParametersValidator.parseYesNo(params.get("autoPullOption"), false)) {
+            return;
+        }
+        String status = invoice.getStatus();
+        boolean purchaseReady = "BORROWER_ACCEPTED".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
+        boolean salesReady = "ELIGIBLE".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
+        String flow = invoice.getFlowType();
+        boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
+        boolean ready = purchaseFlow ? purchaseReady : salesReady;
+        if (!ready) {
+            return;
+        }
+        BigDecimal amount = invoice.getAvailableAmount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            amount = invoice.getEligibleAmount();
+        }
+        lendingServiceFinanceClient.requestInvoiceFinance(
+                invoice.getId(), invoice.getBorrowerId(), invoice.getProgramId(), amount);
     }
 
     /**
@@ -275,7 +327,9 @@ public class InvoiceService {
         invoice.setBorrowerAccepted(true);
         invoice.setBorrowerAcceptedAt(Instant.now());
         invoice.setStatus("BORROWER_ACCEPTED");
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        maybeAutoPullFinance(invoice);
+        return invoice;
     }
 
     /**
@@ -340,7 +394,13 @@ public class InvoiceService {
     public Invoice markDiscounted(UUID invoiceId, BigDecimal discountedAmount) {
         Invoice invoice = invoiceRepository.findByIdForUpdate(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
-        BigDecimal newDiscounted = invoice.getDiscountedAmount().add(discountedAmount);
+        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
+        boolean partialAllowed = ProgramParametersValidator.parseYesNo(params.get("partialDiscount"), false);
+        BigDecimal existing = invoice.getDiscountedAmount() != null ? invoice.getDiscountedAmount() : BigDecimal.ZERO;
+        if (!partialAllowed && existing.compareTo(BigDecimal.ZERO) > 0) {
+            throw new RuntimeException("Partial discount is not allowed for this program");
+        }
+        BigDecimal newDiscounted = existing.add(discountedAmount);
         invoice.setDiscountedAmount(newDiscounted);
         invoice.setAvailableAmount(invoice.getEligibleAmount().subtract(newDiscounted));
         if (invoice.getAvailableAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -350,6 +410,69 @@ public class InvoiceService {
             invoice.setStatus("PARTIALLY_DISCOUNTED");
         }
         return invoiceRepository.save(invoice);
+    }
+
+    @Transactional
+    public void deleteInvoice(UUID invoiceId) {
+        Invoice invoice = invoiceRepository.findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
+        if (!ProgramParametersValidator.parseYesNo(params.get("invoiceDelete"), false)) {
+            throw new RuntimeException("Invoice delete is not enabled for this program");
+        }
+        String status = invoice.getStatus();
+        if (status == null || !DELETABLE_STATUSES.contains(status)) {
+            throw new RuntimeException("Invoice cannot be deleted in status: " + status);
+        }
+        invoiceRepository.delete(invoice);
+        log.info("Invoice deleted: {} status={}", invoiceId, status);
+    }
+
+    private void enforceGapBetweenPreviousInvoices(Invoice invoice) {
+        if (invoice.getSubProgramId() == null) {
+            return;
+        }
+        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
+        int gapDays = parseIntParam(params.get("gapBetweenPreviousInvoiceDays"), 0);
+        if (gapDays <= 0) {
+            return;
+        }
+        List<Invoice> recent = invoiceRepository.findByBorrowerIdAndSubProgramIdOrderByCreatedAtDesc(
+                invoice.getBorrowerId(), invoice.getSubProgramId());
+        LocalDate today = LocalDate.now();
+        for (Invoice prior : recent) {
+            if (prior.getId().equals(invoice.getId())) {
+                continue;
+            }
+            if (prior.getStatus() == null || !GAP_BLOCKING_STATUSES.contains(prior.getStatus())) {
+                continue;
+            }
+            Instant created = prior.getCreatedAt();
+            if (created == null) {
+                continue;
+            }
+            LocalDate priorDate = created.atZone(ZoneId.systemDefault()).toLocalDate();
+            long daysSince = ChronoUnit.DAYS.between(priorDate, today);
+            if (daysSince < gapDays) {
+                throw new RuntimeException(
+                        "Minimum gap of " + gapDays + " days required since last financed/discounted invoice");
+            }
+            break;
+        }
+    }
+
+    private static int parseIntParam(Object raw, int defaultValue) {
+        if (raw instanceof Number n) {
+            return n.intValue();
+        }
+        if (raw == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     public Invoice getInvoice(UUID invoiceId) {

@@ -5,6 +5,7 @@ import type { AuthUser } from '../types';
 interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<AuthUser>;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<AuthUser>;
   logout: () => void;
   loading: boolean;
   error: string | null;
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshToken: data.refreshToken,
         linkedEntityId: data.linkedEntityId ?? null,
         linkedEntityType: data.linkedEntityType ?? null,
+        passwordResetRequired: Boolean(data.passwordResetRequired),
       };
       localStorage.setItem((window.__PLP_TOKEN_KEY__ ?? 'plp_access_token'), data.accessToken);
       localStorage.setItem((window.__PLP_REFRESH_KEY__ ?? 'plp_refresh_token'), data.refreshToken);
@@ -52,6 +54,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string, confirmPassword: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authApi.changePassword({ currentPassword, newPassword, confirmPassword });
+      const data = response.data;
+      const authUser: AuthUser = {
+        userId: data.userId,
+        email: data.email,
+        fullName: data.fullName,
+        role: data.role,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        linkedEntityId: data.linkedEntityId ?? null,
+        linkedEntityType: data.linkedEntityType ?? null,
+        passwordResetRequired: Boolean(data.passwordResetRequired),
+      };
+      localStorage.setItem((window.__PLP_TOKEN_KEY__ ?? 'plp_access_token'), data.accessToken);
+      localStorage.setItem((window.__PLP_REFRESH_KEY__ ?? 'plp_refresh_token'), data.refreshToken);
+      localStorage.setItem((window.__PLP_USER_KEY__ ?? 'plp_user'), JSON.stringify(authUser));
+      setUser(authUser);
+      return authUser;
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const message = axiosErr?.response?.data?.message || (err instanceof Error ? err.message : 'Password change failed');
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(window.__PLP_TOKEN_KEY__ ?? 'plp_access_token');
     localStorage.removeItem(window.__PLP_REFRESH_KEY__ ?? 'plp_refresh_token');
@@ -59,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const value: AuthContextType = { user, login, logout, loading, error, isAuthenticated: !!user };
+  const value: AuthContextType = { user, login, changePassword, logout, loading, error, isAuthenticated: !!user };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

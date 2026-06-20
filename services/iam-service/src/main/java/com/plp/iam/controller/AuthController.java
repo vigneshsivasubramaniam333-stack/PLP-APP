@@ -1,20 +1,25 @@
 package com.plp.iam.controller;
 
 import com.plp.iam.model.dto.AuthResponse;
+import com.plp.iam.model.dto.ChangePasswordRequest;
 import com.plp.iam.model.dto.CreateUserRequest;
 import com.plp.iam.model.dto.LoginRequest;
 import com.plp.iam.model.entity.User;
 import com.plp.iam.model.enums.UserRole;
 import com.plp.iam.service.AuthService;
+import com.plp.iam.security.JwtTokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import io.jsonwebtoken.Claims;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -22,6 +27,7 @@ import java.util.Set;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     /** Only {@link UserRole#BORROWER} self-registers without privileged caller; other roles need Platform Admin or lender provision rules below. */
     private static final Set<UserRole> SELF_REGISTRABLE_ROLES = Set.of(UserRole.BORROWER);
@@ -55,6 +61,31 @@ public class AuthController {
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("status", "ERROR", "message", "Missing or invalid Authorization header"));
+        }
+        Claims claims;
+        try {
+            claims = jwtTokenProvider.validateToken(authorization.substring(7));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("status", "ERROR", "message", "Invalid or expired token"));
+        }
+        try {
+            UUID userId = UUID.fromString(claims.getSubject());
+            AuthResponse response = authService.changePassword(userId, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("status", "ERROR", "message", e.getMessage()));
         }
     }

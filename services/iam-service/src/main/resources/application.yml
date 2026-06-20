@@ -38,7 +38,9 @@ plp:
     api-key: ${PLP_LOS_INTEGRATION_API_KEY:plp-los-integration-dev-key}
     default-user-password: ${PLP_INTEGRATION_DEFAULT_USER_PASSWORD:ChangeMe@PLP2026}
   dev-reset:
-    enabled: false
+    # Local/docker default true; set PLP_DEV_RESET_ENABLED=false in production.
+    enabled: ${PLP_DEV_RESET_ENABLED:true}
+    preserved-user-emails: ${PLP_DEV_RESET_PRESERVED_USER_EMAILS:admin@plp.com,anchor@testcorp.com,raj@testcorp.com,priya@buyerco.com,admin@credinnov.com,creditmanager@credinnov.com,creditofficer@credinnov.com,creditofficer2@credinnov.com,sales@credinnov.com,accounts@credinnov.com,anchor@credinnov.com,borrower@credinnov.com}
 
 eureka:
   client:

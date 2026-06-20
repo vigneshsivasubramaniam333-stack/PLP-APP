@@ -1,5 +1,6 @@
 export * from './api/client';
 export { extractApiErrorMessage } from './api/extractApiErrorMessage';
+export * from './api/devReset';
 export * from './auth/lenderLoanHeaders';
 export * from './types';
 export { useAuth, AuthProvider, AuthContext } from './hooks/useAuth.js';
@@ -44,3 +45,12 @@ export type { LoanPayoffInfo } from './utils/loanPayoff';
 export { loanPrincipalAmount, loanHasLmsAccount } from './utils/loanDisplay';
 export { InvoiceListToolbar } from './components/InvoiceListToolbar';
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';
+export { ProgramConfigDetailsPanel } from './components/ProgramConfigDetailsPanel';
+export {
+  buildProgramConfigurationRows,
+  buildSubProgramConfigurationRows,
+  buildBorrowerTermsRows,
+  buildProgramConfigurationRowsFromMaps,
+  buildBorrowerTermsRowsFromMap,
+} from './utils/programDetailsDisplay';
+export type { ProgramDetailRow, BorrowerTermsLike } from './utils/programDetailsDisplay';

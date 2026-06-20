@@ -21,4 +21,6 @@ public class AuthResponse {
     private String linkedEntityId;
     /** e.g. BORROWER, ANCHOR — aligns with {@link com.plp.iam.model.entity.User#getLinkedEntityType()}. */
     private String linkedEntityType;
+    /** When true, client must force password change before using the portal. */
+    private boolean passwordResetRequired;
 }

@@ -307,8 +307,10 @@ public class LoanController {
             @RequestBody Map<String, Object> body) {
         Loan loan = loanService.getLoan(id);
         LoanAccessGuard.requireRepayAccess(loan, rolesHeader, linkedEntityId, linkedEntityType, userIdHeader);
+        Set<String> roles = LoanAccessGuard.parseRoles(rolesHeader);
+        boolean borrowerInitiated = LoanAccessGuard.isBorrowerRole(roles);
         BigDecimal amount = new BigDecimal(body.get("amount").toString());
-        Loan updated = loanService.recordRepayment(id, amount);
+        Loan updated = loanService.recordRepayment(id, amount, borrowerInitiated);
         auditService.logEvent(
                 "REPAYMENT_RECORDED",
                 "LOAN",

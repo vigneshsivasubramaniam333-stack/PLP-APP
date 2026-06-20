@@ -48,7 +48,7 @@ public class DevResetController {
                     .body(Map.of("status", "ERROR", "message", "Only PLATFORM_ADMIN can run dev reset"));
         }
 
-        devUserResetService.deleteAllUsersExceptPlatformAdmin();
+        devUserResetService.deleteAllUsersExceptPreserved();
 
         return ResponseEntity.ok(Map.of(
                 "status", "SUCCESS",

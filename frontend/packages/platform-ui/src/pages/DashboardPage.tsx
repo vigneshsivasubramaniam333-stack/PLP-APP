@@ -1,28 +1,32 @@
 import { useEffect, useState } from 'react';
-import { programApi, loanApi, BtPageHeader, BtCard, BtCardHeader, BtBadge, BtStatCard } from '@plp/shared';
+import { programApi, loanApi, BtPageHeader, BtCard, BtCardHeader, BtBadge, BtStatCard, useAuth } from '@plp/shared';
 import type { Program, Loan } from '@plp/shared';
+import { ClearDemoDataButton } from '../components/ClearDemoDataButton';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
+  const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN';
+
+  async function fetchData() {
+    try {
+      const [progRes, loanRes] = await Promise.all([
+        programApi.list(),
+        loanApi.list(),
+      ]);
+      setPrograms(progRes.data.data || []);
+      setLoans(loanRes.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [progRes, loanRes] = await Promise.all([
-          programApi.list(),
-          loanApi.list(),
-        ]);
-        setPrograms(progRes.data.data || []);
-        setLoans(loanRes.data.data || []);
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
+    void fetchData();
   }, []);
 
   if (loading) {
@@ -44,6 +48,11 @@ export default function DashboardPage() {
       <BtPageHeader
         title="Dashboard"
         description="Overview of your lending operations"
+        actions={
+          isPlatformAdmin ? (
+            <ClearDemoDataButton onCleared={() => void fetchData()} />
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

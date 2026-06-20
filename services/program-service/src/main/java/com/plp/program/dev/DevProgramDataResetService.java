@@ -1,5 +1,6 @@
 package com.plp.program.dev;
 
+import com.plp.program.audit.AuditEventRepository;
 import com.plp.program.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class DevProgramDataResetService {
     private final BorrowerRepository borrowerRepository;
     private final ProgramRepository programRepository;
     private final AnchorRepository anchorRepository;
+    private final AuditEventRepository auditEventRepository;
 
     @Transactional
     public void resetAllProgramData() {
@@ -35,5 +37,6 @@ public class DevProgramDataResetService {
         borrowerRepository.deleteAllInBatch();
         programRepository.deleteAllInBatch();
         anchorRepository.deleteAllInBatch();
+        auditEventRepository.deleteAllInBatch();
     }
 }

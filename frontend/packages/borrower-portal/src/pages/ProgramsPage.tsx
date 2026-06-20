@@ -6,8 +6,12 @@ import {
   BtPageHeader,
   BtBadge,
   BtCard,
+  ProgramConfigDetailsPanel,
+  buildProgramConfigurationRows,
+  buildSubProgramConfigurationRows,
+  buildBorrowerTermsRows,
 } from '@plp/shared';
-import type { Program, SubProgram } from '@plp/shared';
+import type { Program, SubProgram, SubProgramBorrower } from '@plp/shared';
 
 function borrowerIdFromAuth(
   linkedType: string | null | undefined,
@@ -54,6 +58,7 @@ type BorrowerMembership = {
   utilizedLimit: number;
   availableLimit: number;
   status: string;
+  terms: SubProgramBorrower | null;
 };
 
 type ProgramEnrollment = {
@@ -108,12 +113,21 @@ export default function ProgramsPage() {
           try {
             const summaryRes = await subProgramApi.getBorrowerLimitSummary(sp.id, borrowerId);
             const data = summaryRes.data?.data as Record<string, unknown> | undefined;
+            let terms: SubProgramBorrower | null = null;
+            try {
+              const borRes = await subProgramApi.listBorrowers(sp.id);
+              const borList = (borRes.data?.data as SubProgramBorrower[] | undefined) ?? [];
+              terms = borList.find((b) => b.borrowerId === borrowerId) ?? null;
+            } catch {
+              terms = null;
+            }
             if (data) {
               membership = {
                 borrowerLimit: Number(data.borrowerLimit) || 0,
                 utilizedLimit: Number(data.utilizedLimit) || 0,
                 availableLimit: Number(data.availableLimit) || 0,
                 status: String(data.status ?? 'ACTIVE'),
+                terms,
               };
             }
           } catch {
@@ -240,6 +254,11 @@ export default function ProgramsPage() {
                       </div>
                     </div>
                   </div>
+                  <ProgramConfigDetailsPanel
+                    className="mt-3"
+                    rows={buildProgramConfigurationRows(program)}
+                    label="Show more program details"
+                  />
                 </div>
               ) : null}
 
@@ -272,6 +291,11 @@ export default function ProgramsPage() {
                     </div>
                   </div>
                 </div>
+                <ProgramConfigDetailsPanel
+                  className="mt-3"
+                  rows={buildSubProgramConfigurationRows(subProgram)}
+                  label="Show more sub-program details"
+                />
               </div>
 
               <div className="px-5 py-4">
@@ -310,6 +334,14 @@ export default function ProgramsPage() {
                 ) : (
                   <p className="text-sm text-[var(--bt-gray-400)]">Limit details unavailable.</p>
                 )}
+                {membership?.terms ? (
+                  <ProgramConfigDetailsPanel
+                    className="mt-3"
+                    rows={buildBorrowerTermsRows(membership.terms)}
+                    label="Show your pricing terms"
+                    hideLabel="Hide your pricing terms"
+                  />
+                ) : null}
               </div>
             </BtCard>
           ))}

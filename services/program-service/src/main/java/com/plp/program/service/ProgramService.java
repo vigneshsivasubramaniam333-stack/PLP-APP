@@ -3,6 +3,7 @@ package com.plp.program.service;
 import com.plp.program.model.dto.ProgramEditDto;
 import com.plp.program.model.entity.Program;
 import com.plp.program.model.enums.ProgramStatus;
+import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.repository.BorrowerLimitRepository;
 import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
@@ -64,28 +65,39 @@ public class ProgramService {
             throw new RuntimeException("maxBorrowerLimit is required");
         }
         if (program.getParameters() == null) {
-            program.setParameters(defaultProgramParameters());
+            program.setParameters(ProgramParametersValidator.defaultParameters());
         } else {
-            program.setParameters(mergeProgramParameters(defaultProgramParameters(), program.getParameters()));
+            program.setParameters(ProgramParametersValidator.mergeWithDefaults(program.getParameters()));
+        }
+        program.setParameters(
+                ProgramParametersValidator.validateAndNormalize(program.getParameters(), program.getProductType()));
+        if (program.getConfig() == null || program.getConfig().isEmpty()) {
+            program.setConfig(ProgramParametersValidator.defaultConfig(program.getProductType()));
+        } else {
+            program.setConfig(ProgramParametersValidator.mergeConfigWithDefaults(program.getConfig(), program.getProductType()));
         }
         if (program.getLmsEntryIn() == null || program.getLmsEntryIn().isBlank()) {
             program.setLmsEntryIn("NO");
         }
     }
 
-    private static Map<String, Object> defaultProgramParameters() {
-        Map<String, Object> p = new HashMap<>();
-        p.put("enablePaymentForBorrower", false);
-        p.put("autoDiscounting", false);
-        p.put("discountingDay", 1);
-        p.put("gapBetweenDiscountingDays", 0);
-        return p;
+    /** Returns normalized program parameters map (for invoice/lending consumers). */
+    public Map<String, Object> getProgramParameters(UUID programId) {
+        Program program = getProgram(programId);
+        Map<String, Object> params = program.getParameters();
+        if (params == null) {
+            params = ProgramParametersValidator.defaultParameters();
+        }
+        return ProgramParametersValidator.validateAndNormalize(params, program.getProductType());
     }
 
-    private static Map<String, Object> mergeProgramParameters(Map<String, Object> defaults, Map<String, Object> incoming) {
-        Map<String, Object> merged = new HashMap<>(defaults);
-        merged.putAll(incoming);
-        return merged;
+    public Map<String, Object> getProgramConfig(UUID programId) {
+        Program program = getProgram(programId);
+        Map<String, Object> config = program.getConfig();
+        if (config == null) {
+            config = ProgramParametersValidator.defaultConfig(program.getProductType());
+        }
+        return ProgramParametersValidator.validateConfig(config, program.getProductType());
     }
 
     private String generateUniqueProgramCode() {
@@ -189,6 +201,7 @@ public class ProgramService {
                 }
             }
             program.setConfig(merged);
+            program.setConfig(ProgramParametersValidator.validateConfig(program.getConfig(), program.getProductType()));
         }
         if (dto.getParameters() != null && !dto.getParameters().isEmpty()) {
             Map<String, Object> merged =
@@ -198,7 +211,7 @@ public class ProgramService {
                     merged.put(e.getKey(), e.getValue());
                 }
             }
-            program.setParameters(merged);
+            program.setParameters(ProgramParametersValidator.validateAndNormalize(merged, program.getProductType()));
         }
         if (dto.getLmsEntryIn() != null && !dto.getLmsEntryIn().isBlank()) {
             String v = dto.getLmsEntryIn().trim().toUpperCase();

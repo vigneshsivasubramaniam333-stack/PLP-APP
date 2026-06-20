@@ -64,6 +64,7 @@ public class LosIamIntegrationService {
                         .linkedEntityId(request.getLinkedEntityId())
                         .linkedEntityType(request.getLinkedEntityType().trim().toUpperCase())
                         .status(UserStatus.ACTIVE)
+                        .passwordResetRequired(true)
                         .build();
         user = userRepository.save(user);
         log.info(

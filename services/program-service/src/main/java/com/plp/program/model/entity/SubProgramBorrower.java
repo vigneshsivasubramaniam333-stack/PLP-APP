@@ -39,6 +39,27 @@ public class SubProgramBorrower {
     @Column(name = "available_limit", precision = 19, scale = 2)
     private BigDecimal availableLimit;
 
+    @Column(name = "interest_rate", precision = 7, scale = 4)
+    private BigDecimal interestRate;
+
+    @Column(name = "discount_margin_percent", precision = 7, scale = 4)
+    private BigDecimal discountMarginPercent;
+
+    @Column(name = "credit_period_days")
+    private Integer creditPeriodDays;
+
+    @Column(name = "discount_hold", nullable = false, length = 3)
+    @Builder.Default
+    private String discountHold = "NO";
+
+    @Column(name = "payment_method", nullable = false, length = 30)
+    @Builder.Default
+    private String paymentMethod = "SMART_COLLECT";
+
+    @Column(name = "overdue_interest_rate", precision = 7, scale = 4, nullable = false)
+    @Builder.Default
+    private BigDecimal overdueInterestRate = BigDecimal.ZERO;
+
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String status = "ACTIVE";

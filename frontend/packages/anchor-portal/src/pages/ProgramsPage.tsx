@@ -8,6 +8,10 @@ import {
   BtBadge,
   BtCard,
   BtCardHeader,
+  ProgramConfigDetailsPanel,
+  buildProgramConfigurationRows,
+  buildSubProgramConfigurationRows,
+  buildBorrowerTermsRows,
 } from '@plp/shared';
 import type { Program, SubProgram, SubProgramBorrower, Borrower } from '@plp/shared';
 
@@ -285,6 +289,11 @@ export default function ProgramsPage() {
                           </div>
                         </div>
                       </div>
+                      <ProgramConfigDetailsPanel
+                        className="mt-3"
+                        rows={buildProgramConfigurationRows(program)}
+                        label="Show more program details"
+                      />
                     </div>
 
                     <BtCardHeader
@@ -349,7 +358,11 @@ export default function ProgramsPage() {
                               </button>
 
                               {spExpanded ? (
-                                <div className="border-t border-[var(--bt-gray-100)] bg-[var(--bt-gray-50)]/40">
+                                <div className="border-t border-[var(--bt-gray-100)] bg-[var(--bt-gray-50)]/40 px-5 py-4">
+                                  <ProgramConfigDetailsPanel
+                                    rows={buildSubProgramConfigurationRows(sp)}
+                                    label="Show more sub-program details"
+                                  />
                                   {sp.borrowersLoading ? (
                                     <div className="text-sm text-[var(--bt-gray-400)] py-4 text-center">
                                       Loading linked borrowers...
@@ -380,6 +393,12 @@ export default function ProgramsPage() {
                                                     {borrowerLookup.get(row.borrowerId)?.borrowerCode}
                                                   </div>
                                                 ) : null}
+                                                <ProgramConfigDetailsPanel
+                                                  className="mt-1.5"
+                                                  rows={buildBorrowerTermsRows(row)}
+                                                  label="Show borrower terms"
+                                                  hideLabel="Hide borrower terms"
+                                                />
                                               </td>
                                               <td className="text-right tabular-nums whitespace-nowrap">
                                                 {formatCurrency(row.borrowerLimit)}

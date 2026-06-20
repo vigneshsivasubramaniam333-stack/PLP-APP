@@ -45,6 +45,12 @@ export default function BorrowersPage() {
     borrowerId: '',
     subProgramId: '',
     borrowerLimit: '',
+    interestRate: '',
+    discountMarginPercent: '',
+    creditPeriodDays: '',
+    discountHold: 'NO',
+    paymentMethod: 'SMART_COLLECT',
+    overdueInterestRate: '0',
   });
 
   const [userBorrower, setUserBorrower] = useState<Borrower | null>(null);
@@ -222,14 +228,35 @@ export default function BorrowersPage() {
       return;
     }
     try {
-      await subProgramApi.addBorrower(spId, {
+      const payload: Record<string, unknown> = {
         borrowerId: bid,
         borrowerLimit: limit,
         utilizedLimit: 0,
         availableLimit: limit,
         status: 'ACTIVE',
+      };
+      if (linkForm.interestRate.trim()) payload.interestRate = parseFloat(linkForm.interestRate);
+      if (linkForm.discountMarginPercent.trim()) {
+        payload.discountMarginPercent = parseFloat(linkForm.discountMarginPercent);
+      }
+      if (linkForm.creditPeriodDays.trim()) payload.creditPeriodDays = parseInt(linkForm.creditPeriodDays, 10);
+      payload.discountHold = linkForm.discountHold;
+      payload.paymentMethod = linkForm.paymentMethod;
+      if (linkForm.overdueInterestRate.trim()) {
+        payload.overdueInterestRate = parseFloat(linkForm.overdueInterestRate);
+      }
+      await subProgramApi.addBorrower(spId, payload);
+      setLinkForm({
+        borrowerId: '',
+        subProgramId: '',
+        borrowerLimit: '',
+        interestRate: '',
+        discountMarginPercent: '',
+        creditPeriodDays: '',
+        discountHold: 'NO',
+        paymentMethod: 'SMART_COLLECT',
+        overdueInterestRate: '0',
       });
-      setLinkForm({ borrowerId: '', subProgramId: '', borrowerLimit: '' });
       setMainTab('list');
     } catch (err: unknown) {
       setErrorLink(extractApiErrorMessage(err, 'Failed to link borrower'));
@@ -428,6 +455,21 @@ export default function BorrowersPage() {
                 onChange={(e) => setLinkForm({ ...linkForm, borrowerLimit: e.target.value })}
                 className={inputCls}
               />
+            </div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-2 border-t border-slate-200">
+              Borrower terms (optional)
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Interest rate (%)</label>
+                <input type="number" step="0.01" min={0} value={linkForm.interestRate}
+                  onChange={(e) => setLinkForm({ ...linkForm, interestRate: e.target.value })} className={inputCls} placeholder="Inherit" />
+              </div>
+              <div>
+                <label className={labelCls}>Credit period (days)</label>
+                <input type="number" min={0} value={linkForm.creditPeriodDays}
+                  onChange={(e) => setLinkForm({ ...linkForm, creditPeriodDays: e.target.value })} className={inputCls} placeholder="Inherit" />
+              </div>
             </div>
             {errorLink && (
               <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorLink}</div>

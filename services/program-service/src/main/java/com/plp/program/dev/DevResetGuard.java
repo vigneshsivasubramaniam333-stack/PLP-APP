@@ -8,6 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 @Component
 public class DevResetGuard {
@@ -29,6 +30,14 @@ public class DevResetGuard {
         }
         return Arrays.stream(environment.getActiveProfiles())
                 .anyMatch(p -> "local".equalsIgnoreCase(p) || "dev".equalsIgnoreCase(p));
+    }
+
+    public String getActiveProfilesDisplay() {
+        String[] profiles = environment.getActiveProfiles();
+        if (profiles.length == 0) {
+            return "(none)";
+        }
+        return Arrays.stream(profiles).collect(Collectors.joining(", "));
     }
 
     public void requireDevResetEnabled() {

@@ -45,6 +45,10 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.PENDING_VERIFICATION;
 
+    @Column(name = "password_reset_required", nullable = false)
+    @Builder.Default
+    private boolean passwordResetRequired = false;
+
     private UUID linkedEntityId;
 
     @Column(length = 30)

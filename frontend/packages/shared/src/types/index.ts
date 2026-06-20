@@ -37,6 +37,8 @@ export interface AuthUser {
   /** Business anchor/borrower UUID when provisioned on the IAM user */
   linkedEntityId?: string | null;
   linkedEntityType?: string | null;
+  /** When true, portal must force password change before continuing. */
+  passwordResetRequired?: boolean;
 }
 
 /** IAM user row from GET /api/v1/users (PLATFORM_ADMIN only). */
@@ -75,6 +77,16 @@ export interface ProgramOperationalParameters {
   autoDiscounting?: boolean;
   discountingDay?: number;
   gapBetweenDiscountingDays?: number;
+  gapBetweenPreviousInvoiceDays?: number;
+  autoPullOption?: boolean;
+  gapBetweenSanctionAndDisbursementDays?: number;
+  intFreeCreditPeriod?: boolean;
+  intFreePeriodDays?: number;
+  autoPaymentBorrower?: boolean;
+  autoAcceptInvoices?: boolean;
+  sanctionType?: 'MANUAL' | 'AUTO' | string;
+  partialDiscount?: boolean;
+  invoiceDelete?: boolean;
 }
 
 export interface Program {
@@ -135,6 +147,12 @@ export interface SubProgramBorrower {
   utilizedLimit: number | null;
   availableLimit: number | null;
   status: string;
+  interestRate?: number | null;
+  discountMarginPercent?: number | null;
+  creditPeriodDays?: number | null;
+  discountHold?: 'YES' | 'NO' | string | null;
+  paymentMethod?: string | null;
+  overdueInterestRate?: number | null;
 }
 
 export interface Anchor {

@@ -46,6 +46,7 @@ public final class InvoiceAccessGuard {
         VERIFY,
         CONFIRM,
         MARK_DISCOUNTED,
+        DELETE,
         /** Internal: lending-service after creating an invoice-discounting loan request. */
         MARK_FINANCING_REQUESTED,
         /** Internal: lending-service after cancelling disbursement pending before disbursement completes. */
@@ -136,6 +137,7 @@ public final class InvoiceAccessGuard {
             throw forbidden(MSG_BORROWER_CANNOT);
         }
         if (operation == InvoiceWriteOperation.MARK_DISCOUNTED
+                || operation == InvoiceWriteOperation.DELETE
                 || operation == InvoiceWriteOperation.MARK_FINANCING_REQUESTED
                 || operation == InvoiceWriteOperation.CANCEL_FINANCING_REQUESTED) {
             if (isLenderRole(roles)) {

@@ -1,12 +1,74 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard } from '@plp/shared';
+import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard, useAuth } from '@plp/shared';
 import type { Program, ProgramEligibilityConfig, ProgramOperationalParameters } from '@plp/shared';
+import { ClearDemoDataButton } from '../components/ClearDemoDataButton';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
 const formGridCls = 'grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 items-start';
-const sectionTitleCls = 'col-span-full text-xs font-semibold text-slate-500 uppercase tracking-wide pt-2 border-t border-slate-200 mt-1 mb-1';
-const checkboxRowCls = 'col-span-full flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:gap-8 py-1';
+const sectionTitleCls = 'col-span-full text-xs font-semibold text-slate-500 uppercase tracking-wide pt-3 border-t border-slate-200 mt-2 mb-1 first:mt-0 first:pt-0 first:border-t-0';
+const checkboxGridCls = 'col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 py-1';
+const modalShellCls = 'bt-modal !max-w-3xl w-full max-h-[min(92vh,880px)] flex flex-col overflow-hidden';
+const modalFormCls = 'flex min-h-0 flex-1 flex-col';
+const modalBodyScrollCls = 'bt-modal-body flex-1 min-h-0 overflow-y-auto overscroll-contain';
+
+function ProgramFormModal({
+  title,
+  onClose,
+  onSubmit,
+  submitting,
+  submitLabel,
+  submittingLabel,
+  error,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+  submitLabel: string;
+  submittingLabel: string;
+  error?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bt-modal-overlay">
+      <div className={modalShellCls} role="dialog" aria-modal="true" aria-labelledby="program-modal-title">
+        <div className="bt-modal-header shrink-0">
+          <h2 id="program-modal-title" className="bt-modal-title">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-[var(--bt-gray-400)] hover:text-[var(--bt-gray-600)]"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className={modalFormCls}>
+          <div className={modalBodyScrollCls}>
+            {error ? (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{error}</div>
+            ) : null}
+            {children}
+          </div>
+          <div className="bt-modal-footer shrink-0 border-t border-slate-100 bg-white">
+            <button type="button" onClick={onClose} className="bt-btn bt-btn-secondary">
+              Cancel
+            </button>
+            <BtButton type="submit" disabled={submitting}>
+              {submitting ? submittingLabel : submitLabel}
+            </BtButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function ProgramField({
   label,
@@ -55,36 +117,138 @@ type OperationalFormSlice = {
   autoDiscounting: boolean;
   discountingDay: string;
   gapBetweenDiscountingDays: string;
+  gapBetweenPreviousInvoiceDays: string;
+  autoPullOption: boolean;
+  gapBetweenSanctionAndDisbursementDays: string;
+  intFreeCreditPeriod: boolean;
+  intFreePeriodDays: string;
+  autoPaymentBorrower: boolean;
+  autoAcceptInvoices: boolean;
+  sanctionType: string;
+  partialDiscount: boolean;
+  invoiceDelete: boolean;
   lmsEntryIn: string;
   encoreProductCode: string;
 };
 
+function parseBoolFlag(raw: unknown): boolean {
+  return raw === true || raw === 'true' || raw === 'YES';
+}
+
+function buildParametersPayload(values: OperationalFormSlice): ProgramOperationalParameters {
+  return {
+    enablePaymentForBorrower: values.enablePaymentForBorrower,
+    autoDiscounting: values.autoDiscounting,
+    discountingDay: parseInt(values.discountingDay, 10) || 0,
+    gapBetweenDiscountingDays: parseInt(values.gapBetweenDiscountingDays, 10) || 0,
+    gapBetweenPreviousInvoiceDays: parseInt(values.gapBetweenPreviousInvoiceDays, 10) || 0,
+    autoPullOption: values.autoPullOption,
+    gapBetweenSanctionAndDisbursementDays: parseInt(values.gapBetweenSanctionAndDisbursementDays, 10) || 0,
+    intFreeCreditPeriod: values.intFreeCreditPeriod,
+    intFreePeriodDays: parseInt(values.intFreePeriodDays, 10) || 0,
+    autoPaymentBorrower: values.autoPaymentBorrower,
+    autoAcceptInvoices: values.autoAcceptInvoices,
+    sanctionType: values.sanctionType,
+    partialDiscount: values.partialDiscount,
+    invoiceDelete: values.invoiceDelete,
+  };
+}
+
+const defaultOperationalSlice = (): OperationalFormSlice => ({
+  enablePaymentForBorrower: false,
+  autoDiscounting: false,
+  discountingDay: '0',
+  gapBetweenDiscountingDays: '0',
+  gapBetweenPreviousInvoiceDays: '0',
+  autoPullOption: false,
+  gapBetweenSanctionAndDisbursementDays: '0',
+  intFreeCreditPeriod: false,
+  intFreePeriodDays: '0',
+  autoPaymentBorrower: false,
+  autoAcceptInvoices: false,
+  sanctionType: 'MANUAL',
+  partialDiscount: false,
+  invoiceDelete: false,
+  lmsEntryIn: 'NO',
+  encoreProductCode: '',
+});
+
 function OperationalParamsFields({
   values,
   onChange,
+  showAutomationSection = true,
 }: {
   values: OperationalFormSlice;
   onChange: (patch: Partial<OperationalFormSlice>) => void;
+  showAutomationSection?: boolean;
 }) {
   return (
     <>
+      {showAutomationSection ? (
+        <>
+          <p className={sectionTitleCls}>Automation</p>
+          <div className={checkboxGridCls}>
+            <ProgramCheckbox
+              label="Auto discounting"
+              checked={values.autoDiscounting}
+              onChange={(autoDiscounting) => onChange({ autoDiscounting })}
+            />
+            <ProgramCheckbox
+              label="Auto accept invoices"
+              checked={values.autoAcceptInvoices}
+              onChange={(autoAcceptInvoices) => onChange({ autoAcceptInvoices })}
+            />
+            <ProgramCheckbox
+              label="Auto pull option"
+              checked={values.autoPullOption}
+              onChange={(autoPullOption) => onChange({ autoPullOption })}
+            />
+            <ProgramCheckbox
+              label="Auto payment (borrower)"
+              checked={values.autoPaymentBorrower}
+              onChange={(autoPaymentBorrower) => onChange({ autoPaymentBorrower })}
+            />
+            <ProgramCheckbox
+              label="Partial discount"
+              checked={values.partialDiscount}
+              onChange={(partialDiscount) => onChange({ partialDiscount })}
+            />
+            <ProgramCheckbox
+              label="Invoice delete allowed"
+              checked={values.invoiceDelete}
+              onChange={(invoiceDelete) => onChange({ invoiceDelete })}
+            />
+          </div>
+        </>
+      ) : null}
+
       <p className={sectionTitleCls}>Operational parameters</p>
-      <div className={checkboxRowCls}>
+      <div className={checkboxGridCls}>
         <ProgramCheckbox
           label="Enable payment for borrower"
           checked={values.enablePaymentForBorrower}
           onChange={(enablePaymentForBorrower) => onChange({ enablePaymentForBorrower })}
         />
         <ProgramCheckbox
-          label="Auto discounting"
-          checked={values.autoDiscounting}
-          onChange={(autoDiscounting) => onChange({ autoDiscounting })}
+          label="Interest-free credit period"
+          checked={values.intFreeCreditPeriod}
+          onChange={(intFreeCreditPeriod) => onChange({ intFreeCreditPeriod })}
         />
       </div>
-      <ProgramField label="Discounting day (of month)">
+      <ProgramField label="Sanction type">
+        <select
+          value={values.sanctionType}
+          onChange={(e) => onChange({ sanctionType: e.target.value })}
+          className={inputCls}
+        >
+          <option value="MANUAL">Manual</option>
+          <option value="AUTO">Auto</option>
+        </select>
+      </ProgramField>
+      <ProgramField label="Discounting day (of month)" hint="0–28 when auto discounting is enabled">
         <input
           type="number"
-          min={1}
+          min={0}
           max={28}
           value={values.discountingDay}
           onChange={(e) => onChange({ discountingDay: e.target.value })}
@@ -100,6 +264,33 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
+      <ProgramField label="Gap b/w previous invoice (days)">
+        <input
+          type="number"
+          min={0}
+          value={values.gapBetweenPreviousInvoiceDays}
+          onChange={(e) => onChange({ gapBetweenPreviousInvoiceDays: e.target.value })}
+          className={inputCls}
+        />
+      </ProgramField>
+      <ProgramField label="Gap b/w sanction & disbursement (days)">
+        <input
+          type="number"
+          min={0}
+          value={values.gapBetweenSanctionAndDisbursementDays}
+          onChange={(e) => onChange({ gapBetweenSanctionAndDisbursementDays: e.target.value })}
+          className={inputCls}
+        />
+      </ProgramField>
+      <ProgramField label="Interest-free period (days)" hint="Required > 0 when interest-free credit period is enabled">
+        <input
+          type="number"
+          min={0}
+          value={values.intFreePeriodDays}
+          onChange={(e) => onChange({ intFreePeriodDays: e.target.value })}
+          className={inputCls}
+        />
+      </ProgramField>
       <ProgramField label="Need LMS entry?">
         <select
           value={values.lmsEntryIn}
@@ -111,7 +302,7 @@ function OperationalParamsFields({
         </select>
       </ProgramField>
       {values.lmsEntryIn === 'YES' ? (
-        <ProgramField label="LMS loan product (Encore code)">
+        <ProgramField label="LMS loan product (Encore code)" span={2}>
           <input
             value={values.encoreProductCode}
             onChange={(e) => onChange({ encoreProductCode: e.target.value })}
@@ -119,9 +310,64 @@ function OperationalParamsFields({
             placeholder="e.g. ID_INV_001"
           />
         </ProgramField>
-      ) : (
-        <div className="hidden md:block" aria-hidden />
-      )}
+      ) : null}
+    </>
+  );
+}
+
+function EligibilityFields({
+  maxInvoiceAgeDays,
+  minInvoiceAmount,
+  minDaysToDueDate,
+  onChange,
+}: {
+  maxInvoiceAgeDays: string;
+  minInvoiceAmount: string;
+  minDaysToDueDate: string;
+  onChange: (patch: { maxInvoiceAgeDays?: string; minInvoiceAmount?: string; minDaysToDueDate?: string }) => void;
+}) {
+  return (
+    <>
+      <p className={sectionTitleCls}>Eligibility (optional)</p>
+      <ProgramField
+        label="Age of invoice (days)"
+        hint="Credit period: invoice date to due date (default 90 for invoice discounting)"
+      >
+        <input
+          type="number"
+          step="1"
+          min={1}
+          value={maxInvoiceAgeDays}
+          onChange={(e) => onChange({ maxInvoiceAgeDays: e.target.value })}
+          className={inputCls}
+          placeholder="e.g. 90"
+        />
+      </ProgramField>
+      <ProgramField label="Min invoice amount">
+        <input
+          type="number"
+          step="0.01"
+          min={0.01}
+          value={minInvoiceAmount}
+          onChange={(e) => onChange({ minInvoiceAmount: e.target.value })}
+          className={inputCls}
+          placeholder="Leave blank to skip"
+        />
+      </ProgramField>
+      <ProgramField label="Min days to due date" span={2}>
+        <input
+          type="number"
+          step="1"
+          min={1}
+          value={minDaysToDueDate}
+          onChange={(e) => onChange({ minDaysToDueDate: e.target.value })}
+          className={inputCls}
+          placeholder="Leave blank to skip"
+        />
+      </ProgramField>
+      <p className="col-span-full text-[11px] text-slate-400 -mt-1">
+        Only filled fields are sent; each must be greater than 0. Server merges into stored config.
+      </p>
     </>
   );
 }
@@ -136,13 +382,30 @@ function parseOperationalParams(p: Program): ProgramOperationalParameters {
   if (!raw || typeof raw !== 'object') return {};
   const o = raw as Record<string, unknown>;
   return {
-    enablePaymentForBorrower: o.enablePaymentForBorrower === true || o.enablePaymentForBorrower === 'true',
-    autoDiscounting: o.autoDiscounting === true || o.autoDiscounting === 'true',
-    discountingDay: typeof o.discountingDay === 'number' ? o.discountingDay : Number(o.discountingDay) || undefined,
+    enablePaymentForBorrower: parseBoolFlag(o.enablePaymentForBorrower),
+    autoDiscounting: parseBoolFlag(o.autoDiscounting),
+    discountingDay: typeof o.discountingDay === 'number' ? o.discountingDay : Number(o.discountingDay) || 0,
     gapBetweenDiscountingDays:
       typeof o.gapBetweenDiscountingDays === 'number'
         ? o.gapBetweenDiscountingDays
-        : Number(o.gapBetweenDiscountingDays) || undefined,
+        : Number(o.gapBetweenDiscountingDays) || 0,
+    gapBetweenPreviousInvoiceDays:
+      typeof o.gapBetweenPreviousInvoiceDays === 'number'
+        ? o.gapBetweenPreviousInvoiceDays
+        : Number(o.gapBetweenPreviousInvoiceDays) || 0,
+    autoPullOption: parseBoolFlag(o.autoPullOption),
+    gapBetweenSanctionAndDisbursementDays:
+      typeof o.gapBetweenSanctionAndDisbursementDays === 'number'
+        ? o.gapBetweenSanctionAndDisbursementDays
+        : Number(o.gapBetweenSanctionAndDisbursementDays) || 0,
+    intFreeCreditPeriod: parseBoolFlag(o.intFreeCreditPeriod),
+    intFreePeriodDays:
+      typeof o.intFreePeriodDays === 'number' ? o.intFreePeriodDays : Number(o.intFreePeriodDays) || 0,
+    autoPaymentBorrower: parseBoolFlag(o.autoPaymentBorrower),
+    autoAcceptInvoices: parseBoolFlag(o.autoAcceptInvoices),
+    sanctionType: typeof o.sanctionType === 'string' ? o.sanctionType : 'MANUAL',
+    partialDiscount: parseBoolFlag(o.partialDiscount),
+    invoiceDelete: parseBoolFlag(o.invoiceDelete),
   };
 }
 
@@ -151,6 +414,12 @@ function fmtOpsSummary(p: Program): string {
   const parts: string[] = [];
   if (o.enablePaymentForBorrower) parts.push('Borrower pay');
   if (o.autoDiscounting) parts.push(`Auto disc${o.discountingDay != null ? ` d${o.discountingDay}` : ''}`);
+  if (o.autoAcceptInvoices) parts.push('Auto accept');
+  if (o.autoPullOption) parts.push('Auto pull');
+  if (o.sanctionType === 'AUTO') parts.push('Auto sanction');
+  if (o.partialDiscount) parts.push('Partial disc');
+  if (o.invoiceDelete) parts.push('Del OK');
+  if (o.intFreeCreditPeriod) parts.push(`Int-free ${o.intFreePeriodDays ?? 0}d`);
   if (p.lmsEntryIn === 'YES') parts.push(`LMS:${p.encoreProductCode || '—'}`);
   if (o.gapBetweenDiscountingDays != null && o.gapBetweenDiscountingDays > 0) {
     parts.push(`Gap ${o.gapBetweenDiscountingDays}d`);
@@ -160,7 +429,7 @@ function fmtOpsSummary(p: Program): string {
 
 function fmtCfgSummary(c: ProgramEligibilityConfig): string {
   const parts: string[] = [];
-  if (c.maxInvoiceAgeDays != null) parts.push(`age≤${c.maxInvoiceAgeDays}d`);
+  if (c.maxInvoiceAgeDays != null) parts.push(`credit≤${c.maxInvoiceAgeDays}d`);
   if (c.minInvoiceAmount != null) parts.push(`min ₹${Number(c.minInvoiceAmount).toLocaleString('en-IN')}`);
   if (c.minDaysToDueDate != null) parts.push(`due≥${c.minDaysToDueDate}d`);
   return parts.length ? parts.join(' · ') : '—';
@@ -175,22 +444,15 @@ export default function ProgramsPage() {
   const [editProgram, setEditProgram] = useState<Program | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [editForm, setEditForm] = useState({
-    name: '',
-    description: '',
-    marginPercent: '',
-    maxInvoiceAgeDays: '',
-    minInvoiceAmount: '',
-    minDaysToDueDate: '',
-    enablePaymentForBorrower: false,
-    autoDiscounting: false,
-    discountingDay: '1',
-    gapBetweenDiscountingDays: '0',
-    lmsEntryIn: 'NO',
-    encoreProductCode: '',
-  });
+  const [editForm, setEditForm] = useState({ ...defaultOperationalSlice(), name: '', description: '', marginPercent: '', maxInvoiceAgeDays: '', minInvoiceAmount: '', minDaysToDueDate: '' });
 
   const portalCaps = lenderLoanCapabilities(getStoredAuthUser()?.role);
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN';
+
+  const reloadPrograms = () => {
+    programApi.list().then((res) => setPrograms(res.data.data || [])).catch(console.error);
+  };
 
   const [form, setForm] = useState({
     programName: '',
@@ -204,12 +466,10 @@ export default function ProgramsPage() {
     maxConcurrentLoans: '1',
     gracePeriodDays: '3',
     coolingOffDays: '3',
-    enablePaymentForBorrower: false,
-    autoDiscounting: false,
-    discountingDay: '1',
-    gapBetweenDiscountingDays: '0',
-    lmsEntryIn: 'NO',
-    encoreProductCode: '',
+    maxInvoiceAgeDays: '',
+    minInvoiceAmount: '',
+    minDaysToDueDate: '',
+    ...defaultOperationalSlice(),
   });
 
   useEffect(() => {
@@ -245,9 +505,21 @@ export default function ProgramsPage() {
       minDaysToDueDate: cfg.minDaysToDueDate != null ? String(cfg.minDaysToDueDate) : '',
       enablePaymentForBorrower: Boolean(ops.enablePaymentForBorrower),
       autoDiscounting: Boolean(ops.autoDiscounting),
-      discountingDay: ops.discountingDay != null ? String(ops.discountingDay) : '1',
+      discountingDay: ops.discountingDay != null ? String(ops.discountingDay) : '0',
       gapBetweenDiscountingDays:
         ops.gapBetweenDiscountingDays != null ? String(ops.gapBetweenDiscountingDays) : '0',
+      gapBetweenPreviousInvoiceDays:
+        ops.gapBetweenPreviousInvoiceDays != null ? String(ops.gapBetweenPreviousInvoiceDays) : '0',
+      autoPullOption: Boolean(ops.autoPullOption),
+      gapBetweenSanctionAndDisbursementDays:
+        ops.gapBetweenSanctionAndDisbursementDays != null ? String(ops.gapBetweenSanctionAndDisbursementDays) : '0',
+      intFreeCreditPeriod: Boolean(ops.intFreeCreditPeriod),
+      intFreePeriodDays: ops.intFreePeriodDays != null ? String(ops.intFreePeriodDays) : '0',
+      autoPaymentBorrower: Boolean(ops.autoPaymentBorrower),
+      autoAcceptInvoices: Boolean(ops.autoAcceptInvoices),
+      sanctionType: ops.sanctionType ?? 'MANUAL',
+      partialDiscount: Boolean(ops.partialDiscount),
+      invoiceDelete: Boolean(ops.invoiceDelete),
       lmsEntryIn: p.lmsEntryIn === 'YES' ? 'YES' : 'NO',
       encoreProductCode: p.encoreProductCode ?? '',
     });
@@ -291,12 +563,7 @@ export default function ProgramsPage() {
         description: editForm.description.trim(),
         ...(marginNum !== undefined ? { marginPercent: marginNum } : {}),
         ...(cfgPayload ? { config: cfgPayload } : {}),
-        parameters: {
-          enablePaymentForBorrower: editForm.enablePaymentForBorrower,
-          autoDiscounting: editForm.autoDiscounting,
-          discountingDay: parseInt(editForm.discountingDay, 10) || 1,
-          gapBetweenDiscountingDays: parseInt(editForm.gapBetweenDiscountingDays, 10) || 0,
-        },
+        parameters: buildParametersPayload(editForm),
         lmsEntryIn: editForm.lmsEntryIn,
         encoreProductCode: editForm.lmsEntryIn === 'YES' ? editForm.encoreProductCode.trim() : '',
       });
@@ -320,6 +587,18 @@ export default function ProgramsPage() {
     setCreating(true);
     setError('');
     try {
+      let cfgPayload: Record<string, number> | undefined;
+      if (form.productType === 'INVOICE_DISCOUNTING') {
+        const cfg: Record<string, number> = {};
+        const maxAge = parsePositiveOptional('Age of invoice (days)', form.maxInvoiceAgeDays);
+        const minAmt = parsePositiveOptional('Min invoice amount', form.minInvoiceAmount);
+        const minDue = parsePositiveOptional('Min days to due date', form.minDaysToDueDate);
+        if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
+        if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
+        if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
+        if (Object.keys(cfg).length > 0) cfgPayload = cfg;
+      }
+
       await programApi.create({
         programName: form.programName,
         productType: form.productType,
@@ -332,12 +611,8 @@ export default function ProgramsPage() {
         maxConcurrentLoans: parseInt(form.maxConcurrentLoans, 10),
         gracePeriodDays: parseInt(form.gracePeriodDays, 10),
         coolingOffDays: parseInt(form.coolingOffDays, 10),
-        parameters: {
-          enablePaymentForBorrower: form.enablePaymentForBorrower,
-          autoDiscounting: form.autoDiscounting,
-          discountingDay: parseInt(form.discountingDay, 10) || 1,
-          gapBetweenDiscountingDays: parseInt(form.gapBetweenDiscountingDays, 10) || 0,
-        },
+        ...(cfgPayload ? { config: cfgPayload } : {}),
+        parameters: buildParametersPayload(form),
         lmsEntryIn: form.lmsEntryIn,
         encoreProductCode: form.lmsEntryIn === 'YES' ? form.encoreProductCode.trim() : undefined,
         status: 'ACTIVE',
@@ -355,12 +630,10 @@ export default function ProgramsPage() {
         maxConcurrentLoans: '1',
         gracePeriodDays: '3',
         coolingOffDays: '3',
-        enablePaymentForBorrower: false,
-        autoDiscounting: false,
-        discountingDay: '1',
-        gapBetweenDiscountingDays: '0',
-        lmsEntryIn: 'NO',
-        encoreProductCode: '',
+        maxInvoiceAgeDays: '',
+        minInvoiceAmount: '',
+        minDaysToDueDate: '',
+        ...defaultOperationalSlice(),
       });
       reload();
     } catch (err: unknown) {
@@ -385,247 +658,183 @@ export default function ProgramsPage() {
         title="Programs"
         description="Manage lending programs and configurations"
         actions={
-          portalCaps.canCreateProgramArtifacts ? (
-            <BtButton onClick={() => setShowCreate(true)}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Create Program
-            </BtButton>
-          ) : undefined
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {isPlatformAdmin ? <ClearDemoDataButton onCleared={reloadPrograms} /> : null}
+            {portalCaps.canCreateProgramArtifacts ? (
+              <BtButton onClick={() => setShowCreate(true)}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Create Program
+              </BtButton>
+            ) : null}
+          </div>
         }
       />
 
       {/* Create Program Modal */}
-      {showCreate && (
-        <div className="bt-modal-overlay">
-          <div className="bt-modal max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bt-modal-header">
-              <h2 className="bt-modal-title">Create Program</h2>
-              <button type="button" onClick={() => setShowCreate(false)} className="text-[var(--bt-gray-400)] hover:text-[var(--bt-gray-600)]">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleCreate}>
-              <div className="bt-modal-body">
-                {error && (
-                  <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{error}</div>
-                )}
-                <p className="mb-5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                  Program codes are generated automatically. Anchor and facility limits belong on sub-programs under this umbrella.
-                </p>
-                <div className={formGridCls}>
-                  <ProgramField label="Program Name *" span={2}>
-                    <input
-                      value={form.programName}
-                      onChange={(e) => setForm({ ...form, programName: e.target.value })}
-                      className={inputCls}
-                      placeholder="e.g., ACME Pay Day Loan"
-                      required
-                    />
-                  </ProgramField>
-                  <ProgramField label="Product Type *">
-                    <select
-                      value={form.productType}
-                      onChange={(e) => setForm({ ...form, productType: e.target.value })}
-                      className={inputCls}
-                    >
-                      <option value="PAY_DAY_LOAN">Pay Day Loan</option>
-                      <option value="INVOICE_DISCOUNTING">Invoice Discounting</option>
-                    </select>
-                  </ProgramField>
-                  <ProgramField label="Umbrella program limit (INR) *">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={form.programLimit}
-                      onChange={(e) => setForm({ ...form, programLimit: e.target.value })}
-                      className={inputCls}
-                      placeholder="e.g., 10000000"
-                      required
-                    />
-                  </ProgramField>
-                  <ProgramField label="Max Borrower Limit (INR) *">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={form.maxBorrowerLimit}
-                      onChange={(e) => setForm({ ...form, maxBorrowerLimit: e.target.value })}
-                      className={inputCls}
-                      placeholder="e.g., 100000"
-                      required
-                    />
-                  </ProgramField>
-                  <ProgramField label="Interest Rate (% p.a.) *">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={form.defaultInterestRate}
-                      onChange={(e) => setForm({ ...form, defaultInterestRate: e.target.value })}
-                      className={inputCls}
-                      placeholder="e.g., 18"
-                      required
-                    />
-                  </ProgramField>
-                  <ProgramField label="Margin (%)" hint="0 = eligible equals net amount">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.marginPercent}
-                      onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
-                      className={inputCls}
-                      placeholder="0"
-                    />
-                  </ProgramField>
-                  <ProgramField label="Max Tenure (days)">
-                    <input
-                      type="number"
-                      value={form.maxTenureDays}
-                      onChange={(e) => setForm({ ...form, maxTenureDays: e.target.value })}
-                      className={inputCls}
-                    />
-                  </ProgramField>
-                  <ProgramField label="Max Concurrent Loans">
-                    <input
-                      type="number"
-                      value={form.maxConcurrentLoans}
-                      onChange={(e) => setForm({ ...form, maxConcurrentLoans: e.target.value })}
-                      className={inputCls}
-                    />
-                  </ProgramField>
-                  <OperationalParamsFields
-                    values={form}
-                    onChange={(patch) => setForm({ ...form, ...patch })}
-                  />
-                </div>
-              </div>
-              <div className="bt-modal-footer">
-                <button type="button" onClick={() => setShowCreate(false)} className="bt-btn bt-btn-secondary">
-                  Cancel
-                </button>
-                <BtButton type="submit" disabled={creating}>
-                  {creating ? 'Creating...' : 'Create Program'}
-                </BtButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {editProgram && (
-        <div className="bt-modal-overlay">
-          <div className="bt-modal max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bt-modal-header">
-              <h2 className="bt-modal-title">Edit program</h2>
-              <button
-                type="button"
-                onClick={() => setEditProgram(null)}
-                className="text-[var(--bt-gray-400)] hover:text-[var(--bt-gray-600)]"
+      {showCreate ? (
+        <ProgramFormModal
+          title="Create Program"
+          onClose={() => setShowCreate(false)}
+          onSubmit={handleCreate}
+          submitting={creating}
+          submitLabel="Create Program"
+          submittingLabel="Creating..."
+          error={error}
+        >
+          <p className="mb-5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            Program codes are generated automatically. Anchor and facility limits belong on sub-programs under this umbrella.
+          </p>
+          <div className={formGridCls}>
+            <p className={`${sectionTitleCls} first:mt-0 first:pt-0 first:border-t-0`}>Program details</p>
+            <ProgramField label="Program Name *" span={2}>
+              <input
+                value={form.programName}
+                onChange={(e) => setForm({ ...form, programName: e.target.value })}
+                className={inputCls}
+                placeholder="e.g., ACME Pay Day Loan"
+                required
+              />
+            </ProgramField>
+            <ProgramField label="Product Type *">
+              <select
+                value={form.productType}
+                onChange={(e) => setForm({ ...form, productType: e.target.value })}
+                className={inputCls}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleEditSave}>
-              <div className="bt-modal-body">
-                {editError && (
-                  <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{editError}</div>
-                )}
-                <div className={formGridCls}>
-                  <ProgramField label="Name" span={2}>
-                    <input
-                      value={editForm.name}
-                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className={inputCls}
-                      required
-                    />
-                  </ProgramField>
-                  <ProgramField label="Description" span={2}>
-                    <textarea
-                      value={editForm.description}
-                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      className={`${inputCls} min-h-[88px] resize-y`}
-                      placeholder="Optional"
-                    />
-                  </ProgramField>
-                  <ProgramField
-                    label="Margin (%)"
-                    span={2}
-                    hint="Deducted from invoice net amount to calculate eligible amount. Leave blank or set to 0 for full eligibility."
-                  >
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      value={editForm.marginPercent}
-                      onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
-                      className={inputCls}
-                      placeholder="0 = no margin (eligible = net amount)"
-                    />
-                  </ProgramField>
-                  <OperationalParamsFields
-                    values={editForm}
-                    onChange={(patch) => setEditForm({ ...editForm, ...patch })}
-                  />
-                  <p className={sectionTitleCls}>Eligibility parameters (optional)</p>
-                  <ProgramField label="Max invoice age (days)">
-                    <input
-                      type="number"
-                      step="1"
-                      min={1}
-                      value={editForm.maxInvoiceAgeDays}
-                      onChange={(e) => setEditForm({ ...editForm, maxInvoiceAgeDays: e.target.value })}
-                      className={inputCls}
-                      placeholder="Leave blank to skip"
-                    />
-                  </ProgramField>
-                  <ProgramField label="Min invoice amount">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0.01}
-                      value={editForm.minInvoiceAmount}
-                      onChange={(e) => setEditForm({ ...editForm, minInvoiceAmount: e.target.value })}
-                      className={inputCls}
-                      placeholder="Leave blank to skip"
-                    />
-                  </ProgramField>
-                  <ProgramField label="Min days to due date" span={2}>
-                    <input
-                      type="number"
-                      step="1"
-                      min={1}
-                      value={editForm.minDaysToDueDate}
-                      onChange={(e) => setEditForm({ ...editForm, minDaysToDueDate: e.target.value })}
-                      className={inputCls}
-                      placeholder="Leave blank to skip"
-                    />
-                  </ProgramField>
-                  <p className="col-span-full text-[11px] text-slate-400 -mt-1">
-                    Only filled fields are sent; each must be greater than 0. Server merges into stored config.
-                  </p>
-                </div>
-              </div>
-              <div className="bt-modal-footer">
-                <button
-                  type="button"
-                  onClick={() => setEditProgram(null)}
-                  className="bt-btn bt-btn-secondary"
-                >
-                  Cancel
-                </button>
-                <BtButton type="submit" disabled={editSaving}>
-                  {editSaving ? 'Saving...' : 'Save'}
-                </BtButton>
-              </div>
-            </form>
+                <option value="PAY_DAY_LOAN">Pay Day Loan</option>
+                <option value="INVOICE_DISCOUNTING">Invoice Discounting</option>
+              </select>
+            </ProgramField>
+            <ProgramField label="Umbrella program limit (INR) *">
+              <input
+                type="number"
+                step="0.01"
+                value={form.programLimit}
+                onChange={(e) => setForm({ ...form, programLimit: e.target.value })}
+                className={inputCls}
+                placeholder="e.g., 10000000"
+                required
+              />
+            </ProgramField>
+            <ProgramField label="Max Borrower Limit (INR) *">
+              <input
+                type="number"
+                step="0.01"
+                value={form.maxBorrowerLimit}
+                onChange={(e) => setForm({ ...form, maxBorrowerLimit: e.target.value })}
+                className={inputCls}
+                placeholder="e.g., 100000"
+                required
+              />
+            </ProgramField>
+            <ProgramField label="Interest Rate (% p.a.) *">
+              <input
+                type="number"
+                step="0.01"
+                value={form.defaultInterestRate}
+                onChange={(e) => setForm({ ...form, defaultInterestRate: e.target.value })}
+                className={inputCls}
+                placeholder="e.g., 18"
+                required
+              />
+            </ProgramField>
+            <ProgramField label="Margin (%)" hint="0 = eligible equals net amount">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.marginPercent}
+                onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+                className={inputCls}
+                placeholder="0"
+              />
+            </ProgramField>
+            <ProgramField label="Max Tenure (days)">
+              <input
+                type="number"
+                value={form.maxTenureDays}
+                onChange={(e) => setForm({ ...form, maxTenureDays: e.target.value })}
+                className={inputCls}
+              />
+            </ProgramField>
+            <ProgramField label="Max Concurrent Loans">
+              <input
+                type="number"
+                value={form.maxConcurrentLoans}
+                onChange={(e) => setForm({ ...form, maxConcurrentLoans: e.target.value })}
+                className={inputCls}
+              />
+            </ProgramField>
+            {form.productType === 'INVOICE_DISCOUNTING' ? (
+              <EligibilityFields
+                maxInvoiceAgeDays={form.maxInvoiceAgeDays}
+                minInvoiceAmount={form.minInvoiceAmount}
+                minDaysToDueDate={form.minDaysToDueDate}
+                onChange={(patch) => setForm({ ...form, ...patch })}
+              />
+            ) : null}
+            <OperationalParamsFields values={form} onChange={(patch) => setForm({ ...form, ...patch })} />
           </div>
-        </div>
-      )}
+        </ProgramFormModal>
+      ) : null}
+
+      {editProgram ? (
+        <ProgramFormModal
+          title="Edit program"
+          onClose={() => setEditProgram(null)}
+          onSubmit={handleEditSave}
+          submitting={editSaving}
+          submitLabel="Save"
+          submittingLabel="Saving..."
+          error={editError}
+        >
+          <div className={formGridCls}>
+            <p className={`${sectionTitleCls} first:mt-0 first:pt-0 first:border-t-0`}>Program details</p>
+            <ProgramField label="Name" span={2}>
+              <input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className={inputCls}
+                required
+              />
+            </ProgramField>
+            <ProgramField label="Description" span={2}>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className={`${inputCls} min-h-[88px] resize-y`}
+                placeholder="Optional"
+              />
+            </ProgramField>
+            <ProgramField
+              label="Margin (%)"
+              span={2}
+              hint="Deducted from invoice net amount to calculate eligible amount. Leave blank or set to 0 for full eligibility."
+            >
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                value={editForm.marginPercent}
+                onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
+                className={inputCls}
+                placeholder="0 = no margin (eligible = net amount)"
+              />
+            </ProgramField>
+            <OperationalParamsFields values={editForm} onChange={(patch) => setEditForm({ ...editForm, ...patch })} />
+            {editProgram.productType === 'INVOICE_DISCOUNTING' ? (
+              <EligibilityFields
+                maxInvoiceAgeDays={editForm.maxInvoiceAgeDays}
+                minInvoiceAmount={editForm.minInvoiceAmount}
+                minDaysToDueDate={editForm.minDaysToDueDate}
+                onChange={(patch) => setEditForm({ ...editForm, ...patch })}
+              />
+            ) : null}
+          </div>
+        </ProgramFormModal>
+      ) : null}
 
       <BtCard className="overflow-hidden p-0">
         <table className="bt-table w-full">

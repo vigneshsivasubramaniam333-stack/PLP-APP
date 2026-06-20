@@ -3,6 +3,7 @@ package com.plp.lending.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.Map;
 public final class InvoiceDiscountingProgramRules {
 
     public static final String MSG_INVOICE_TOO_OLD = "Invoice is older than allowed maximum age";
+    public static final String MSG_INVOICE_CREDIT_PERIOD_EXCEEDED =
+            "Invoice credit period (invoice date to due date) exceeds allowed maximum";
     public static final String MSG_AMOUNT_BELOW_MIN = "Invoice amount is below minimum allowed amount";
     public static final String MSG_DUE_TOO_SOON = "Invoice due date is earlier than minimum required due date";
     public static final String MSG_INVOICE_DATA_INCOMPLETE = "Invoice data incomplete for eligibility rules";
@@ -39,12 +42,13 @@ public final class InvoiceDiscountingProgramRules {
             return reasons;
         }
 
-        Integer maxInvoiceAgeDays = getNonNegativeInteger(programConfig.get("maxInvoiceAgeDays"));
-        if (maxInvoiceAgeDays != null) {
-            LocalDate oldestAllowed = today.minusDays(maxInvoiceAgeDays);
-            if (invoiceDate.isBefore(oldestAllowed)) {
-                reasons.add(MSG_INVOICE_TOO_OLD);
-            }
+        Integer maxInvoiceAgeDays = getPositiveInteger(programConfig.get("maxInvoiceAgeDays"));
+        if (maxInvoiceAgeDays == null) {
+            maxInvoiceAgeDays = 90;
+        }
+        long creditPeriodDays = ChronoUnit.DAYS.between(invoiceDate, dueDate);
+        if (creditPeriodDays > maxInvoiceAgeDays) {
+            reasons.add(MSG_INVOICE_CREDIT_PERIOD_EXCEEDED);
         }
 
         BigDecimal minInvoiceAmount = getBigDecimal(programConfig.get("minInvoiceAmount"));
@@ -66,6 +70,11 @@ public final class InvoiceDiscountingProgramRules {
     private static Integer getNonNegativeInteger(Object raw) {
         Integer n = parseInteger(raw);
         return n != null && n >= 0 ? n : null;
+    }
+
+    private static Integer getPositiveInteger(Object raw) {
+        Integer n = parseInteger(raw);
+        return n != null && n >= 1 ? n : null;
     }
 
     private static Integer parseInteger(Object raw) {

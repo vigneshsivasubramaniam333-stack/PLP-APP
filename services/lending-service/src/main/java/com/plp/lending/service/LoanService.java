@@ -7,9 +7,12 @@ import com.plp.lending.audit.AuditBridge;
 import com.plp.lending.audit.AuditService;
 import com.plp.lending.integration.ProgramServiceAuthHeaders;
 import com.plp.lending.integration.ProgramServiceInvoiceSubProgramValidator;
+import com.plp.lending.integration.ProgramServiceEffectiveBorrowerTermsClient;
 import com.plp.lending.integration.ProgramServiceProgramConfigClient;
+import com.plp.lending.integration.ProgramServiceProgramParametersClient;
 import com.plp.lending.integration.ProgramServiceSalarySlipClient;
 import com.plp.lending.integration.ProgramServiceSubProgramLimits;
+import com.plp.lending.validation.ProgramParametersReader;
 import com.plp.lending.lms.LmsPayableAmounts;
 import com.plp.lending.lms.PlpLmsOrchestrator;
 import com.plp.lending.security.LenderRoleAuthorization;
@@ -115,6 +118,8 @@ public class LoanService {
     private final ProgramServiceInvoiceSubProgramValidator invoiceSubProgramValidator;
     private final ProgramServiceSubProgramLimits subProgramLimits;
     private final ProgramServiceProgramConfigClient programServiceProgramConfigClient;
+    private final ProgramServiceProgramParametersClient programServiceProgramParametersClient;
+    private final ProgramServiceEffectiveBorrowerTermsClient effectiveBorrowerTermsClient;
     private final EligibilityService eligibilityService;
     private final AuditService auditService;
     private final ProgramServiceSalarySlipClient salarySlipClient;
@@ -290,11 +295,11 @@ public class LoanService {
 
         int tenureDaysForInterest = mandatoryTenureDaysPrimitive(loan);
 
-        BigDecimal interest = calculateInterest(
+        BigDecimal interest = calculateInterestForLoan(
+                loan,
                 loan.getRequestedAmount(),
                 loan.getInterestRate(),
-                tenureDaysForInterest
-        );
+                tenureDaysForInterest);
         loan.setInterestAmount(interest);
 
         BigDecimal processingFee = loan.getProcessingFee() != null ? loan.getProcessingFee() : BigDecimal.ZERO;
@@ -333,6 +338,13 @@ public class LoanService {
         loanEventPublisher.publishLoanEvent("LOAN_REQUESTED", loan);
         loanEventPublisher.publishAuditEvent("LOAN", loan.getId().toString(), "REQUESTED",
                 null, null, null, "{\"loanNumber\":\"" + loan.getLoanNumber() + "\",\"amount\":" + loan.getRequestedAmount() + "}");
+
+        if ("INVOICE_DISCOUNTING".equals(loan.getProductType())) {
+            Map<String, Object> params = programServiceProgramParametersClient.fetchProgramParameters(loan.getProgramId());
+            if ("AUTO".equals(String.valueOf(params.get("sanctionType")))) {
+                loan = approveLoan(loan.getId(), null, loan.getRequestedAmount());
+            }
+        }
         return loan;
     }
 
@@ -349,7 +361,7 @@ public class LoanService {
         loan.setStatus(LoanStatus.SANCTIONED);
         loan.setDueDate(LocalDate.now().plusDays(loan.getTenureDays()));
 
-        BigDecimal interest = calculateInterest(loan.getSanctionedAmount(), loan.getInterestRate(), loan.getTenureDays());
+        BigDecimal interest = calculateInterestForLoan(loan, loan.getSanctionedAmount(), loan.getInterestRate(), loan.getTenureDays());
         loan.setInterestAmount(interest);
         BigDecimal fee = loan.getProcessingFee() != null ? loan.getProcessingFee() : BigDecimal.ZERO;
         loan.setTotalRepayable(loan.getSanctionedAmount().add(interest).add(fee));
@@ -405,6 +417,7 @@ public class LoanService {
         if (amount.compareTo(cap) > 0) {
             throw new RuntimeException("Initiated amount exceeds sanctioned amount");
         }
+        enforceSanctionDisbursementGap(loan);
 
         Map<String, Object> snap = loan.getEligibilitySnapshot();
         Map<String, Object> mutable = snap == null ? new HashMap<>() : new HashMap<>(snap);
@@ -477,12 +490,13 @@ public class LoanService {
         if (disbursedAmount.compareTo(pending) != 0) {
             throw new RuntimeException("Disbursement amount must match initiated amount: " + pending.toPlainString());
         }
+        enforceSanctionDisbursementGap(loan);
         loan.setDisbursedAmount(disbursedAmount);
         loan.setDisbursementDate(LocalDate.now());
         loan.setStatus(LoanStatus.DISBURSED);
         loan.setDueDate(LocalDate.now().plusDays(loan.getTenureDays()));
 
-        BigDecimal interest = calculateInterest(disbursedAmount, loan.getInterestRate(), loan.getTenureDays());
+        BigDecimal interest = calculateInterestForLoan(loan, disbursedAmount, loan.getInterestRate(), loan.getTenureDays());
         loan.setInterestAmount(interest);
         BigDecimal fee = loan.getProcessingFee() != null ? loan.getProcessingFee() : BigDecimal.ZERO;
         loan.setTotalRepayable(disbursedAmount.add(interest).add(fee));
@@ -593,7 +607,15 @@ public class LoanService {
 
     @Transactional
     public Loan recordRepayment(UUID loanId, BigDecimal repaidAmount) {
+        return recordRepayment(loanId, repaidAmount, false);
+    }
+
+    @Transactional
+    public Loan recordRepayment(UUID loanId, BigDecimal repaidAmount, boolean borrowerInitiated) {
         Loan loan = getLoanForUpdate(loanId);
+        if (borrowerInitiated) {
+            assertBorrowerRepaymentAllowed(loan);
+        }
         if (loan.getStatus() != LoanStatus.DISBURSED && loan.getStatus() != LoanStatus.REPAYMENT_DUE && loan.getStatus() != LoanStatus.OVERDUE) {
             throw new RuntimeException("Repayment cannot be recorded. Loan status: " + loan.getStatus());
         }
@@ -1241,6 +1263,45 @@ public class LoanService {
                 .divide(BigDecimal.valueOf(36500), 2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal calculateInterestForLoan(
+            Loan loan, BigDecimal principal, BigDecimal annualRate, int days) {
+        int chargeableDays = days;
+        if (loan.getProgramId() != null) {
+            Map<String, Object> params = programServiceProgramParametersClient.fetchProgramParameters(loan.getProgramId());
+            if (ProgramParametersReader.parseYesNo(params.get("intFreeCreditPeriod"))) {
+                int freeDays = ProgramParametersReader.normalize(params).get("intFreePeriodDays") instanceof Number n
+                        ? n.intValue()
+                        : 0;
+                chargeableDays = Math.max(0, days - freeDays);
+            }
+        }
+        return calculateInterest(principal, annualRate, chargeableDays);
+    }
+
+    private void enforceSanctionDisbursementGap(Loan loan) {
+        if (loan.getProgramId() == null || loan.getSanctionDate() == null) {
+            return;
+        }
+        Map<String, Object> params = programServiceProgramParametersClient.fetchProgramParameters(loan.getProgramId());
+        int gapDays = params.get("gapBetweenSanctionAndDisbursementDays") instanceof Number n ? n.intValue() : 0;
+        if (gapDays <= 0) {
+            return;
+        }
+        long elapsed = ChronoUnit.DAYS.between(loan.getSanctionDate(), LocalDate.now());
+        if (elapsed < gapDays) {
+            throw new RuntimeException(
+                    "Minimum " + gapDays + " day(s) required between sanction and disbursement");
+        }
+    }
+
+    public void assertBorrowerRepaymentAllowed(Loan loan) {
+        Map<String, Object> params = programServiceProgramParametersClient.fetchProgramParameters(loan.getProgramId());
+        if (!ProgramParametersReader.parseYesNo(params.get("enablePaymentForBorrower"))) {
+            throw new LendingBusinessException(
+                    HttpStatus.FORBIDDEN, "Borrower-initiated repayment is not enabled for this program");
+        }
+    }
+
     /**
      * Sub-program to block/release limits: persisted loan row wins, else invoice JSON link.
      */
@@ -1375,11 +1436,7 @@ public class LoanService {
             if (subProgramLimits.validateRequestedAmountWithinSubProgram(spId, invBorrower, requested).isPresent()) {
                 continue;
             }
-            eligible.add(new SubProgramCandidate(
-                    spId,
-                    spProgram,
-                    parseBigDecimal(sp.get("interestRate")),
-                    parsePositiveInteger(sp.get("maxTenureDays"))));
+            buildInvoiceDiscountingCandidate(sp, invBorrower).ifPresent(eligible::add);
         }
 
         eligible.sort(Comparator.comparing(SubProgramCandidate::interestRate, Comparator.nullsLast(BigDecimal::compareTo))
@@ -1399,6 +1456,25 @@ public class LoanService {
                 loan.getBorrowerId(),
                 chosen.programId(),
                 chosen.id());
+    }
+
+    private Optional<SubProgramCandidate> buildInvoiceDiscountingCandidate(
+            Map<String, Object> sp, UUID invBorrower) {
+        UUID spId = parseUuid(sp.get("id"));
+        UUID spProgram = parseUuid(sp.get("programId"));
+        if (spId == null || spProgram == null) {
+            return Optional.empty();
+        }
+        Optional<ProgramServiceEffectiveBorrowerTermsClient.EffectiveBorrowerTerms> termsOpt =
+                effectiveBorrowerTermsClient.fetchEffectiveTerms(spId, invBorrower);
+        if (termsOpt.isPresent() && "YES".equalsIgnoreCase(termsOpt.get().discountHold())) {
+            return Optional.empty();
+        }
+        BigDecimal rate = termsOpt.map(ProgramServiceEffectiveBorrowerTermsClient.EffectiveBorrowerTerms::interestRate)
+                .orElse(parseBigDecimal(sp.get("interestRate")));
+        Integer tenure = termsOpt.map(ProgramServiceEffectiveBorrowerTermsClient.EffectiveBorrowerTerms::creditPeriodDays)
+                .orElse(parsePositiveInteger(sp.get("maxTenureDays")));
+        return Optional.of(new SubProgramCandidate(spId, spProgram, rate, tenure, termsOpt.orElse(null)));
     }
 
     /**
@@ -1458,11 +1534,7 @@ public class LoanService {
             if (subProgramLimits.validateRequestedAmountWithinSubProgram(spId, invBorrower, requested).isPresent()) {
                 continue;
             }
-            eligible.add(new SubProgramCandidate(
-                    spId,
-                    spProgram,
-                    parseBigDecimal(sp.get("interestRate")),
-                    parsePositiveInteger(sp.get("maxTenureDays"))));
+            buildInvoiceDiscountingCandidate(sp, invBorrower).ifPresent(eligible::add);
         }
 
         eligible.sort(Comparator.comparing(SubProgramCandidate::interestRate, Comparator.nullsLast(BigDecimal::compareTo))
@@ -1523,9 +1595,29 @@ public class LoanService {
         if (loan.getTenureDays() == null || loan.getTenureDays() <= 0) {
             throw new LendingBusinessException(HttpStatus.BAD_REQUEST, MSG_LOAN_TENURE_NOT_CONFIGURED);
         }
+
+        if (chosen.borrowerTerms() != null) {
+            Map<String, Object> snap = loan.getEligibilitySnapshot();
+            Map<String, Object> mutable = snap == null ? new HashMap<>() : new HashMap<>(snap);
+            if (chosen.borrowerTerms().discountMarginPercent() != null) {
+                mutable.put("discountMarginPercent", chosen.borrowerTerms().discountMarginPercent());
+            }
+            if (chosen.borrowerTerms().overdueInterestRate() != null) {
+                mutable.put("overdueInterestRate", chosen.borrowerTerms().overdueInterestRate());
+            }
+            if (chosen.borrowerTerms().paymentMethod() != null) {
+                mutable.put("paymentMethod", chosen.borrowerTerms().paymentMethod());
+            }
+            loan.setEligibilitySnapshot(mutable);
+        }
     }
 
-    private record SubProgramCandidate(UUID id, UUID programId, BigDecimal interestRate, Integer maxTenureDays) {}
+    private record SubProgramCandidate(
+            UUID id,
+            UUID programId,
+            BigDecimal interestRate,
+            Integer maxTenureDays,
+            ProgramServiceEffectiveBorrowerTermsClient.EffectiveBorrowerTerms borrowerTerms) {}
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchInvoiceJson(UUID invoiceId) {
@@ -1955,6 +2047,15 @@ public class LoanService {
                 .ifPresent(msg -> {
                     throw new RuntimeException(msg);
                 });
+
+        UUID subProgramId = parseUuid(invoiceResponse.get("subProgramId"));
+        if (subProgramId != null) {
+            effectiveBorrowerTermsClient.fetchEffectiveTerms(subProgramId, borrowerId).ifPresent(terms -> {
+                if ("YES".equalsIgnoreCase(terms.discountHold())) {
+                    throw new RuntimeException("Discount is on hold for this borrower");
+                }
+            });
+        }
 
         Object invoiceProgramIdObj = invoiceResponse.get("programId");
         if (invoiceProgramIdObj != null) {

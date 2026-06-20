@@ -272,4 +272,21 @@ public class InvoiceController {
         BigDecimal amount = new BigDecimal(body.get("amount").toString());
         return ResponseEntity.ok(invoiceService.markDiscounted(id, amount));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteInvoice(
+            @PathVariable UUID id,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Invoice invoice = invoiceService.getInvoice(id);
+        InvoiceAccessGuard.requireInvoiceWriteAccess(
+                invoice, rolesHeader, linkedEntityId, linkedEntityType, InvoiceWriteOperation.DELETE);
+        try {
+            invoiceService.deleteInvoice(id);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
 }

@@ -65,4 +65,5 @@ plp:
       secret-key: ${MINIO_SECRET_KEY:}
       bucket: plp-invoices
   dev-reset:
-    enabled: false
+    # Local/docker default true; set PLP_DEV_RESET_ENABLED=false in production.
+    enabled: ${PLP_DEV_RESET_ENABLED:true}

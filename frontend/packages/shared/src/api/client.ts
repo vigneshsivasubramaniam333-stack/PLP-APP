@@ -73,6 +73,8 @@ apiClient.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     apiClient.post('/api/v1/auth/login', { email, password }),
+  changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    apiClient.post('/api/v1/auth/change-password', data),
   register: (data: Record<string, unknown>) =>
     apiClient.post('/api/v1/auth/register', data, { headers: lenderLoanActionHeaders() }),
 };
@@ -114,6 +116,12 @@ export const subProgramApi = {
     apiClient.post(`/api/v1/sub-programs/${subProgramId}/borrowers`, payload, {
       headers: lenderLoanActionHeaders(),
     }),
+  updateBorrowerTerms: (subProgramId: string, borrowerId: string, payload: Record<string, unknown>) =>
+    apiClient.patch(`/api/v1/sub-programs/${subProgramId}/borrowers/${borrowerId}`, payload, {
+      headers: lenderLoanActionHeaders(),
+    }),
+  getEffectiveBorrowerTerms: (subProgramId: string, borrowerId: string) =>
+    apiClient.get(`/api/v1/sub-programs/${subProgramId}/borrowers/${borrowerId}/effective-terms`),
 };
 
 export const anchorApi = {

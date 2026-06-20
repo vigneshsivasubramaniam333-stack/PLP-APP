@@ -31,4 +31,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     Optional<Invoice> findByInvoiceNumberAndAnchorId(String invoiceNumber, UUID anchorId);
 
     List<Invoice> findByAnchorIdAndProgramId(UUID anchorId, UUID programId);
+
+    List<Invoice> findByBorrowerIdAndSubProgramIdOrderByCreatedAtDesc(UUID borrowerId, UUID subProgramId);
 }

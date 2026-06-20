@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,6 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     List<User> findByLinkedEntityId(UUID linkedEntityId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("DELETE FROM User u WHERE lower(trim(u.email)) <> lower(trim(:preservedEmail))")
-    void deleteAllExceptEmail(@Param("preservedEmail") String preservedEmail);
+    @Query("DELETE FROM User u WHERE lower(trim(u.email)) NOT IN :preservedEmails")
+    int deleteAllExceptEmails(@Param("preservedEmails") Collection<String> preservedEmails);
 }

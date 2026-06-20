@@ -21,6 +21,8 @@ eureka:
 plp:
   iam:
     base-url: http://localhost:8181
+  dev-reset:
+    enabled: true
   storage:
     minio:
       endpoint: http://localhost:9010

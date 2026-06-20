@@ -17,3 +17,7 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8861/eureka/
+
+plp:
+  dev-reset:
+    enabled: true

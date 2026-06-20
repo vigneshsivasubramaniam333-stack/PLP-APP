@@ -124,6 +124,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_iam
       PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
       PLP_INTEGRATION_DEFAULT_USER_PASSWORD: ChangeMe@PLP2026
+      # UAT/sandbox: set PLP_DEV_RESET_ENABLED=true. Local docker defaults to true for demo workflows.
+      PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,6 +150,7 @@ services:
       PLP_STORAGE_MINIO_ENDPOINT: http://minio:9000
       PLP_IAM_BASE_URL: http://iam-service:8081
       PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
+      PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -178,6 +181,7 @@ services:
       ENCORE_API_PASSWORD: ${ENCORE_API_PASSWORD:-password1}
       ENCORE_ADMIN_BRANCH: ${ENCORE_ADMIN_BRANCH:-MGPP}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_lending
+      PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
