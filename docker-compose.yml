@@ -149,6 +149,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_program
       PLP_STORAGE_MINIO_ENDPOINT: http://minio:9000
       PLP_IAM_BASE_URL: http://iam-service:8081
+      PLP_LENDING_BASE_URL: http://lending-service:8083
       PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
       PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
     depends_on:
@@ -185,6 +186,7 @@ services:
       PAYU_MERCHANT_KEY: ${PAYU_MERCHANT_KEY:-g8yc8J}
       PAYU_MERCHANT_SALT: ${PAYU_MERCHANT_SALT:-BBc2U41mOZPLuteAYBW9wJ2Lnm9V9rQV}
       PAYU_GATEWAY_URL: ${PAYU_GATEWAY_URL:-https://test.payu.in/_payment}
+      # Local Docker default. On Credinnov EC2 use docker-compose.sandbox.yml or .env (see .env.example).
       PLP_PUBLIC_API_BASE_URL: ${PLP_PUBLIC_API_BASE_URL:-http://localhost:8180}
       PLP_BORROWER_UI_URL: ${PLP_BORROWER_UI_URL:-http://localhost:3012/plp-borrower}
       LOS_BORROWER_UI_URL: ${LOS_BORROWER_UI_URL:-http://localhost:5173/los/borrower}

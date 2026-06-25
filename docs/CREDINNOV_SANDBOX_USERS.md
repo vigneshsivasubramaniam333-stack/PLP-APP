@@ -124,6 +124,19 @@ docker exec plp-lending wget -qO- --user=admin --password=password1 \
   "http://credinnov-sandbox.senseitech.com/credinnov-encore-server/webservices/loans/accounts/findBankWorkingDate"
 ```
 
+## PayU redirect to localhost
+
+If PayU redirects to `http://localhost:8180/api/v1/webhooks/payments/payu/success`, `plp-lending` still has the local Docker default for `PLP_PUBLIC_API_BASE_URL`. This affects invoice discounting PayU from the **LOS** borrower portal as well (LOS proxies PLP).
+
+```bash
+cd /vol/PLP-APP
+git pull origin credinnov
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml -f docker-compose.ui.yml up -d --build lending-service
+docker exec plp-lending printenv PLP_PUBLIC_API_BASE_URL
+```
+
+See `docs/PAYU.md` and `.env.example`.
+
 ## Deploy on EC2
 
 ```bash
@@ -133,9 +146,7 @@ docker compose -f docker-compose.prod.yml up -d --build los-core ui-service
 
 # PLP
 cd /vol/PLP-APP && git fetch && git checkout credinnov && git pull origin credinnov
-docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d --build iam-service
-docker compose -f docker-compose.yml -f docker-compose.ui.yml up -d platform-ui anchor-portal borrower-portal
-docker compose -f docker-compose.yml up -d --no-deps lending-service
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml -f docker-compose.ui.yml up -d --build
 ```
 
 Flyway runs migrations on service startup. To re-run on existing DB, restart `los_core` and `plp-iam` (or run SQL manually if migrations already applied).

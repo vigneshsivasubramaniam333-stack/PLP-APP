@@ -19,6 +19,8 @@ Personal loans and `SMART_COLLECT` borrowers continue using direct `POST /api/v1
 
 Configure in **lending-service** (`plp.payu.*` in `application.yml`). For Docker, set the same variables on the `lending-service` container (see `docker-compose.yml`).
 
+**Credinnov EC2:** use `docker-compose.sandbox.yml` or copy `.env.example` → `.env` so `PLP_PUBLIC_API_BASE_URL` is `http://credinnov-sandbox.senseitech.com/plp-api` (not `localhost:8180`). Invoice discounting PayU initiated from the **LOS** borrower portal still hits PLP lending-service for surl/furl.
+
 **Reverse hash:** PayU success callbacks are verified with  
 `sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)`  
 (`status||||||` is 6 pipes = **5** empty fields; `udf1` carries `borrowerId`). If browser callback hash still mismatches, lending-service falls back to PayU **`verify_payment`** API (uses a non–load-balanced HTTP client).

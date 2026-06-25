@@ -1,0 +1,14 @@
+# Credinnov EC2 sandbox — public PayU callback + portal URLs (browser must not hit localhost).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml -f docker-compose.ui.yml up -d --build
+#
+# Invoice discounting PayU from the LOS borrower portal proxies PLP lending-service; surl/furl use PLP_PUBLIC_API_BASE_URL.
+
+name: plp
+
+services:
+  lending-service:
+    environment:
+      PLP_PUBLIC_API_BASE_URL: ${PLP_PUBLIC_API_BASE_URL:-http://credinnov-sandbox.senseitech.com/plp-api}
+      PLP_BORROWER_UI_URL: ${PLP_BORROWER_UI_URL:-http://credinnov-sandbox.senseitech.com/plp-borrower}
+      LOS_BORROWER_UI_URL: ${LOS_BORROWER_UI_URL:-http://credinnov-sandbox.senseitech.com/los/borrower}
