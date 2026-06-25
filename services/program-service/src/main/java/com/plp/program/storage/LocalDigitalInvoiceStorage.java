@@ -3,6 +3,7 @@ package com.plp.program.storage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -19,6 +20,11 @@ public class LocalDigitalInvoiceStorage {
     public LocalDigitalInvoiceStorage(
             @Value("${plp.storage.local.root:./uploads/digital-invoices}") String rootPath) {
         this.root = Path.of(rootPath).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(this.root);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot create digital invoice storage root: " + this.root, e);
+        }
     }
 
     public void put(String key, byte[] data) throws Exception {

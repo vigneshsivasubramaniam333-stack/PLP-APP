@@ -54,16 +54,20 @@ management:
 plp:
   iam:
     base-url: ${PLP_IAM_BASE_URL:http://iam-service:8081}
+  lending:
+    base-url: ${PLP_LENDING_BASE_URL:http://lending-service:8083}
   los-integration:
     api-key: ${PLP_LOS_INTEGRATION_API_KEY:plp-los-integration-dev-key}
   storage:
+    local:
+      root: ${PLP_STORAGE_LOCAL_ROOT:./uploads/digital-invoices}
     minio:
-      # Set true + credentials to upload bytes to MinIO (see docker-compose.infra.yml).
-      enabled: false
+      # Docker EC2: set PLP_STORAGE_MINIO_ENABLED=true and MINIO_ACCESS_KEY/SECRET (see docker-compose.yml).
+      enabled: ${PLP_STORAGE_MINIO_ENABLED:false}
       endpoint: ${PLP_STORAGE_MINIO_ENDPOINT:http://minio:9000}
       access-key: ${MINIO_ACCESS_KEY:}
       secret-key: ${MINIO_SECRET_KEY:}
-      bucket: plp-invoices
+      bucket: ${PLP_STORAGE_MINIO_BUCKET:plp-invoices}
   dev-reset:
     # Local/docker default true; set PLP_DEV_RESET_ENABLED=false in production.
     enabled: ${PLP_DEV_RESET_ENABLED:true}

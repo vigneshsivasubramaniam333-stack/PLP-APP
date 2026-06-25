@@ -126,16 +126,21 @@ docker exec plp-lending wget -qO- --user=admin --password=password1 \
 
 ## PayU redirect to localhost
 
-If PayU redirects to `http://localhost:8180/api/v1/webhooks/payments/payu/success`, `plp-lending` still has the local Docker default for `PLP_PUBLIC_API_BASE_URL`. This affects invoice discounting PayU from the **LOS** borrower portal as well (LOS proxies PLP).
+If PayU redirects to `http://localhost:8180/...`, rebuild `plp-lending` with `docker-compose.sandbox.yml` (see `.env.example`). Verify: `docker exec plp-lending printenv PLP_PUBLIC_API_BASE_URL`.
+
+## Digital invoice upload (metadata only / file not available)
+
+`program-service` stores invoice copy bytes in **MinIO** (default in Docker) with a **local volume fallback**. If upload says *metadata saved; enable MinIO…* or preview returns *Digital invoice file not available*, MinIO was off or the container could not write files.
 
 ```bash
 cd /vol/PLP-APP
 git pull origin credinnov
-docker compose -f docker-compose.yml -f docker-compose.sandbox.yml -f docker-compose.ui.yml up -d --build lending-service
-docker exec plp-lending printenv PLP_PUBLIC_API_BASE_URL
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml -f docker-compose.ui.yml up -d --build minio program-service
+docker exec plp-program printenv PLP_STORAGE_MINIO_ENABLED MINIO_ACCESS_KEY PLP_STORAGE_LOCAL_ROOT
+docker ps --filter name=plp-minio
 ```
 
-See `docs/PAYU.md` and `.env.example`.
+Re-upload digital invoice files for rows created before this fix (old rows have metadata only).
 
 ## Deploy on EC2
 

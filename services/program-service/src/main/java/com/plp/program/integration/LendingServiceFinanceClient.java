@@ -2,6 +2,7 @@ package com.plp.program.integration;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +29,9 @@ public class LendingServiceFinanceClient {
 
     private final RestTemplateBuilder restTemplateBuilder;
 
+    @Value("${plp.lending.base-url:http://localhost:8183}")
+    private String lendingBaseUrl;
+
     public boolean requestInvoiceFinance(UUID invoiceId, UUID borrowerId, UUID programId, BigDecimal requestedAmount) {
         if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("Auto-pull skipped for invoice {}: no financeable amount", invoiceId);
@@ -48,7 +52,7 @@ public class LendingServiceFinanceClient {
             body.put("requestedAmount", requestedAmount);
 
             restTemplate.exchange(
-                    "http://lending-service/api/v1/loans",
+                    lendingBaseUrl.replaceAll("/$", "") + "/api/v1/loans",
                     HttpMethod.POST,
                     new HttpEntity<>(body, headers),
                     Map.class);

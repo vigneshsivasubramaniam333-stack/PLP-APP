@@ -147,11 +147,17 @@ services:
     environment:
       <<: [*eureka-env, *db-env, *redis-env, *rabbit-env]
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_program
+      PLP_STORAGE_MINIO_ENABLED: ${PLP_STORAGE_MINIO_ENABLED:-true}
       PLP_STORAGE_MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-plp_minio_admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-plp_minio_secret_2026}
+      PLP_STORAGE_LOCAL_ROOT: /data/digital-invoices
       PLP_IAM_BASE_URL: http://iam-service:8081
       PLP_LENDING_BASE_URL: http://lending-service:8083
       PLP_LOS_INTEGRATION_API_KEY: plp-los-integration-dev-key
       PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
+    volumes:
+      - plp_digital_invoices:/data/digital-invoices
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,6 +166,8 @@ services:
       rabbitmq:
         condition: service_healthy
       discovery-service:
+        condition: service_started
+      minio:
         condition: service_started
     networks:
       - plp-net
@@ -296,3 +304,4 @@ volumes:
   plp_postgres_data:
   plp_redis_data:
   plp_minio_data:
+  plp_digital_invoices:

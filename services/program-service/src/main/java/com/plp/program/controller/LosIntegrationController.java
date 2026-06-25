@@ -24,6 +24,7 @@ public class LosIntegrationController {
     private final LosBorrowerIntegrationService losBorrowerIntegrationService;
     private final LosSubProgramBorrowerLinkIntegrationService losSubProgramBorrowerLinkIntegrationService;
     private final LosBorrowerProgramMappingIntegrationService losBorrowerProgramMappingIntegrationService;
+    private final LosApplicationCleanupService losApplicationCleanupService;
 
     @PostMapping("/program-borrower-link")
     public ResponseEntity<Map<String, Object>> linkProgramBorrower(@Valid @RequestBody LosProgramBorrowerLinkRequest body) {
@@ -66,6 +67,13 @@ public class LosIntegrationController {
     public ResponseEntity<Map<String, Object>> upsertBorrowerProgramMapping(
             @Valid @RequestBody LosBorrowerProgramMappingUpsertRequest body) {
         LosBorrowerProgramMappingUpsertResponse data = losBorrowerProgramMappingIntegrationService.upsert(body);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @PostMapping("/application-cleanup")
+    public ResponseEntity<Map<String, Object>> cleanupApplication(
+            @Valid @RequestBody LosApplicationCleanupRequest body) {
+        LosApplicationCleanupResponse data = losApplicationCleanupService.cleanup(body);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
     }
 }

@@ -17,7 +17,11 @@ RUN ./mvnw dependency:go-offline -q -pl services/program-service
 RUN ./mvnw package -DskipTests -q -pl services/program-service
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN addgroup -S plp && adduser -S plp -G plp
-USER plp
+RUN addgroup -S plp && adduser -S plp -G plp \
+    && mkdir -p /data/digital-invoices \
+    && apk add --no-cache su-exec \
+    && chown -R plp:plp /data
 COPY --from=builder /build/services/program-service/target/*.jar app.jar
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+COPY services/program-service/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
