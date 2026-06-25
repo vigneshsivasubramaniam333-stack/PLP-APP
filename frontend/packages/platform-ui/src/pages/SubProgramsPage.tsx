@@ -14,7 +14,7 @@ import {
   buildBorrowerTermsRowsFromMap,
   buildSubProgramConfigurationRows,
 } from '@plp/shared';
-import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower, ProductRepaymentDefault, ProductType } from '@plp/shared';
+import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower, ProductRepaymentDefault } from '@plp/shared';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
