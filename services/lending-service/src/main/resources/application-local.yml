@@ -21,3 +21,11 @@ eureka:
 plp:
   dev-reset:
     enabled: true
+  payu:
+    merchant-key: g8yc8J
+    merchant-salt: BBc2U41mOZPLuteAYBW9wJ2Lnm9V9rQV
+    gateway-url: https://test.payu.in/_payment
+    # Local gateway listens on 8180 (see api-gateway application-local.yml / start-all.ps1)
+    callback-base-url: http://localhost:8180
+    plp-borrower-ui-url: http://localhost:3012/plp-borrower
+    los-borrower-ui-url: http://localhost:5173/los/borrower

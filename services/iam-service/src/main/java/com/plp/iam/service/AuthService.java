@@ -36,6 +36,9 @@ public class AuthService {
             UserRole.ANCHOR_CHECKER
     );
 
+    /** Default password for admin-provisioned lender/anchor users (not borrower self-registration). */
+    public static final String DEFAULT_PROVISIONED_TEMPORARY_PASSWORD = "Temp@123";
+
     private static final Pattern STRONG_PASSWORD = Pattern.compile(
             "^(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}$");
 
@@ -133,16 +136,21 @@ public class AuthService {
             }
         }
 
+        String passwordToStore = request.getRole() == UserRole.BORROWER
+                ? request.getPassword()
+                : DEFAULT_PROVISIONED_TEMPORARY_PASSWORD;
+        boolean passwordResetRequired = request.getRole() != UserRole.BORROWER;
+
         User user = User.builder()
                 .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .passwordHash(passwordEncoder.encode(passwordToStore))
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .role(request.getRole())
                 .linkedEntityId(request.getLinkedEntityId())
                 .linkedEntityType(request.getLinkedEntityType())
                 .status(UserStatus.ACTIVE)
-                .passwordResetRequired(ANCHOR_LINKED_ROLES.contains(request.getRole()))
+                .passwordResetRequired(passwordResetRequired)
                 .build();
 
         user = userRepository.save(user);

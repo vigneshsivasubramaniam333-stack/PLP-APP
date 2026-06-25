@@ -100,4 +100,12 @@ public final class LenderPortalRoleAuthorization {
                 AUDIT_VIEWER_ROLES,
                 "Audit trail is restricted to lender operations roles");
     }
+
+    /** Platform-wide configuration (repayment defaults, etc.). */
+    public static void requirePlatformAdmin(String rolesHeader) {
+        Set<String> roles = parseRoles(rolesHeader);
+        if (!hasPlatformAdmin(roles)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only Platform Admin can access this resource");
+        }
+    }
 }

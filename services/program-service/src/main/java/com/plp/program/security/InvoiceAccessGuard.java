@@ -50,7 +50,11 @@ public final class InvoiceAccessGuard {
         /** Internal: lending-service after creating an invoice-discounting loan request. */
         MARK_FINANCING_REQUESTED,
         /** Internal: lending-service after cancelling disbursement pending before disbursement completes. */
-        CANCEL_FINANCING_REQUESTED
+        CANCEL_FINANCING_REQUESTED,
+        /** Internal: lending-service when loan rejected after finance requested. */
+        MARK_REJECTED,
+        /** Internal: lending-service when all loans on invoice are closed. */
+        MARK_CLOSED
     }
 
     private InvoiceAccessGuard() {}
@@ -139,7 +143,9 @@ public final class InvoiceAccessGuard {
         if (operation == InvoiceWriteOperation.MARK_DISCOUNTED
                 || operation == InvoiceWriteOperation.DELETE
                 || operation == InvoiceWriteOperation.MARK_FINANCING_REQUESTED
-                || operation == InvoiceWriteOperation.CANCEL_FINANCING_REQUESTED) {
+                || operation == InvoiceWriteOperation.CANCEL_FINANCING_REQUESTED
+                || operation == InvoiceWriteOperation.MARK_REJECTED
+                || operation == InvoiceWriteOperation.MARK_CLOSED) {
             if (isLenderRole(roles)) {
                 return;
             }

@@ -6,6 +6,7 @@ const labelCls = 'bt-label';
 export type InvoiceListFilters = {
   search: string;
   status: string;
+  lifecycle: 'active' | 'closed';
   page: number;
   size: number;
 };
@@ -26,8 +27,9 @@ const DEFAULT_STATUSES = [
   'FINANCING_REQUESTED',
   'PARTIALLY_DISCOUNTED',
   'FULLY_DISCOUNTED',
-  'EXPIRED',
   'REJECTED',
+  'CLOSED',
+  'EXPIRED',
 ];
 
 export function InvoiceListToolbar({ filters, onChange, pageMeta, statusOptions = DEFAULT_STATUSES }: Props) {
@@ -38,6 +40,22 @@ export function InvoiceListToolbar({ filters, onChange, pageMeta, statusOptions 
 
   return (
     <div className="mb-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex gap-2 border-b border-slate-100 pb-3">
+        {(['active', 'closed'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => onChange({ lifecycle: tab, page: 0, status: '' })}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize ${
+              filters.lifecycle === tab
+                ? 'bg-[var(--bt-orange)] text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {tab === 'active' ? 'Active' : 'Closed'}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-[180px] flex-1">
           <span className={labelCls}>Search</span>

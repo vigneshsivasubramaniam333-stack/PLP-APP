@@ -36,6 +36,8 @@ public interface LoanRepository extends JpaRepository<Loan, UUID> {
 
     boolean existsByInvoiceIdAndStatusIn(UUID invoiceId, List<LoanStatus> statuses);
 
+    List<Loan> findByInvoiceId(UUID invoiceId);
+
     boolean existsBySalaryDataIdAndStatusIn(UUID salaryDataId, Collection<LoanStatus> statuses);
 
     @Query("SELECT COUNT(l) FROM Loan l WHERE l.borrowerId = :borrowerId AND l.status IN ('DISBURSED', 'REPAYMENT_DUE', 'OVERDUE')")

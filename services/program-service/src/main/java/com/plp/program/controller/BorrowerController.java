@@ -9,6 +9,7 @@ import com.plp.program.model.enums.BorrowerStatus;
 import com.plp.program.repository.BorrowerRepository;
 import com.plp.program.security.LenderPortalRoleAuthorization;
 import com.plp.program.service.BorrowerProvisioningService;
+import com.plp.program.service.BorrowerPaymentProfileService;
 import com.plp.program.service.LimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -29,6 +31,7 @@ public class BorrowerController {
     private final BorrowerProvisioningService borrowerProvisioningService;
     private final LimitService limitService;
     private final AuditService auditService;
+    private final BorrowerPaymentProfileService borrowerPaymentProfileService;
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createBorrower(
@@ -73,6 +76,22 @@ public class BorrowerController {
         Borrower borrower = borrowerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Borrower not found: " + id));
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", borrower));
+    }
+
+    /** Internal/lender: effective PayU vs Smart Collect and sub-program enrollments for payment cart. */
+    @GetMapping("/{id}/payment-profile")
+    public ResponseEntity<Map<String, Object>> paymentProfile(
+            @PathVariable UUID id,
+            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false)
+                    String rolesHeader) {
+        Set<String> roles = LenderPortalRoleAuthorization.parseRoles(rolesHeader);
+        if (!roles.contains("PLATFORM_ADMIN") && roles.stream().noneMatch(r -> r.contains("ACCOUNTS") || r.contains("CREDIT"))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("status", "ERROR", "message", "Forbidden"));
+        }
+        borrowerRepository.findById(id).orElseThrow(() -> new RuntimeException("Borrower not found: " + id));
+        BorrowerPaymentProfileService.PaymentProfile profile = borrowerPaymentProfileService.buildProfile(id);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", profile));
     }
 
     @GetMapping("/{id}/limits")

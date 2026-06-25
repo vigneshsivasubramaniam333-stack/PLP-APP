@@ -8,6 +8,9 @@ import DashboardPage from './pages/DashboardPage';
 import LoanRequestPage from './pages/LoanRequestPage';
 import MyLoansPage from './pages/MyLoansPage';
 import InvoiceDiscountingPage from './pages/InvoiceDiscountingPage';
+import PaymentCartPage from './pages/PaymentCartPage';
+import PayuCheckoutPage from './pages/PayuCheckoutPage';
+import PaymentResultPage from './pages/PaymentResultPage';
 import RepaymentHistoryPage from './pages/RepaymentHistoryPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProgramsPage from './pages/ProgramsPage';
@@ -60,6 +63,9 @@ function App() {
             <Route path="request-loan" element={<LoanRequestPage />} />
             <Route path="my-loans" element={<MyLoansPage />} />
             <Route path="invoice-discounting" element={<InvoiceDiscountingPage />} />
+            <Route path="payments/cart" element={<PaymentCartPage />} />
+            <Route path="payments/payu" element={<PayuCheckoutPage />} />
+            <Route path="payments/result" element={<PaymentResultPage />} />
             <Route path="repayments" element={<RepaymentHistoryPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>

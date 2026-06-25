@@ -103,6 +103,9 @@ $services = @(
             SERVER_PORT = "8183"
             SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_lending"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
+            PLP_PUBLIC_API_BASE_URL = "http://localhost:8180"
+            PLP_BORROWER_UI_URL = "http://localhost:3012/plp-borrower"
+            LOS_BORROWER_UI_URL = "http://localhost:5173/los/borrower"
         } + $localSpringProfile + $localRedis + $localRabbit + $localDevReset
     },
     @{

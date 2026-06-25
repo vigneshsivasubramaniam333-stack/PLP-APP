@@ -25,6 +25,7 @@ function defaultRepaymentAmountInput(loan: Loan): string {
 
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanTab, setLoanTab] = useState<'active' | 'closed'>('active');
   const [loading, setLoading] = useState(true);
   const [repayModalLoan, setRepayModalLoan] = useState<Loan | null>(null);
   const [repayAmount, setRepayAmount] = useState('');
@@ -45,6 +46,10 @@ export default function LoansPage() {
       .catch((err) => notifyError(err, 'Could not load loans'))
       .finally(() => setLoading(false));
   }, []);
+
+  const visibleLoans = loans.filter((l) =>
+    loanTab === 'closed' ? ['CLOSED', 'REJECTED'].includes(l.status) : !['CLOSED', 'REJECTED'].includes(l.status),
+  );
 
   const handleSanction = async (loan: Loan) => {
     try {
@@ -148,6 +153,20 @@ export default function LoansPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Loans</h1>
         <p className="text-sm text-slate-500 mt-1">All loan applications and active loans</p>
+        <div className="flex gap-2 mt-4">
+          {(['active', 'closed'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setLoanTab(tab)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize ${
+                loanTab === tab ? 'bg-[var(--bt-orange)] text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {tab === 'active' ? 'Active' : 'Closed'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -202,7 +221,7 @@ export default function LoansPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {loans.map((l) => {
+            {visibleLoans.map((l) => {
               const showSanctionReject = l.status === 'REQUESTED' && caps.canSanctionOrReject;
               const showInitiate = l.status === 'SANCTIONED' && caps.canInitiateDisburse;
               const showApproveDisburse = l.status === 'DISBURSEMENT_PENDING' && caps.canApproveDisburse;

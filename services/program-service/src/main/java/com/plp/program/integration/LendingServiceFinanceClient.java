@@ -28,10 +28,10 @@ public class LendingServiceFinanceClient {
 
     private final RestTemplateBuilder restTemplateBuilder;
 
-    public void requestInvoiceFinance(UUID invoiceId, UUID borrowerId, UUID programId, BigDecimal requestedAmount) {
+    public boolean requestInvoiceFinance(UUID invoiceId, UUID borrowerId, UUID programId, BigDecimal requestedAmount) {
         if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("Auto-pull skipped for invoice {}: no financeable amount", invoiceId);
-            return;
+            return false;
         }
         try {
             RestTemplate restTemplate = restTemplateBuilder.build();
@@ -53,8 +53,10 @@ public class LendingServiceFinanceClient {
                     new HttpEntity<>(body, headers),
                     Map.class);
             log.info("Auto-pull finance requested for invoice {} amount {}", invoiceId, requestedAmount);
+            return true;
         } catch (Exception e) {
-            log.warn("Auto-pull finance request failed for invoice {}: {}", invoiceId, e.getMessage());
+            log.error("Auto-pull finance request failed for invoice {}: {}", invoiceId, e.getMessage());
+            return false;
         }
     }
 }

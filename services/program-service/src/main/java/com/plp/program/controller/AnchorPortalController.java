@@ -1,10 +1,12 @@
 package com.plp.program.controller;
 
+import com.plp.program.model.dto.InvoiceCsvUploadResult;
 import com.plp.program.model.dto.InvoiceDigitalAttachmentResult;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.EmployeeSalaryData;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.entity.SubProgram;
 import com.plp.program.repository.BorrowerRepository;
 import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
@@ -22,8 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -86,6 +90,24 @@ public class AnchorPortalController {
         if (invoiceAnchorId == null || !resolvedAnchorId.equals(invoiceAnchorId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invoice does not belong to this anchor");
         }
+    }
+
+    private void requireSubProgramBelongsToAnchorProgram(UUID subProgramId, UUID programId, UUID anchorId) {
+        SubProgram sub = subProgramRepository.findById(subProgramId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sub-program not found"));
+        if (!Objects.equals(sub.getProgramId(), programId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sub-program does not belong to the selected program");
+        }
+        if (sub.getAnchorId() != null && !Objects.equals(sub.getAnchorId(), anchorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sub-program does not belong to this anchor");
+        }
+    }
+
+    private static String exceptionMessage(Exception e) {
+        if (e.getMessage() != null && !e.getMessage().isBlank()) {
+            return e.getMessage();
+        }
+        return e.getClass().getSimpleName();
     }
 
     @GetMapping("/dashboard")
@@ -182,6 +204,7 @@ public class AnchorPortalController {
             @RequestParam(required = false) UUID programId,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String lifecycle,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestHeader(value = "X-Linked-Entity-Type", required = false) String linkedEntityType,
@@ -191,12 +214,14 @@ public class AnchorPortalController {
         if (programId != null) {
             requireProgramBelongsToAnchor(programId, resolvedAnchorId);
         }
-        if (page != null || size != null || (search != null && !search.isBlank()) || (status != null && !status.isBlank())) {
+        if (page != null || size != null || (search != null && !search.isBlank()) || (status != null && !status.isBlank())
+                || (lifecycle != null && !lifecycle.isBlank())) {
             Map<String, Object> paged = invoiceService.listAnchorInvoicesPaged(
                     resolvedAnchorId,
                     programId,
                     search,
                     status,
+                    lifecycle,
                     page != null ? page : 0,
                     size != null ? size : 20);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
@@ -240,6 +265,7 @@ public class AnchorPortalController {
     public ResponseEntity<Map<String, Object>> uploadInvoices(
             @RequestParam UUID anchorId,
             @RequestParam UUID programId,
+            @RequestParam(required = false) UUID subProgramId,
             @RequestParam("file") MultipartFile file,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-User-Roles", required = false) String roles,
@@ -249,16 +275,27 @@ public class AnchorPortalController {
         try {
             UUID resolvedAnchorId = requireAnchorFromHeaders(linkedEntityType, linkedEntityId, anchorId, userId);
             requireProgramBelongsToAnchor(programId, resolvedAnchorId);
+            if (subProgramId != null) {
+                requireSubProgramBelongsToAnchorProgram(subProgramId, programId, resolvedAnchorId);
+            }
             UUID uploadedByUserId = userId != null ? UUID.fromString(userId) : null;
-            List<Invoice> results =
-                    invoiceService.uploadInvoiceCsv(resolvedAnchorId, programId, file.getInputStream(), uploadedByUserId);
-            return ResponseEntity.ok(Map.of(
-                    "status", "SUCCESS",
-                    "data", Map.of("rowsProcessed", results.size(), "records", results)));
+            InvoiceCsvUploadResult upload = invoiceService.uploadInvoiceCsv(
+                    resolvedAnchorId, programId, file.getInputStream(), uploadedByUserId, subProgramId);
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("rowsProcessed", upload.rowsProcessed());
+            data.put("rowsSkipped", upload.rowsSkipped());
+            data.put("errors", upload.errors());
+            data.put("records", upload.invoices());
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("status", "SUCCESS");
+            body.put("data", data);
+            return ResponseEntity.ok(body);
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+            log.warn("Anchor invoice CSV upload failed: {}", exceptionMessage(e), e);
+            return ResponseEntity.badRequest()
+                    .body(Map.of("status", "ERROR", "message", exceptionMessage(e)));
         }
     }
 

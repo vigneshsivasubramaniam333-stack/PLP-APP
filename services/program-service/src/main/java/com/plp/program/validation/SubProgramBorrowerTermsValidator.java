@@ -2,18 +2,22 @@ package com.plp.program.validation;
 
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
+import com.plp.program.model.enums.PaymentMethodMode;
 
 import java.math.BigDecimal;
 import java.util.Set;
 
 public final class SubProgramBorrowerTermsValidator {
 
-    private static final Set<String> PAYMENT_METHODS = Set.of("SMART_COLLECT");
+    private static final Set<String> PAYMENT_METHODS = Set.of("SMART_COLLECT", "PAYU_PG");
 
     private SubProgramBorrowerTermsValidator() {
     }
 
     public static void validateAndApplyDefaults(SubProgramBorrower membership, SubProgram subProgram) {
+        if (membership.getPaymentMethodMode() == null) {
+            membership.setPaymentMethodMode(PaymentMethodMode.CUSTOM);
+        }
         if (membership.getDiscountHold() == null || membership.getDiscountHold().isBlank()) {
             membership.setDiscountHold("NO");
         } else {

@@ -152,31 +152,7 @@ public class LoanService {
             }
         }
 
-        if (loan.getAnchorId() == null && loan.getProgramId() != null) {
-            try {
-                HttpEntity<Void> psEntity = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
-                @SuppressWarnings("unchecked")
-                Map<String, Object> programResponse = restTemplate.exchange(
-                                "http://program-service/api/v1/programs/{programId}",
-                                HttpMethod.GET,
-                                psEntity,
-                                Map.class,
-                                loan.getProgramId())
-                        .getBody();
-                if (programResponse != null && "SUCCESS".equals(programResponse.get("status"))) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> programData = (Map<String, Object>) programResponse.get("data");
-                    if (programData != null && programData.containsKey("anchorId")) {
-                        loan.setAnchorId(UUID.fromString(programData.get("anchorId").toString()));
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to resolve anchorId from program {}: {}", loan.getProgramId(), e.getMessage());
-            }
-            if (loan.getAnchorId() == null) {
-                throw new RuntimeException("Unable to resolve anchor for program " + loan.getProgramId() + ". Please try again or contact support.");
-            }
-        }
+        resolveAndSetLoanAnchorId(loan);
 
         if ("PAY_DAY_LOAN".equals(loan.getProductType())) {
             Map<String, Object> eligibilityResult = eligibilityService.checkPayDayLoanEligibility(
@@ -398,6 +374,9 @@ public class LoanService {
         loanEventPublisher.publishAuditEvent("LOAN", loan.getId().toString(), "REJECTED",
                 rejectedBy != null ? rejectedBy.toString() : null, null,
                 "{\"status\":\"REQUESTED\"}", "{\"status\":\"REJECTED\",\"reason\":\"" + reason + "\"}");
+        if (loan.getInvoiceId() != null && "INVOICE_DISCOUNTING".equals(loan.getProductType())) {
+            markInvoiceRejectedOnProgramService(loan.getInvoiceId(), reason);
+        }
         return loan;
     }
 
@@ -612,6 +591,23 @@ public class LoanService {
 
     @Transactional
     public Loan recordRepayment(UUID loanId, BigDecimal repaidAmount, boolean borrowerInitiated) {
+        return recordRepayment(loanId, repaidAmount, borrowerInitiated, null, null);
+    }
+
+    /** Admin PG settlement: posts repayment with UTR and custom payment mode (no borrower-initiated gate). */
+    @Transactional
+    public Loan recordSettlementRepayment(
+            UUID loanId, BigDecimal repaidAmount, String paymentMode, String utr) {
+        return recordRepayment(loanId, repaidAmount, false, paymentMode, utr);
+    }
+
+    @Transactional
+    private Loan recordRepayment(
+            UUID loanId,
+            BigDecimal repaidAmount,
+            boolean borrowerInitiated,
+            String paymentMode,
+            String utr) {
         Loan loan = getLoanForUpdate(loanId);
         if (borrowerInitiated) {
             assertBorrowerRepaymentAllowed(loan);
@@ -620,7 +616,7 @@ public class LoanService {
             throw new RuntimeException("Repayment cannot be recorded. Loan status: " + loan.getStatus());
         }
         loan.setTotalRepaid(loan.getTotalRepaid().add(repaidAmount));
-        persistRepaymentRecord(loan, repaidAmount);
+        persistRepaymentRecord(loan, repaidAmount, paymentMode, utr);
 
         boolean lmsEnabled = plpLmsOrchestrator.isLmsEnabledForLoan(loan);
         if (!lmsEnabled) {
@@ -709,6 +705,9 @@ public class LoanService {
                 && loan.getSalaryDataId() != null) {
             salarySlipClient.patchSlipStatus(loan.getSalaryDataId(), SLIP_CLOSED_USED);
         }
+        if (loan.getStatus() == LoanStatus.CLOSED && loan.getInvoiceId() != null) {
+            maybeMarkInvoiceClosedIfAllLoansSettled(loan.getInvoiceId());
+        }
         loanEventPublisher.publishLoanEvent("REPAYMENT_RECEIVED", loan);
         loanEventPublisher.publishAuditEvent("LOAN", loan.getId().toString(), "REPAYMENT",
                 null, null, null, "{\"repaidAmount\":" + repaidAmount + ",\"outstanding\":" + loan.getOutstandingAmount() + ",\"status\":\"" + loan.getStatus() + "\"}");
@@ -741,6 +740,10 @@ public class LoanService {
     }
 
     private void persistRepaymentRecord(Loan loan, BigDecimal repaidAmount) {
+        persistRepaymentRecord(loan, repaidAmount, null, null);
+    }
+
+    private void persistRepaymentRecord(Loan loan, BigDecimal repaidAmount, String paymentMode, String utr) {
         repaymentRepository.save(Repayment.builder()
                 .loanId(loan.getId())
                 .repaymentRef("RP-" + loan.getLoanNumber() + "-" + Instant.now().toEpochMilli())
@@ -748,7 +751,8 @@ public class LoanService {
                 .paidAmount(repaidAmount)
                 .paidDate(LocalDate.now())
                 .status(RepaymentStatus.SUCCESS)
-                .paymentMode("BORROWER_PORTAL")
+                .paymentMode(paymentMode != null && !paymentMode.isBlank() ? paymentMode : "BORROWER_PORTAL")
+                .utrNumber(utr)
                 .build());
     }
 
@@ -1751,6 +1755,132 @@ public class LoanService {
     }
 
     /**
+     * Umbrella programs may omit {@code anchorId}; sub-programs and borrowers carry the anchor association.
+     */
+    private void resolveAndSetLoanAnchorId(Loan loan) {
+        if (loan.getAnchorId() != null || loan.getProgramId() == null) {
+            return;
+        }
+        UUID anchorId = fetchProgramAnchorId(loan.getProgramId());
+        if (anchorId == null && loan.getBorrowerId() != null) {
+            anchorId = fetchBorrowerAnchorId(loan.getBorrowerId());
+        }
+        if (anchorId == null && "PAY_DAY_LOAN".equals(loan.getProductType()) && loan.getBorrowerId() != null) {
+            anchorId = resolvePayLoanSubProgramAnchorId(
+                    loan.getBorrowerId(), loan.getProgramId(), loan.getRequestedAmount());
+        }
+        if (anchorId == null) {
+            throw new RuntimeException(
+                    "Unable to resolve anchor for program "
+                            + loan.getProgramId()
+                            + ". Please try again or contact support.");
+        }
+        loan.setAnchorId(anchorId);
+        log.info(
+                "Resolved anchorId={} for programId={} borrowerId={} productType={}",
+                anchorId,
+                loan.getProgramId(),
+                loan.getBorrowerId(),
+                loan.getProductType());
+    }
+
+    private UUID fetchProgramAnchorId(UUID programId) {
+        try {
+            HttpEntity<Void> psEntity = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> programResponse =
+                    restTemplate
+                            .exchange(
+                                    "http://program-service/api/v1/programs/{programId}",
+                                    HttpMethod.GET,
+                                    psEntity,
+                                    Map.class,
+                                    programId)
+                            .getBody();
+            if (programResponse == null || !"SUCCESS".equals(programResponse.get("status"))) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> programData = (Map<String, Object>) programResponse.get("data");
+            return programData != null ? parseUuid(programData.get("anchorId")) : null;
+        } catch (Exception e) {
+            log.warn("Failed to resolve anchorId from program {}: {}", programId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Borrowers onboarded on a sub-program store {@code anchorId} on the borrower row even when the umbrella program
+     * has no anchor.
+     */
+    private UUID fetchBorrowerAnchorId(UUID borrowerId) {
+        try {
+            HttpEntity<Void> psEntity = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response =
+                    restTemplate
+                            .exchange(
+                                    "http://program-service/api/v1/borrowers/{borrowerId}",
+                                    HttpMethod.GET,
+                                    psEntity,
+                                    Map.class,
+                                    borrowerId)
+                            .getBody();
+            if (response == null || !"SUCCESS".equals(response.get("status"))) {
+                return null;
+            }
+            Object dataObj = response.get("data");
+            if (!(dataObj instanceof Map<?, ?> dataMap)) {
+                return null;
+            }
+            return parseUuid(dataMap.get("anchorId"));
+        } catch (Exception e) {
+            log.warn("Failed to fetch borrower anchor for {}: {}", borrowerId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Anchor from the enrolled Pay Loan sub-program when program-level anchor is absent. */
+    private UUID resolvePayLoanSubProgramAnchorId(UUID borrowerId, UUID programId, BigDecimal requestedAmount) {
+        List<Map<String, Object>> programSubPrograms = fetchProgramSubPrograms(programId);
+        List<PayLoanSubProgramCandidate> enrolled = new ArrayList<>();
+        for (Map<String, Object> sp : programSubPrograms) {
+            if (!isActivePayLoanSubProgram(sp)) {
+                continue;
+            }
+            UUID spId = parseUuid(sp.get("id"));
+            if (spId == null) {
+                continue;
+            }
+            var headroom = subProgramLimits.fetchEffectiveBorrowerAvailableLimit(spId, borrowerId);
+            if (headroom.isEmpty()) {
+                continue;
+            }
+            if (requestedAmount != null && headroom.get().compareTo(requestedAmount) < 0) {
+                continue;
+            }
+            enrolled.add(new PayLoanSubProgramCandidate(
+                    spId,
+                    parseBigDecimal(sp.get("interestRate")),
+                    headroom.get(),
+                    parsePositiveInteger(sp.get("maxTenureDays"))));
+        }
+        return enrolled.stream()
+                .min(PAY_LOAN_SUB_PROGRAM_COMPARATOR)
+                .map(c -> anchorIdForSubProgram(programSubPrograms, c.subProgramId()))
+                .orElse(null);
+    }
+
+    private static UUID anchorIdForSubProgram(List<Map<String, Object>> subPrograms, UUID subProgramId) {
+        for (Map<String, Object> sp : subPrograms) {
+            if (subProgramId.equals(parseUuid(sp.get("id")))) {
+                return parseUuid(sp.get("anchorId"));
+            }
+        }
+        return null;
+    }
+
+    /**
      * Resolves {@code programId} from program-service borrower record (Pay Day Loan UI may omit program in payload).
      */
     private UUID fetchProgramIdForBorrower(UUID borrowerId) {
@@ -2020,6 +2150,66 @@ public class LoanService {
         }
     }
 
+    private void markInvoiceRejectedOnProgramService(UUID invoiceId, String reason) {
+        try {
+            Map<String, Object> body = reason != null ? Map.of("reason", reason) : Map.of();
+            HttpEntity<Map<String, Object>> entity =
+                    new HttpEntity<>(body, ProgramServiceAuthHeaders.trustedInternalJsonHeaders());
+            restTemplate.exchange(
+                    "http://program-service/api/v1/invoices/{invoiceId}/mark-rejected",
+                    HttpMethod.POST,
+                    entity,
+                    Void.class,
+                    invoiceId);
+            log.info("Invoice {} marked REJECTED after loan rejection", invoiceId);
+        } catch (Exception e) {
+            log.error("Failed to mark invoice {} REJECTED: {}", invoiceId, e.getMessage());
+        }
+    }
+
+    private void maybeMarkInvoiceClosedIfAllLoansSettled(UUID invoiceId) {
+        List<LoanStatus> open = List.of(
+                LoanStatus.REQUESTED,
+                LoanStatus.ELIGIBILITY_CHECK,
+                LoanStatus.SANCTIONED,
+                LoanStatus.DISBURSEMENT_PENDING,
+                LoanStatus.DISBURSED,
+                LoanStatus.REPAYMENT_DUE,
+                LoanStatus.OVERDUE);
+        if (loanRepository.existsByInvoiceIdAndStatusIn(invoiceId, open)) {
+            return;
+        }
+        try {
+            HttpEntity<Void> entity = new HttpEntity<>(ProgramServiceAuthHeaders.trustedInternalHeaders());
+            restTemplate.exchange(
+                    "http://program-service/api/v1/invoices/{invoiceId}/mark-closed",
+                    HttpMethod.POST,
+                    entity,
+                    Void.class,
+                    invoiceId);
+            log.info("Invoice {} marked CLOSED — all linked loans settled", invoiceId);
+        } catch (Exception e) {
+            log.error("Failed to mark invoice {} CLOSED: {}", invoiceId, e.getMessage());
+        }
+    }
+
+    private static BigDecimal parseInvoiceMoney(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof BigDecimal bd) {
+            return bd;
+        }
+        if (raw instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
+        }
+        try {
+            return new BigDecimal(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private void validateInvoiceEligibleForFinancing(
             UUID invoiceId,
             UUID borrowerId,
@@ -2047,6 +2237,15 @@ public class LoanService {
                 .ifPresent(msg -> {
                     throw new RuntimeException(msg);
                 });
+
+        BigDecimal availableHeadroom = parseInvoiceMoney(invoiceResponse.get("availableAmount"));
+        if (availableHeadroom == null || availableHeadroom.compareTo(BigDecimal.ZERO) <= 0) {
+            availableHeadroom = parseInvoiceMoney(invoiceResponse.get("eligibleAmount"));
+        }
+        if (availableHeadroom != null && requestedAmount.compareTo(availableHeadroom) > 0) {
+            throw new RuntimeException(
+                    "Requested amount exceeds available financeable amount (" + availableHeadroom.toPlainString() + ")");
+        }
 
         UUID subProgramId = parseUuid(invoiceResponse.get("subProgramId"));
         if (subProgramId != null) {

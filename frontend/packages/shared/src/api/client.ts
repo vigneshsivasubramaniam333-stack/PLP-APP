@@ -1,4 +1,4 @@
-import axios, { type AxiosResponse } from 'axios';
+import axios from 'axios';
 import {
   anchorAccessHeaders,
   borrowerAccessHeaders,
@@ -52,6 +52,18 @@ apiClient.interceptors.request.use((config) => {
   } else if (user?.linkedEntityType === 'ANCHOR') {
     Object.assign(config.headers, anchorAccessHeaders());
   }
+  // Let the browser set multipart boundary; default axios Content-Type is application/json.
+  if (config.data instanceof FormData) {
+    if (config.headers && typeof config.headers === 'object') {
+      if ('delete' in config.headers && typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+        config.headers.delete('content-type');
+      } else {
+        delete (config.headers as Record<string, unknown>)['Content-Type'];
+        delete (config.headers as Record<string, unknown>)['content-type'];
+      }
+    }
+  }
   return config;
 });
 
@@ -94,6 +106,17 @@ export const programApi = {
   updateStatus: (id: string, status: string) =>
     apiClient.patch(`/api/v1/programs/${id}/status`, { status }, { headers: lenderLoanActionHeaders() }),
   getUtilization: (id: string) => apiClient.get(`/api/v1/programs/${id}/utilization`),
+};
+
+export const repaymentDefaultsApi = {
+  list: () =>
+    apiClient.get<{ status?: string; data?: import('../types').ProductRepaymentDefault[] }>(
+      '/api/v1/platform/repayment-defaults',
+    ),
+  update: (productType: string, payload: Record<string, unknown>) =>
+    apiClient.put(`/api/v1/platform/repayment-defaults/${productType}`, payload, {
+      headers: lenderLoanActionHeaders(),
+    }),
 };
 
 export const subProgramApi = {
@@ -146,6 +169,16 @@ export const borrowerApi = {
 };
 
 export const invoiceApi = {
+  list: (opts?: { search?: string; status?: string; lifecycle?: string; page?: number; size?: number }) =>
+    apiClient.get('/api/v1/invoices', {
+      params: {
+        ...(opts?.search ? { search: opts.search } : {}),
+        ...(opts?.status ? { status: opts.status } : {}),
+        ...(opts?.lifecycle ? { lifecycle: opts.lifecycle } : {}),
+        ...(opts?.page != null ? { page: opts.page } : {}),
+        ...(opts?.size != null ? { size: opts.size } : {}),
+      },
+    }),
   borrowerAccept: (invoiceId: string, borrowerId: string) =>
     apiClient.post(`/api/v1/invoices/${invoiceId}/borrower-accept`, null, {
       params: { borrowerId },
@@ -156,78 +189,6 @@ export const invoiceApi = {
       headers: invoiceAccessHeaders(),
     }),
 };
-
-function parseFilenameFromContentDisposition(cd: string | undefined): string | null {
-  if (!cd) return null;
-  const star = /filename\*=(?:UTF-8'')?([^;\n]+)/i.exec(cd);
-  if (star) {
-    try {
-      return decodeURIComponent(star[1].trim().replace(/^"(.*)"$/, '$1'));
-    } catch {
-      return star[1].trim().replace(/"/g, '');
-    }
-  }
-  const quoted = /filename="([^"]+)"/i.exec(cd);
-  if (quoted) return quoted[1];
-  const plain = /filename=([^;\n]+)/i.exec(cd);
-  return plain ? plain[1].trim().replace(/"/g, '') : null;
-}
-
-function openInvoiceBlobResponse(res: AxiosResponse<Blob>): void {
-  const blob = res.data;
-  const cd = res.headers['content-disposition'];
-  const parsedName = parseFilenameFromContentDisposition(
-    typeof cd === 'string' ? cd : Array.isArray(cd) ? cd[0] : undefined,
-  );
-  const filename = parsedName || 'digital-invoice';
-  const url = URL.createObjectURL(blob);
-  const ctHeader = res.headers['content-type'];
-  const ct =
-    (typeof ctHeader === 'string' ? ctHeader : Array.isArray(ctHeader) ? ctHeader[0] : '') ||
-    blob.type ||
-    '';
-  const isPdfOrImage = ct.includes('application/pdf') || ct.startsWith('image/');
-  try {
-    if (isPdfOrImage) {
-      const w = window.open(url, '_blank', 'noopener,noreferrer');
-      if (w) {
-        setTimeout(() => URL.revokeObjectURL(url), 120_000);
-        return;
-      }
-    }
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  }
-}
-
-/** Fetches the digital invoice via authenticated API and opens inline (PDF/image) or downloads. */
-export async function openDigitalInvoiceDownload(invoiceId: string): Promise<void> {
-  try {
-    const res = await invoiceApi.downloadDigitalInvoice(invoiceId);
-    openInvoiceBlobResponse(res);
-  } catch (err: unknown) {
-    if (axios.isAxiosError(err) && err.response?.data instanceof Blob) {
-      const text = await err.response.data.text();
-      try {
-        const j = JSON.parse(text) as { message?: string };
-        throw new Error(j.message || 'Digital invoice file not available');
-      } catch (parseErr: unknown) {
-        if (parseErr instanceof SyntaxError) {
-          throw new Error(text.trim().slice(0, 280) || 'Digital invoice file not available');
-        }
-        throw parseErr;
-      }
-    }
-    throw err;
-  }
-}
 
 export const loanApi = {
   list: (params?: Record<string, string>) => apiClient.get('/api/v1/loans', { params }),
@@ -260,9 +221,7 @@ export const salaryApi = {
     formData.append('programId', programId);
     formData.append('payPeriod', payPeriod);
     formData.append('file', file);
-    return apiClient.post('/api/v1/salary/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return apiClient.post('/api/v1/salary/upload', formData);
   },
   create: (data: Record<string, unknown>) => apiClient.post('/api/v1/salary', data),
   list: (params: Record<string, string>) => apiClient.get('/api/v1/salary', { params }),
@@ -289,9 +248,7 @@ export const portalApi = {
     formData.append('programId', programId);
     formData.append('payPeriod', payPeriod);
     formData.append('file', file);
-    return apiClient.post('/api/v1/portal/anchor/salary/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return apiClient.post('/api/v1/portal/anchor/salary/upload', formData);
   },
   borrowerDashboard: () => apiClient.get('/api/v1/portal/borrower/dashboard'),
   borrowerLoans: (borrowerId: string) => apiClient.get('/api/v1/portal/borrower/loans', { params: { borrowerId } }),
@@ -309,7 +266,7 @@ export const portalApi = {
   borrowerRequestLoan: (data: Record<string, unknown>) => apiClient.post('/api/v1/portal/borrower/loans/request', data),
   anchorInvoices: (
     anchorId: string,
-    opts?: { programId?: string; search?: string; status?: string; page?: number; size?: number },
+    opts?: { programId?: string; search?: string; status?: string; lifecycle?: string; page?: number; size?: number },
   ) =>
     apiClient.get('/api/v1/portal/anchor/invoices', {
       params: {
@@ -317,6 +274,7 @@ export const portalApi = {
         ...(opts?.programId ? { programId: opts.programId } : {}),
         ...(opts?.search ? { search: opts.search } : {}),
         ...(opts?.status ? { status: opts.status } : {}),
+        ...(opts?.lifecycle ? { lifecycle: opts.lifecycle } : {}),
         ...(opts?.page != null ? { page: opts.page } : {}),
         ...(opts?.size != null ? { size: opts.size } : {}),
       },
@@ -328,14 +286,15 @@ export const portalApi = {
     formData.append('file', file);
     return apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/digital-invoice`, formData);
   },
-  anchorInvoiceUpload: (anchorId: string, programId: string, file: File) => {
+  anchorInvoiceUpload: (anchorId: string, programId: string, file: File, subProgramId?: string) => {
     const formData = new FormData();
     formData.append('anchorId', anchorId);
     formData.append('programId', programId);
+    if (subProgramId) {
+      formData.append('subProgramId', subProgramId);
+    }
     formData.append('file', file);
-    return apiClient.post('/api/v1/portal/anchor/invoices/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return apiClient.post('/api/v1/portal/anchor/invoices/upload', formData);
   },
   anchorVerifyInvoice: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/verify`),
@@ -439,4 +398,113 @@ export const auditApi = {
 export const kfsApi = {
   getKfs: (loanId: string) =>
     apiClient.get(`/api/v1/loans/${loanId}/kfs`, { responseType: 'text' }),
+};
+
+export interface PaymentCheckoutLine {
+  id: string;
+  borrowerId: string;
+  invoiceId: string;
+  loanId?: string;
+  subProgramId?: string;
+  programId: string;
+  invoiceNumber?: string;
+  amountToPay: number;
+  discountAmount: number;
+  status: string;
+}
+
+export interface PayuInitiatePayload {
+  baseUrl: string;
+  key: string;
+  txnid: string;
+  amount: string;
+  productinfo: string;
+  firstname: string;
+  email: string;
+  phone?: string;
+  udf1?: string;
+  hash: string;
+  surl: string;
+  furl: string;
+  transactionId?: string;
+}
+
+export interface PaymentInProgressRow {
+  id: string;
+  pgTransactionId: string;
+  invoiceId: string;
+  loanId: string;
+  borrowerId: string;
+  principalAmount: number;
+  discountAmount: number;
+  pipStatus: string;
+  createdAt?: string;
+}
+
+export const paymentCartApi = {
+  listLines: (borrowerId?: string) =>
+    apiClient.get<{ status?: string; data?: PaymentCheckoutLine[] }>(
+      '/api/v1/portal/borrower/payments/checkout/lines',
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+  count: (borrowerId?: string) =>
+    apiClient.get<{ status?: string; data?: number }>(
+      '/api/v1/portal/borrower/payments/checkout/count',
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+  paymentMethod: (borrowerId?: string) =>
+    apiClient.get<{ status?: string; data?: { paymentMethod: string } }>(
+      '/api/v1/portal/borrower/payments/checkout/payment-method',
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+  addLine: (invoiceId: string, borrowerId?: string, amount?: number) =>
+    apiClient.post(
+      '/api/v1/portal/borrower/payments/checkout/lines',
+      { invoiceId, ...(amount != null ? { amount } : {}) },
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+  addBulk: (invoiceIds: string[], borrowerId?: string) =>
+    apiClient.post(
+      '/api/v1/portal/borrower/payments/checkout/lines/bulk',
+      { invoiceIds },
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+  removeLine: (lineId: string, borrowerId?: string) =>
+    apiClient.delete(`/api/v1/portal/borrower/payments/checkout/lines/${lineId}`, {
+      params: borrowerId ? { borrowerId } : undefined,
+    }),
+  clearCart: (borrowerId?: string) =>
+    apiClient.delete('/api/v1/portal/borrower/payments/checkout/lines', {
+      params: borrowerId ? { borrowerId } : undefined,
+    }),
+};
+
+export const payuApi = {
+  initiate: (portalSource: 'PLP' | 'LOS' = 'PLP', borrowerId?: string) =>
+    apiClient.post<{ status?: string; data?: PayuInitiatePayload }>(
+      '/api/v1/portal/borrower/payments/payu/initiate',
+      { portalSource },
+      { params: borrowerId ? { borrowerId } : undefined },
+    ),
+};
+
+export const pgSettlementApi = {
+  listOpenPip: () =>
+    apiClient.get<{ status?: string; data?: PaymentInProgressRow[] }>(
+      '/api/v1/payments/settlements/pip',
+      { headers: lenderLoanActionHeaders() },
+    ),
+  listTransactions: () =>
+    apiClient.get('/api/v1/payments/settlements/transactions', {
+      headers: lenderLoanActionHeaders(),
+    }),
+  createBatch: (payload: {
+    settlementDate: string;
+    settlementUtr: string;
+    pipIds: string[];
+    remarks?: string;
+  }) =>
+    apiClient.post('/api/v1/payments/settlements/batches', payload, {
+      headers: lenderLoanActionHeaders(),
+    }),
 };

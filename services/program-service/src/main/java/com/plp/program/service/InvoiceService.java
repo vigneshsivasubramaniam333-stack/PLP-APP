@@ -1,6 +1,6 @@
 package com.plp.program.service;
 
-import com.plp.program.integration.LendingServiceFinanceClient;
+import com.plp.program.model.dto.InvoiceCsvUploadResult;
 import com.plp.program.model.dto.InvoiceDigitalAttachmentResult;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Invoice;
@@ -14,6 +14,7 @@ import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.repository.SubProgramRepository;
 import com.plp.program.storage.DigitalInvoiceObjectStorage;
+import com.plp.program.storage.LocalDigitalInvoiceStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -53,8 +56,9 @@ public class InvoiceService {
     private final SubProgramRepository subProgramRepository;
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final DigitalInvoiceObjectStorage digitalInvoiceObjectStorage;
+    private final LocalDigitalInvoiceStorage localDigitalInvoiceStorage;
     private final ProgramService programService;
-    private final LendingServiceFinanceClient lendingServiceFinanceClient;
+    private final InvoiceAutoFinanceService invoiceAutoFinanceService;
 
     private static final List<String> GAP_BLOCKING_STATUSES = List.of(
             InvoiceStatus.FINANCING_REQUESTED.name(),
@@ -63,6 +67,15 @@ public class InvoiceService {
     private static final List<String> DELETABLE_STATUSES = List.of("UPLOADED", "VERIFIED");
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private static final List<DateTimeFormatter> CSV_DATE_FORMATS = List.of(
+            DateTimeFormatter.ISO_LOCAL_DATE,
+            DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+            DateTimeFormatter.ofPattern("d-M-yyyy"),
+            DateTimeFormatter.ofPattern("d/M/yyyy"),
+            DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH));
 
     private static final String FLOW_PURCHASE_BILL_DISCOUNTING = "PURCHASE_BILL_DISCOUNTING";
     private static final String FLOW_SALES_BILL_DISCOUNTING = "SALES_BILL_DISCOUNTING";
@@ -92,17 +105,32 @@ public class InvoiceService {
     }
 
     @Transactional
-    public List<Invoice> uploadInvoiceCsv(UUID anchorId, UUID programId, InputStream csvStream, UUID uploadedByUserId) {
+    public InvoiceCsvUploadResult uploadInvoiceCsv(
+            UUID anchorId, UUID programId, InputStream csvStream, UUID uploadedByUserId) {
+        return uploadInvoiceCsv(anchorId, programId, csvStream, uploadedByUserId, null);
+    }
+
+    @Transactional
+    public InvoiceCsvUploadResult uploadInvoiceCsv(
+            UUID anchorId,
+            UUID programId,
+            InputStream csvStream,
+            UUID uploadedByUserId,
+            UUID defaultSubProgramId) {
         Program program = programRepository.findById(programId)
                 .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
 
         BigDecimal marginPct = program.getMarginPercent() != null ? program.getMarginPercent() : BigDecimal.ZERO;
 
         List<Invoice> results = new ArrayList<>();
+        List<InvoiceCsvUploadResult.CsvRowError> errors = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvStream))) {
             String header = reader.readLine();
             if (header == null) {
                 throw new RuntimeException("CSV file is empty");
+            }
+            if (header.startsWith("\uFEFF")) {
+                header = header.substring(1);
             }
 
             Map<String, Integer> headerIndex = parseInvoiceCsvHeader(header);
@@ -111,19 +139,27 @@ public class InvoiceService {
             int rowNum = 1;
             while ((line = reader.readLine()) != null) {
                 rowNum++;
+                if (line.isBlank()) {
+                    continue;
+                }
                 String[] cols = line.split(",", -1);
                 if (cols.length < 6) {
-                    log.warn("Skipping row {}: insufficient columns (need 6: invoiceNumber,borrowerCode,invoiceDate,dueDate,invoiceAmount,taxAmount)", rowNum);
+                    skipCsvRow(
+                            rowNum,
+                            "insufficient columns (need invoiceNumber, borrowerCode or partyCode, invoiceDate, dueDate, invoiceAmount, taxAmount)",
+                            errors);
                     continue;
                 }
 
                 CsvInvoiceRow parsed = extractInvoiceCsvRow(cols, headerIndex, rowNum);
                 if (parsed == null) {
+                    skipCsvRow(rowNum, "could not parse row (check headers and column count)", errors);
                     continue;
                 }
 
                 String invoiceNumber = parsed.invoiceNumber();
                 String borrowerCode = parsed.borrowerCode();
+                String partyCode = parsed.partyCode();
                 String invoiceDateStr = parsed.invoiceDateStr();
                 String dueDateStr = parsed.dueDateStr();
                 String invoiceAmtStr = parsed.invoiceAmtStr();
@@ -132,66 +168,87 @@ public class InvoiceService {
                 String subProgramCode = parsed.subProgramCode();
                 String subProgramIdRaw = parsed.subProgramIdRaw();
 
-                if (invoiceNumber.isEmpty() || borrowerCode.isEmpty()) {
-                    log.warn("Skipping row {}: missing invoiceNumber or borrowerCode", rowNum);
+                if (invoiceNumber.isEmpty()) {
+                    skipCsvRow(rowNum, "missing invoiceNumber", errors);
+                    continue;
+                }
+                if (borrowerCode.isEmpty() && partyCode.isEmpty()) {
+                    skipCsvRow(rowNum, "missing borrowerCode or partyCode", errors);
                     continue;
                 }
 
-                Optional<Invoice> existing = invoiceRepository.findByInvoiceNumberAndAnchorId(invoiceNumber, anchorId);
-                if (existing.isPresent()) {
-                    log.warn("Skipping row {}: duplicate invoice {} for anchor {}", rowNum, invoiceNumber, anchorId);
+                CsvSubProgramPick subPick = pickCsvSubProgram(subProgramCode, subProgramIdRaw, rowNum);
+                if (subPick.skipRow()) {
+                    skipCsvRow(rowNum, "invalid sub-program reference", errors);
                     continue;
                 }
+                UUID csvSubProgramId = subPick.subProgramId();
+                if (csvSubProgramId == null && defaultSubProgramId != null) {
+                    csvSubProgramId = defaultSubProgramId;
+                }
 
-                Optional<Borrower> borrowerOpt = borrowerRepository.findByBorrowerCode(borrowerCode);
+                Optional<Borrower> borrowerOpt =
+                        resolveCsvBorrower(borrowerCode, partyCode, csvSubProgramId, anchorId);
                 if (borrowerOpt.isEmpty()) {
-                    log.warn("Skipping row {}: borrower not found: {}", rowNum, borrowerCode);
+                    skipCsvRow(
+                            rowNum,
+                            partyCode.isEmpty()
+                                    ? "borrower not found: " + borrowerCode
+                                    : "party code not found: " + partyCode,
+                            errors);
+                    continue;
+                }
+
+                LocalDate invoiceDate = parseCsvLocalDate(invoiceDateStr);
+                LocalDate dueDate = parseCsvLocalDate(dueDateStr);
+                if (invoiceDate == null || dueDate == null) {
+                    skipCsvRow(
+                            rowNum,
+                            "invalid date format (use yyyy-MM-dd, e.g. 2026-06-01). invoiceDate='"
+                                    + invoiceDateStr
+                                    + "', dueDate='"
+                                    + dueDateStr
+                                    + "'",
+                            errors);
+                    continue;
+                }
+
+                if (findDuplicateInvoice(borrowerOpt.get().getId(), invoiceNumber, invoiceDate, dueDate).isPresent()) {
+                    skipCsvRow(
+                            rowNum,
+                            "duplicate invoice for this borrower (same number, invoice date, and due date)",
+                            errors);
                     continue;
                 }
 
                 BigDecimal invoiceAmt;
                 BigDecimal taxAmt;
                 try {
-                    invoiceAmt = new BigDecimal(invoiceAmtStr);
-                    taxAmt = taxAmtStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(taxAmtStr);
+                    invoiceAmt = new BigDecimal(invoiceAmtStr.replace(",", ""));
+                    taxAmt = taxAmtStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(taxAmtStr.replace(",", ""));
                 } catch (NumberFormatException e) {
-                    log.warn("Skipping row {}: invalid amount", rowNum);
+                    skipCsvRow(rowNum, "invalid amount", errors);
                     continue;
                 }
 
                 if (invoiceAmt.compareTo(BigDecimal.ZERO) <= 0) {
-                    log.warn("Skipping row {}: invoice amount must be positive", rowNum);
-                    continue;
-                }
-
-                LocalDate invoiceDate;
-                LocalDate dueDate;
-                try {
-                    invoiceDate = LocalDate.parse(invoiceDateStr, DATE_FMT);
-                    dueDate = LocalDate.parse(dueDateStr, DATE_FMT);
-                } catch (Exception e) {
-                    log.warn("Skipping row {}: invalid date format (use yyyy-MM-dd)", rowNum);
+                    skipCsvRow(rowNum, "invoice amount must be positive", errors);
                     continue;
                 }
 
                 BigDecimal netAmount = invoiceAmt.add(taxAmt);
 
-                CsvSubProgramPick subPick = pickCsvSubProgram(subProgramCode, subProgramIdRaw, rowNum);
-                if (subPick.skipRow()) {
-                    continue;
-                }
-                UUID csvSubProgramId = subPick.subProgramId();
                 SubProgram linkedSub = null;
                 if (csvSubProgramId != null) {
                     linkedSub = subProgramRepository.findById(csvSubProgramId).orElse(null);
                     if (linkedSub == null) {
-                        log.warn("Skipping row {}: sub program not found: {}", rowNum, csvSubProgramId);
+                        skipCsvRow(rowNum, "sub-program not found: " + csvSubProgramId, errors);
                         continue;
                     }
                     try {
                         validateInvoiceAgainstSubProgram(linkedSub, programId, anchorId, borrowerOpt.get().getId());
                     } catch (RuntimeException e) {
-                        log.warn("Skipping row {}: {}", rowNum, e.getMessage());
+                        skipCsvRow(rowNum, e.getMessage() != null ? e.getMessage() : "sub-program validation failed", errors);
                         continue;
                     }
                 }
@@ -204,6 +261,7 @@ public class InvoiceService {
                 } else {
                     String rft = resolveFlowTypeForCsv(flowRaw, rowNum);
                     if (rft == null) {
+                        skipCsvRow(rowNum, "invalid flowType (use PURCHASE_BILL_DISCOUNTING or SALES_BILL_DISCOUNTING)", errors);
                         continue;
                     }
                     resolvedFlowType = rft;
@@ -238,8 +296,13 @@ public class InvoiceService {
             throw new RuntimeException("Error processing invoice CSV: " + e.getMessage(), e);
         }
 
-        log.info("Invoice CSV upload: anchor={} program={} rows={}", anchorId, programId, results.size());
-        return results;
+        log.info("Invoice CSV upload: anchor={} program={} rows={} skipped={}", anchorId, programId, results.size(), errors.size());
+        return new InvoiceCsvUploadResult(results, results.size(), errors.size(), errors);
+    }
+
+    private void skipCsvRow(int rowNum, String reason, List<InvoiceCsvUploadResult.CsvRowError> errors) {
+        log.warn("Skipping row {}: {}", rowNum, reason);
+        errors.add(new InvoiceCsvUploadResult.CsvRowError(rowNum, reason));
     }
 
     @Transactional
@@ -285,25 +348,7 @@ public class InvoiceService {
     }
 
     private void maybeAutoPullFinance(Invoice invoice) {
-        Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
-        if (!ProgramParametersValidator.parseYesNo(params.get("autoPullOption"), false)) {
-            return;
-        }
-        String status = invoice.getStatus();
-        boolean purchaseReady = "BORROWER_ACCEPTED".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
-        boolean salesReady = "ELIGIBLE".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
-        String flow = invoice.getFlowType();
-        boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
-        boolean ready = purchaseFlow ? purchaseReady : salesReady;
-        if (!ready) {
-            return;
-        }
-        BigDecimal amount = invoice.getAvailableAmount();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            amount = invoice.getEligibleAmount();
-        }
-        lendingServiceFinanceClient.requestInvoiceFinance(
-                invoice.getId(), invoice.getBorrowerId(), invoice.getProgramId(), amount);
+        invoiceAutoFinanceService.maybeAutoPullFinance(invoice);
     }
 
     /**
@@ -320,16 +365,17 @@ public class InvoiceService {
         if (!purchaseFlow) {
             throw new RuntimeException("Borrower acceptance does not apply to SALES_BILL_DISCOUNTING invoices");
         }
-        if (!"ELIGIBLE".equals(invoice.getStatus())) {
+        if (!"ELIGIBLE".equals(invoice.getStatus()) && !InvoiceStatus.REJECTED.name().equals(invoice.getStatus())) {
             throw new RuntimeException(
-                    "Borrower acceptance allowed only when invoice status is ELIGIBLE. Current status: " + invoice.getStatus());
+                    "Borrower acceptance allowed only when invoice status is ELIGIBLE or REJECTED. Current status: "
+                            + invoice.getStatus());
         }
         invoice.setBorrowerAccepted(true);
         invoice.setBorrowerAcceptedAt(Instant.now());
         invoice.setStatus("BORROWER_ACCEPTED");
         invoice = invoiceRepository.save(invoice);
         maybeAutoPullFinance(invoice);
-        return invoice;
+        return invoiceRepository.findById(invoiceId).orElse(invoice);
     }
 
     /**
@@ -359,6 +405,46 @@ public class InvoiceService {
         }
         log.info("Updating invoice {} status from {} to FINANCING_REQUESTED", invoiceId, current);
         invoice.setStatus(InvoiceStatus.FINANCING_REQUESTED.name());
+        invoice.setLastFinanceRequestedAt(Instant.now());
+        return invoiceRepository.save(invoice);
+    }
+
+    /**
+     * Lending-service: loan rejected after finance was requested — invoice shows as REJECTED on portals.
+     */
+    @Transactional
+    public Invoice markRejected(UUID invoiceId, String reason) {
+        Invoice invoice = invoiceRepository.findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+        String current = invoice.getStatus();
+        if (!InvoiceStatus.FINANCING_REQUESTED.name().equals(current)) {
+            throw new RuntimeException("Invoice cannot be marked REJECTED from status: " + current);
+        }
+        invoice.setStatus(InvoiceStatus.REJECTED.name());
+        invoice.setRejectionReason(reason);
+        invoice.setRejectedAt(Instant.now());
+        log.info("Invoice {} marked REJECTED: {}", invoiceId, reason);
+        return invoiceRepository.save(invoice);
+    }
+
+    /**
+     * Lending-service: all loans on invoice repaid — invoice lifecycle closed.
+     */
+    @Transactional
+    public Invoice markClosed(UUID invoiceId) {
+        Invoice invoice = invoiceRepository.findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+        String current = invoice.getStatus();
+        if (InvoiceStatus.CLOSED.name().equals(current)) {
+            return invoice;
+        }
+        if (!InvoiceStatus.FULLY_DISCOUNTED.name().equals(current)
+                && !InvoiceStatus.PARTIALLY_DISCOUNTED.name().equals(current)) {
+            throw new RuntimeException("Invoice cannot be marked CLOSED from status: " + current);
+        }
+        invoice.setStatus(InvoiceStatus.CLOSED.name());
+        invoice.setClosedAt(Instant.now());
+        log.info("Invoice {} marked CLOSED", invoiceId);
         return invoiceRepository.save(invoice);
     }
 
@@ -480,6 +566,41 @@ public class InvoiceService {
                 .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
     }
 
+    /** Adjust PRUS/PIP amounts on an invoice (internal lending-service calls on PG success or settlement). */
+    @Transactional
+    public Invoice adjustPipAmounts(
+            UUID invoiceId,
+            BigDecimal principalAdd,
+            BigDecimal principalSubtract,
+            BigDecimal discountAdd,
+            BigDecimal discountSubtract) {
+        Invoice invoice = getInvoice(invoiceId);
+        BigDecimal pip = invoice.getPipAmount() != null ? invoice.getPipAmount() : BigDecimal.ZERO;
+        BigDecimal pipDisc =
+                invoice.getPipDiscountAmount() != null ? invoice.getPipDiscountAmount() : BigDecimal.ZERO;
+        if (principalAdd != null) {
+            pip = pip.add(principalAdd);
+        }
+        if (principalSubtract != null) {
+            pip = pip.subtract(principalSubtract);
+            if (pip.compareTo(BigDecimal.ZERO) < 0) {
+                pip = BigDecimal.ZERO;
+            }
+        }
+        if (discountAdd != null) {
+            pipDisc = pipDisc.add(discountAdd);
+        }
+        if (discountSubtract != null) {
+            pipDisc = pipDisc.subtract(discountSubtract);
+            if (pipDisc.compareTo(BigDecimal.ZERO) < 0) {
+                pipDisc = BigDecimal.ZERO;
+            }
+        }
+        invoice.setPipAmount(pip);
+        invoice.setPipDiscountAmount(pipDisc);
+        return invoiceRepository.save(invoice);
+    }
+
     /**
      * Loads digital invoice bytes from object storage; callers must enforce authorization.
      *
@@ -491,6 +612,9 @@ public class InvoiceService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Digital invoice file not available");
         }
         Optional<byte[]> bytes = digitalInvoiceObjectStorage.tryDownload(storageKey);
+        if (bytes.isEmpty()) {
+            bytes = localDigitalInvoiceStorage.get(storageKey);
+        }
         if (bytes.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Digital invoice file not available");
         }
@@ -522,6 +646,12 @@ public class InvoiceService {
         byte[] bytes = file.getBytes();
         String contentType = file.getContentType();
 
+        try {
+            localDigitalInvoiceStorage.put(storageKey, bytes);
+        } catch (Exception e) {
+            log.warn("Local digital invoice storage failed for {}: {}", storageKey, e.getMessage());
+        }
+
         DigitalInvoiceObjectStorage.UploadAttempt attempt =
                 digitalInvoiceObjectStorage.tryUpload(storageKey, bytes, contentType);
 
@@ -531,14 +661,20 @@ public class InvoiceService {
         invoice.setDigitalInvoiceUploadedAt(Instant.now());
         invoiceRepository.save(invoice);
 
+        if (attempt == DigitalInvoiceObjectStorage.UploadAttempt.UPLOADED) {
+            return new InvoiceDigitalAttachmentResult("OBJECT_STORAGE", null);
+        }
+        if (localDigitalInvoiceStorage.get(storageKey).isPresent()) {
+            return new InvoiceDigitalAttachmentResult("LOCAL_FILESYSTEM", null);
+        }
         return switch (attempt) {
-            case UPLOADED -> new InvoiceDigitalAttachmentResult("OBJECT_STORAGE", null);
             case MINIO_DISABLED -> new InvoiceDigitalAttachmentResult("METADATA_ONLY",
-                    "TODO: Enable plp.storage.minio.enabled and MINIO_ACCESS_KEY/MINIO_SECRET_KEY so bytes are stored in MinIO (bucket from plp.storage.minio.bucket). Metadata and key invoices/{invoiceId}/{fileName} are saved.");
+                    "Digital invoice metadata saved; enable MinIO or check local storage path plp.storage.local.root.");
             case MINIO_MISCONFIGURED -> new InvoiceDigitalAttachmentResult("METADATA_ONLY",
-                    "TODO: MinIO is enabled but access-key or secret-key is empty. Metadata saved; configure plp.storage.minio credentials.");
+                    "MinIO credentials missing. Configure plp.storage.minio or use local storage.");
             case UPLOAD_FAILED -> new InvoiceDigitalAttachmentResult("METADATA_ONLY",
-                    "TODO: MinIO upload failed (endpoint, bucket, or network). Metadata saved; verify docker-compose MinIO and retry.");
+                    "Upload failed. Check storage configuration and retry.");
+            default -> new InvoiceDigitalAttachmentResult("METADATA_ONLY", "Digital invoice metadata saved.");
         };
     }
 
@@ -569,19 +705,23 @@ public class InvoiceService {
     }
 
     public Map<String, Object> listBorrowerInvoicesPaged(
-            UUID borrowerId, String search, String status, int page, int size) {
-        return paginateInvoices(getByBorrower(borrowerId), search, status, page, size);
+            UUID borrowerId, String search, String status, String lifecycle, int page, int size) {
+        return paginateInvoices(getByBorrower(borrowerId), search, status, lifecycle, page, size);
     }
 
     public Map<String, Object> listAnchorInvoicesPaged(
-            UUID anchorId, UUID programId, String search, String status, int page, int size) {
+            UUID anchorId, UUID programId, String search, String status, String lifecycle, int page, int size) {
         List<Invoice> base =
                 programId != null ? getByAnchorAndProgram(anchorId, programId) : getByAnchor(anchorId);
-        return paginateInvoices(base, search, status, page, size);
+        return paginateInvoices(base, search, status, lifecycle, page, size);
+    }
+
+    public Map<String, Object> listInvoicesPaged(String search, String status, String lifecycle, int page, int size) {
+        return paginateInvoices(invoiceRepository.findAll(), search, status, lifecycle, page, size);
     }
 
     private Map<String, Object> paginateInvoices(
-            List<Invoice> source, String search, String status, int page, int size) {
+            List<Invoice> source, String search, String status, String lifecycle, int page, int size) {
         int safeSize = Math.min(Math.max(size, 1), 100);
         int safePage = Math.max(page, 0);
         String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
@@ -589,6 +729,7 @@ public class InvoiceService {
 
         List<Invoice> filtered = source.stream()
                 .filter(inv -> st == null || st.equalsIgnoreCase(String.valueOf(inv.getStatus())))
+                .filter(inv -> InvoiceLifecycleFilter.matchesLifecycle(inv.getStatus(), lifecycle))
                 .filter(inv -> {
                     if (q.isEmpty()) return true;
                     String num = inv.getInvoiceNumber() == null ? "" : inv.getInvoiceNumber().toLowerCase(Locale.ROOT);
@@ -631,6 +772,31 @@ public class InvoiceService {
         return base.isBlank() ? "invoice.bin" : base;
     }
 
+    private void assertNoDuplicateInvoice(Invoice invoice) {
+        if (invoice.getBorrowerId() == null
+                || invoice.getInvoiceNumber() == null
+                || invoice.getInvoiceDate() == null
+                || invoice.getDueDate() == null) {
+            return;
+        }
+        findDuplicateInvoice(
+                        invoice.getBorrowerId(),
+                        invoice.getInvoiceNumber(),
+                        invoice.getInvoiceDate(),
+                        invoice.getDueDate())
+                .ifPresent(existing -> {
+                    throw new RuntimeException(String.format(
+                            "Duplicate invoice for this borrower: number %s, invoice date %s, due date %s",
+                            invoice.getInvoiceNumber(), invoice.getInvoiceDate(), invoice.getDueDate()));
+                });
+    }
+
+    private Optional<Invoice> findDuplicateInvoice(
+            UUID borrowerId, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate) {
+        return invoiceRepository.findByBorrowerIdAndInvoiceNumberAndInvoiceDateAndDueDate(
+                borrowerId, invoiceNumber, invoiceDate, dueDate);
+    }
+
     private void validateInvoice(Invoice invoice) {
         if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
             throw new RuntimeException("Invoice number is required");
@@ -638,15 +804,7 @@ public class InvoiceService {
         if (invoice.getInvoiceAmount() == null || invoice.getInvoiceAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Invoice amount must be positive");
         }
-        if (invoice.getDueDate() != null && invoice.getDueDate().isBefore(LocalDate.now())) {
-            throw new RuntimeException("Invoice due date cannot be in the past");
-        }
-
-        Optional<Invoice> existing = invoiceRepository.findByInvoiceNumberAndAnchorId(
-                invoice.getInvoiceNumber(), invoice.getAnchorId());
-        if (existing.isPresent()) {
-            throw new RuntimeException("Duplicate invoice number: " + invoice.getInvoiceNumber() + " for this anchor");
-        }
+        assertNoDuplicateInvoice(invoice);
 
         borrowerRepository.findById(invoice.getBorrowerId())
                 .orElseThrow(() -> new RuntimeException("Borrower not found: " + invoice.getBorrowerId()));
@@ -662,11 +820,27 @@ public class InvoiceService {
         invoice.setFlowType(sub.getFlowType());
     }
 
+    private Optional<Borrower> resolveCsvBorrower(
+            String borrowerCode, String partyCode, UUID subProgramId, UUID anchorId) {
+        if (partyCode != null && !partyCode.isBlank()) {
+            if (subProgramId == null) {
+                return Optional.empty();
+            }
+            return subProgramBorrowerRepository
+                    .findBySubProgramIdAndPartyCodeIgnoreCase(subProgramId, partyCode.trim())
+                    .flatMap(m -> borrowerRepository.findById(m.getBorrowerId()));
+        }
+        if (borrowerCode != null && !borrowerCode.isBlank()) {
+            return borrowerRepository.findByBorrowerCode(borrowerCode.trim());
+        }
+        return Optional.empty();
+    }
+
     private void validateInvoiceAgainstSubProgram(SubProgram sub, UUID programId, UUID anchorId, UUID borrowerId) {
-        if (!sub.getProgramId().equals(programId)) {
+        if (!Objects.equals(sub.getProgramId(), programId)) {
             throw new RuntimeException("Sub program program_id does not match invoice programId");
         }
-        if (!sub.getAnchorId().equals(anchorId)) {
+        if (sub.getAnchorId() != null && !Objects.equals(sub.getAnchorId(), anchorId)) {
             throw new RuntimeException("Sub program anchor_id does not match invoice anchorId");
         }
         subProgramBorrowerRepository.findBySubProgramIdAndBorrowerId(sub.getId(), borrowerId)
@@ -691,24 +865,65 @@ public class InvoiceService {
     /**
      * Header keys after normalizing: lowercase, underscores removed (so {@code flow_type} matches {@code flowtype}).
      */
+    private static String normalizeCsvCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        String s = value.trim();
+        if (s.startsWith("\"") && s.endsWith("\"") && s.length() >= 2) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        return s;
+    }
+
+    /** Accepts ISO and common Excel/regional date formats in invoice CSV uploads. */
+    private static LocalDate parseCsvLocalDate(String raw) {
+        String s = normalizeCsvCell(raw);
+        if (s.isEmpty()) {
+            return null;
+        }
+        int space = s.indexOf(' ');
+        if (space > 0) {
+            s = s.substring(0, space).trim();
+        }
+        int t = s.indexOf('T');
+        if (t > 0) {
+            s = s.substring(0, t).trim();
+        }
+        for (DateTimeFormatter fmt : CSV_DATE_FORMATS) {
+            try {
+                return LocalDate.parse(s, fmt);
+            } catch (DateTimeParseException ignored) {
+                // try next pattern
+            }
+        }
+        return null;
+    }
+
     private static Map<String, Integer> parseInvoiceCsvHeader(String headerLine) {
-        String[] headers = headerLine.split(",", -1);
+        String line = headerLine;
+        if (line.startsWith("\uFEFF")) {
+            line = line.substring(1);
+        }
+        String[] headers = line.split(",", -1);
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < headers.length; i++) {
-            String key = headers[i].trim().toLowerCase(Locale.ROOT).replace("_", "");
+            String key = normalizeCsvCell(headers[i]).toLowerCase(Locale.ROOT).replace("_", "");
             map.putIfAbsent(key, i);
         }
         return map;
     }
 
     private static boolean hasNamedInvoiceColumns(Map<String, Integer> idx) {
-        return idx.containsKey("invoicenumber") && idx.containsKey("borrowercode") && idx.containsKey("invoicedate")
+        boolean hasCounterparty = idx.containsKey("borrowercode") || idx.containsKey("partycode") || idx.containsKey("buyercode");
+        return idx.containsKey("invoicenumber") && hasCounterparty && idx.containsKey("invoicedate")
                 && idx.containsKey("duedate") && idx.containsKey("invoiceamount") && idx.containsKey("taxamount");
     }
 
     private record CsvInvoiceRow(
             String invoiceNumber,
             String borrowerCode,
+            String partyCode,
             String invoiceDateStr,
             String dueDateStr,
             String invoiceAmtStr,
@@ -729,47 +944,53 @@ public class InvoiceService {
         if (hasNamedInvoiceColumns(headerIndex)) {
             Integer inv = headerIndex.get("invoicenumber");
             Integer bc = headerIndex.get("borrowercode");
+            Integer pc = headerIndex.get("partycode");
+            if (pc == null) {
+                pc = headerIndex.get("buyercode");
+            }
             Integer id = headerIndex.get("invoicedate");
             Integer dd = headerIndex.get("duedate");
             Integer ia = headerIndex.get("invoiceamount");
             Integer ta = headerIndex.get("taxamount");
-            Integer maxIdx = maxIndex(inv, bc, id, dd, ia, ta);
+            Integer maxIdx = maxIndex(inv, bc, pc, id, dd, ia, ta);
             Integer flowIx = headerIndex.get("flowtype");
             Integer subCodeIx = headerIndex.get("subprogramcode");
             Integer subIdIx = headerIndex.get("subprogramid");
-            if (maxIdx == null) {
+            if (maxIdx == null || inv == null || id == null || dd == null || ia == null || ta == null) {
                 log.warn("Skipping row {}: invalid invoice CSV header indices", rowNum);
                 return null;
             }
             int requiredCols = maxIdx + 1;
-            for (Integer ix : List.of(flowIx, subCodeIx, subIdIx)) {
-                if (ix != null && ix + 1 > requiredCols) {
-                    requiredCols = ix + 1;
-                }
+            Integer optionalMax = maxIndex(flowIx, subCodeIx, subIdIx);
+            if (optionalMax != null && optionalMax + 1 > requiredCols) {
+                requiredCols = optionalMax + 1;
             }
             if (cols.length < requiredCols) {
                 log.warn("Skipping row {}: insufficient columns for named header layout", rowNum);
                 return null;
             }
+            String borrowerCode = bc != null && bc < cols.length ? normalizeCsvCell(cols[bc]) : "";
+            String partyCode = pc != null && pc < cols.length ? normalizeCsvCell(cols[pc]) : "";
             String flowRaw = "";
             if (flowIx != null && flowIx < cols.length) {
-                flowRaw = cols[flowIx].trim();
+                flowRaw = normalizeCsvCell(cols[flowIx]);
             }
             String subProgramCode = "";
             if (subCodeIx != null && subCodeIx < cols.length) {
-                subProgramCode = cols[subCodeIx].trim();
+                subProgramCode = normalizeCsvCell(cols[subCodeIx]);
             }
             String subProgramIdRaw = "";
             if (subIdIx != null && subIdIx < cols.length) {
-                subProgramIdRaw = cols[subIdIx].trim();
+                subProgramIdRaw = normalizeCsvCell(cols[subIdIx]);
             }
             return new CsvInvoiceRow(
-                    cols[inv].trim(),
-                    cols[bc].trim(),
-                    cols[id].trim(),
-                    cols[dd].trim(),
-                    cols[ia].trim().replace(",", ""),
-                    cols[ta].trim().replace(",", ""),
+                    normalizeCsvCell(cols[inv]),
+                    borrowerCode,
+                    partyCode,
+                    normalizeCsvCell(cols[id]),
+                    normalizeCsvCell(cols[dd]),
+                    normalizeCsvCell(cols[ia]).replace(",", ""),
+                    normalizeCsvCell(cols[ta]).replace(",", ""),
                     flowRaw,
                     subProgramCode,
                     subProgramIdRaw);
@@ -777,16 +998,17 @@ public class InvoiceService {
         if (cols.length < 6) {
             return null;
         }
-        String flowRaw = cols.length > 6 ? cols[6].trim() : "";
-        String subCodeLegacy = cols.length > 7 ? cols[7].trim() : "";
-        String subIdLegacy = cols.length > 8 ? cols[8].trim() : "";
+        String flowRaw = cols.length > 6 ? normalizeCsvCell(cols[6]) : "";
+        String subCodeLegacy = cols.length > 7 ? normalizeCsvCell(cols[7]) : "";
+        String subIdLegacy = cols.length > 8 ? normalizeCsvCell(cols[8]) : "";
         return new CsvInvoiceRow(
-                cols[0].trim(),
-                cols[1].trim(),
-                cols[2].trim(),
-                cols[3].trim(),
-                cols[4].trim().replace(",", ""),
-                cols[5].trim().replace(",", ""),
+                normalizeCsvCell(cols[0]),
+                normalizeCsvCell(cols[1]),
+                "",
+                normalizeCsvCell(cols[2]),
+                normalizeCsvCell(cols[3]),
+                normalizeCsvCell(cols[4]).replace(",", ""),
+                normalizeCsvCell(cols[5]).replace(",", ""),
                 flowRaw,
                 subCodeLegacy,
                 subIdLegacy);

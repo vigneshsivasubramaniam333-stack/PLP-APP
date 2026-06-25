@@ -88,6 +88,14 @@ public class Invoice {
     @Builder.Default
     private BigDecimal discountedAmount = BigDecimal.ZERO;
 
+    @Column(name = "pip_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal pipAmount = BigDecimal.ZERO;
+
+    @Column(name = "pip_discount_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal pipDiscountAmount = BigDecimal.ZERO;
+
     @Column(precision = 15, scale = 2)
     private BigDecimal availableAmount;
 
@@ -146,6 +154,18 @@ public class Invoice {
 
     @Column(name = "digital_invoice_uploaded_at")
     private Instant digitalInvoiceUploadedAt;
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
+    @Column(name = "last_finance_requested_at")
+    private Instant lastFinanceRequestedAt;
 
     @CreationTimestamp
     @Column(updatable = false)

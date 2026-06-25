@@ -1,11 +1,13 @@
 package com.plp.program.controller;
 
+import com.plp.program.model.dto.InvoiceCsvUploadResult;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.entity.Program;
 import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
 import com.plp.program.security.InvoiceAccessGuard;
 import com.plp.program.security.InvoiceAccessGuard.InvoiceWriteOperation;
+import com.plp.program.security.LenderPortalRoleAuthorization;
 import com.plp.program.service.InvoiceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,20 @@ public class InvoiceController {
     private final ProgramRepository programRepository;
     private final SubProgramRepository subProgramRepository;
 
+    @GetMapping
+    public ResponseEntity<?> listInvoices(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String lifecycle,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader) {
+        LenderPortalRoleAuthorization.requireCreditAnalystOrManager(rolesHeader);
+        Map<String, Object> paged = invoiceService.listInvoicesPaged(
+                search, status, lifecycle, page != null ? page : 0, size != null ? size : 20);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
+    }
+
     @PostMapping
     public ResponseEntity<Invoice> createInvoice(
             @RequestBody Invoice invoice,
@@ -55,9 +71,13 @@ public class InvoiceController {
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         InvoiceAccessGuard.requireCsvUploadAllowed(anchorId, rolesHeader, linkedEntityId, linkedEntityType);
         try {
-            List<Invoice> invoices =
+            InvoiceCsvUploadResult upload =
                     invoiceService.uploadInvoiceCsv(anchorId, programId, file.getInputStream(), null);
-            return ResponseEntity.ok(Map.of("status", "success", "rowsInserted", invoices.size()));
+            return ResponseEntity.ok(Map.of(
+                    "status", "success",
+                    "rowsInserted", upload.rowsProcessed(),
+                    "rowsSkipped", upload.rowsSkipped(),
+                    "errors", upload.errors()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("status", "error", "message", e.getMessage()));
         }
@@ -130,6 +150,7 @@ public class InvoiceController {
             @PathVariable UUID borrowerId,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String lifecycle,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
@@ -141,6 +162,7 @@ public class InvoiceController {
                     borrowerId,
                     search,
                     status,
+                    lifecycle,
                     page != null ? page : 0,
                     size != null ? size : 20);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
@@ -259,6 +281,32 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.revertFinancingRequestedForLoanDisburseCancel(id));
     }
 
+    @PostMapping("/{id}/mark-rejected")
+    public ResponseEntity<Invoice> markRejected(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Invoice invoice = invoiceService.getInvoice(id);
+        InvoiceAccessGuard.requireInvoiceWriteAccess(
+                invoice, rolesHeader, linkedEntityId, linkedEntityType, InvoiceWriteOperation.MARK_REJECTED);
+        String reason = body != null && body.get("reason") != null ? body.get("reason").toString() : null;
+        return ResponseEntity.ok(invoiceService.markRejected(id, reason));
+    }
+
+    @PostMapping("/{id}/mark-closed")
+    public ResponseEntity<Invoice> markClosed(
+            @PathVariable UUID id,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Invoice invoice = invoiceService.getInvoice(id);
+        InvoiceAccessGuard.requireInvoiceWriteAccess(
+                invoice, rolesHeader, linkedEntityId, linkedEntityType, InvoiceWriteOperation.MARK_CLOSED);
+        return ResponseEntity.ok(invoiceService.markClosed(id));
+    }
+
     @PostMapping("/{id}/mark-discounted")
     public ResponseEntity<Invoice> markDiscounted(
             @PathVariable UUID id,
@@ -288,5 +336,28 @@ public class InvoiceController {
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
         }
+    }
+
+    @PostMapping("/{id}/pip-adjust")
+    public ResponseEntity<Invoice> adjustPip(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader) {
+        if (!LenderPortalRoleAuthorization.parseRoles(rolesHeader).contains("PLATFORM_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PIP adjust is restricted to internal system calls");
+        }
+        BigDecimal principalAdd = decimal(body.get("principalAdd"));
+        BigDecimal principalSubtract = decimal(body.get("principalSubtract"));
+        BigDecimal discountAdd = decimal(body.get("discountAdd"));
+        BigDecimal discountSubtract = decimal(body.get("discountSubtract"));
+        return ResponseEntity.ok(invoiceService.adjustPipAmounts(
+                id, principalAdd, principalSubtract, discountAdd, discountSubtract));
+    }
+
+    private static BigDecimal decimal(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        return new BigDecimal(raw.toString());
     }
 }

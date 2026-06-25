@@ -33,6 +33,7 @@ export default function MyLoansPage() {
   );
 
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanTab, setLoanTab] = useState<'active' | 'closed'>('active');
   const [payoffs, setPayoffs] = useState<Record<string, LoanPayoffInfo>>({});
   const [loading, setLoading] = useState(true);
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -116,11 +117,29 @@ export default function MyLoansPage() {
     );
   }
 
+  const visibleLoans = loans.filter((l) =>
+    loanTab === 'closed' ? ['CLOSED', 'REJECTED'].includes(l.status) : !['CLOSED', 'REJECTED'].includes(l.status),
+  );
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">My Loans</h1>
         <p className="text-sm text-slate-500 mt-1">Scoped to your profile — loans load automatically</p>
+        <div className="flex gap-2 mt-4">
+          {(['active', 'closed'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setLoanTab(tab)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize ${
+                loanTab === tab ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {tab === 'active' ? 'Active' : 'Closed'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {repayMsg && (
@@ -139,7 +158,7 @@ export default function MyLoansPage() {
         <div className="flex justify-center py-16">
           <div className="animate-pulse text-slate-400 text-sm">Loading loans…</div>
         </div>
-      ) : loans.length > 0 ? (
+      ) : visibleLoans.length > 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -171,7 +190,7 @@ export default function MyLoansPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loans.map((loan) => {
+              {visibleLoans.map((loan) => {
                 const payoff = payoffs[loan.id];
                 const payableAmount = payoff?.payoffAmount ?? (Number(loan.outstandingAmount) || 0);
                 return (

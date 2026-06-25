@@ -24,11 +24,11 @@ spring:
         - id: program-service
           uri: lb://program-service
           predicates:
-            - Path=/api/v1/programs/**,/api/v1/sub-programs/**,/api/v1/anchors/**,/api/v1/borrowers/**,/api/v1/salary/**,/api/v1/invoices/**,/api/v1/portal/anchor/**,/api/v1/dev/reset-program-data,/api/v1/dev/status,/api/v1/program-audit/**
+            - Path=/api/v1/programs/**,/api/v1/sub-programs/**,/api/v1/anchors/**,/api/v1/borrowers/**,/api/v1/salary/**,/api/v1/invoices/**,/api/v1/portal/anchor/**,/api/v1/dev/reset-program-data,/api/v1/dev/status,/api/v1/program-audit/**,/api/v1/platform/**
         - id: lending-service
           uri: lb://lending-service
           predicates:
-            - Path=/api/v1/loans/**,/api/v1/disbursements/**,/api/v1/repayments/**,/api/v1/portal/borrower/**,/api/v1/dev/reset-lending-data,/api/v1/lending-audit/**
+            - Path=/api/v1/loans/**,/api/v1/disbursements/**,/api/v1/repayments/**,/api/v1/portal/borrower/**,/api/v1/payments/settlements/**,/api/v1/dev/reset-lending-data,/api/v1/lending-audit/**
         - id: integration-service
           uri: lb://integration-service
           predicates:

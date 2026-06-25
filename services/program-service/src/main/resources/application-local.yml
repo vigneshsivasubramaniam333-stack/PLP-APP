@@ -24,5 +24,7 @@ plp:
   dev-reset:
     enabled: true
   storage:
+    local:
+      root: ./uploads/digital-invoices
     minio:
       endpoint: http://localhost:9010

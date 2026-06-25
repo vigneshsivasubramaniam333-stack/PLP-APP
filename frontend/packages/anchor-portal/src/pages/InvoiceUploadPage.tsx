@@ -6,10 +6,11 @@ import {
   portalApi,
   subProgramApi,
   useAuth,
-  openDigitalInvoiceDownload,
-  notifyError,
+  DigitalInvoiceAttachment,
+  extractApiErrorMessage,
 } from '@plp/shared';
 import type { Program, Invoice, AuthUser, Borrower, SubProgram } from '@plp/shared';
+import { downloadSampleInvoiceCsv } from '../invoice/invoiceShared';
 
 const NO_LINKED_BORROWERS =
   'No linked borrowers for this sub-program. Ask your lender to add the counterparty borrower to this sub-program.';
@@ -58,8 +59,9 @@ export default function InvoiceUploadPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [subPrograms, setSubPrograms] = useState<SubProgram[]>([]);
   const [selectedSubProgramId, setSelectedSubProgramId] = useState('');
-  const [uploadResult, setUploadResult] = useState<{ rows: number; error?: string } | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ rows: number; skipped?: number; error?: string; errors?: { row: number; reason: string }[] } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tab, setTab] = useState<'upload' | 'manual' | 'view'>('upload');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -132,17 +134,23 @@ export default function InvoiceUploadPage() {
   }, [anchorId, selectedSubProgramId, umbrellaProgramId]);
 
   const handleUpload = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file || !anchorId || !umbrellaProgramId) return;
+    const file = csvFile ?? fileRef.current?.files?.[0];
+    if (!file || !anchorId || !umbrellaProgramId || !selectedSubProgramId) return;
     setUploading(true);
     setUploadResult(null);
     try {
-      const res = await portalApi.anchorInvoiceUpload(anchorId, umbrellaProgramId, file);
-      setUploadResult({ rows: res.data.data.rowsProcessed });
+      const res = await portalApi.anchorInvoiceUpload(anchorId, umbrellaProgramId, file, selectedSubProgramId);
+      const data = res.data?.data as { rowsProcessed?: number; rowsSkipped?: number; errors?: { row: number; reason: string }[] } | undefined;
+      setUploadResult({
+        rows: data?.rowsProcessed ?? 0,
+        skipped: data?.rowsSkipped,
+        errors: data?.errors,
+      });
       loadInvoices();
+      if (fileRef.current) fileRef.current.value = '';
+      setCsvFile(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      setUploadResult({ rows: 0, error: message });
+      setUploadResult({ rows: 0, error: extractApiErrorMessage(err, 'Upload failed') });
     } finally {
       setUploading(false);
     }
@@ -151,13 +159,14 @@ export default function InvoiceUploadPage() {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setManualMsg('');
-    if (!anchorId || !umbrellaProgramId) return;
+    if (!anchorId || !umbrellaProgramId || !selectedSubProgramId) return;
     try {
       const createRes = await portalApi.anchorCreateInvoice({
         invoiceNumber: manual.invoiceNumber,
         borrowerId: manual.borrowerId,
         anchorId,
         programId: umbrellaProgramId,
+        subProgramId: selectedSubProgramId,
         invoiceDate: manual.invoiceDate,
         dueDate: manual.dueDate,
         invoiceAmount: parseFloat(manual.invoiceAmount),
@@ -212,8 +221,7 @@ export default function InvoiceUploadPage() {
       if (digitalInvoiceFileRef.current) digitalInvoiceFileRef.current.value = '';
       loadInvoices();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      setManualMsg('Error: ' + message);
+      setManualMsg('Error: ' + extractApiErrorMessage(err, 'Save failed'));
     }
   };
 
@@ -324,23 +332,56 @@ export default function InvoiceUploadPage() {
               invoiceNumber, borrowerCode, invoiceDate (yyyy-MM-dd), dueDate, invoiceAmount, taxAmount
             </code>
           </p>
-          <div className="flex items-center gap-4">
-            <input type="file" ref={fileRef} accept=".csv" className="text-sm text-slate-600" />
+          <div className="flex flex-wrap items-center gap-4">
+            <input
+              type="file"
+              ref={fileRef}
+              accept=".csv"
+              className="text-sm text-slate-600"
+              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+            />
             <button
+              type="button"
               onClick={() => void handleUpload()}
-              disabled={uploading || !umbrellaProgramId}
+              disabled={uploading || !selectedSubProgramId || !csvFile}
               className="px-5 py-2.5 bt-btn bt-btn-primary disabled:opacity-50"
             >
               {uploading ? 'Uploading...' : 'Upload CSV'}
             </button>
+            <button type="button" onClick={downloadSampleInvoiceCsv} className="px-5 py-2.5 bt-btn bt-btn-secondary">
+              Download sample CSV
+            </button>
           </div>
+          {!selectedSubProgramId ? (
+            <p className="mt-2 text-xs text-amber-700">Select a sub-program above before uploading.</p>
+          ) : !csvFile ? (
+            <p className="mt-2 text-xs text-slate-500">Choose a CSV file to enable upload.</p>
+          ) : null}
           {uploadResult && (
             <div
-              className={`mt-4 p-4 rounded-lg text-sm flex items-center gap-2 ${
-                uploadResult.error ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              className={`mt-4 p-4 rounded-lg text-sm ${
+                uploadResult.error
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : uploadResult.rows === 0 && (uploadResult.errors?.length ?? 0) > 0
+                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               }`}
             >
-              {uploadResult.error || `${uploadResult.rows} invoice(s) processed successfully`}
+              {uploadResult.error || (
+                <>
+                  {uploadResult.rows} invoice(s) processed successfully.
+                  {uploadResult.skipped ? ` ${uploadResult.skipped} row(s) skipped.` : ''}
+                  {uploadResult.errors && uploadResult.errors.length > 0 ? (
+                    <ul className="mt-2 text-left list-disc pl-5">
+                      {uploadResult.errors.slice(0, 10).map((e) => (
+                        <li key={e.row}>
+                          Row {e.row}: {e.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -505,7 +546,7 @@ export default function InvoiceUploadPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Dates</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Net</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Digital</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Copy</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -532,25 +573,8 @@ export default function InvoiceUploadPage() {
                         </td>
                         <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.invoiceAmount)}</td>
                         <td className="px-5 py-3 text-right font-medium text-slate-800">{formatCurrency(inv.netAmount)}</td>
-                        <td className="px-5 py-3 text-xs text-slate-600 max-w-[200px]">
-                          {inv.digitalInvoiceFileName ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="font-mono text-[11px] break-all">{inv.digitalInvoiceFileName}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                    notifyError(e, 'Could not open digital invoice');
-                                  });
-                                }}
-                                className="text-left text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline"
-                              >
-                                View / Download
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
+                        <td className="px-5 py-3 text-center align-middle">
+                          <DigitalInvoiceAttachment invoiceId={inv.id} fileName={inv.digitalInvoiceFileName} />
                         </td>
                         <td className="px-5 py-3 text-center">
                           <InvoiceBadge status={inv.status} />

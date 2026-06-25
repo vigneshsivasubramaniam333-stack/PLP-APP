@@ -11,5 +11,10 @@ public enum InvoiceStatus {
     /** Borrower submitted a financing request; lending row created. */
     FINANCING_REQUESTED,
     PARTIALLY_DISCOUNTED,
-    FULLY_DISCOUNTED
+    FULLY_DISCOUNTED,
+    /** Finance request rejected by lender (loan REJECTED). */
+    REJECTED,
+    /** All linked loans repaid / closed. */
+    CLOSED,
+    EXPIRED
 }

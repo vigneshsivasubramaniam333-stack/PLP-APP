@@ -21,6 +21,8 @@ public interface SubProgramBorrowerRepository extends JpaRepository<SubProgramBo
 
     Optional<SubProgramBorrower> findBySubProgramIdAndBorrowerId(UUID subProgramId, UUID borrowerId);
 
+    Optional<SubProgramBorrower> findBySubProgramIdAndPartyCodeIgnoreCase(UUID subProgramId, String partyCode);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM SubProgramBorrower m WHERE m.subProgramId = :subProgramId AND m.borrowerId = :borrowerId")
     Optional<SubProgramBorrower> findBySubProgramIdAndBorrowerIdForUpdate(

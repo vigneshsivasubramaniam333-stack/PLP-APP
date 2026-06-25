@@ -8,6 +8,25 @@ export const CONFIRM_SELF_UPLOAD_TOOLTIP = 'You cannot approve an invoice upload
 export const inputCls = 'bt-input w-full';
 export const labelCls = 'bt-label';
 
+/** Sample CSV for anchor invoice batch upload (named columns). */
+export const INVOICE_CSV_SAMPLE = `invoiceNumber,partyCode,invoiceDate,dueDate,invoiceAmount,taxAmount,subProgramCode
+INV-2026-001,PTY-001,2026-06-01,2026-08-01,100000,18000,
+INV-2026-002,BORR-1001,2026-06-05,2026-09-05,250000,45000,
+`;
+
+export function downloadSampleInvoiceCsv(): void {
+  const blob = new Blob([INVOICE_CSV_SAMPLE], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'invoice-upload-sample.csv';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
 export function anchorIdFromUser(linkedType: string | null | undefined, linkedId: string | null | undefined): string {
   if ((linkedType ?? '').trim().toUpperCase() !== 'ANCHOR') return '';
   return (linkedId ?? '').trim();

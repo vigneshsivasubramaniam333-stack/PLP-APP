@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   portalApi,
   invoiceApi,
   useAuth,
   apiClient,
   loanApi,
-  openDigitalInvoiceDownload,
+  paymentCartApi,
+  DigitalInvoiceAttachment,
   notifyError,
+  notifySuccess,
   InvoiceListToolbar,
 } from '@plp/shared';
 import type { Invoice, InvoicePageMeta, Loan } from '@plp/shared';
 import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
+import { InvoiceActionsMenu, type InvoiceActionItem } from '../components/InvoiceActionsMenu';
 
 const FLOW_PURCHASE = 'PURCHASE_BILL_DISCOUNTING';
 const FLOW_SALES = 'SALES_BILL_DISCOUNTING';
@@ -50,7 +54,7 @@ export default function InvoiceDiscountingPage() {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
-  const [listFilters, setListFilters] = useState({ search: '', status: '', page: 0, size: 20 });
+  const [listFilters, setListFilters] = useState({ search: '', status: '', lifecycle: 'active' as const, page: 0, size: 20 });
   const [loansByInvoice, setLoansByInvoice] = useState<Record<string, Loan[]>>({});
   const [loading, setLoading] = useState(true);
   const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
@@ -71,6 +75,12 @@ export default function InvoiceDiscountingPage() {
   const [requestMsg, setRequestMsg] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'SMART_COLLECT' | 'PAYU_PG'>('SMART_COLLECT');
+  const [selectedForCart, setSelectedForCart] = useState<Set<string>>(() => new Set());
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [cartInvoiceIds, setCartInvoiceIds] = useState<Set<string>>(() => new Set());
+
+  const usePayu = paymentMethod === 'PAYU_PG';
 
   /** Full borrower invoice list — includes FINANCING_REQUESTED etc. Avoids stale /eligible snapshots. */
   const loadInvoices = useCallback(
@@ -85,6 +95,7 @@ export default function InvoiceDiscountingPage() {
             params: {
               search: listFilters.search || undefined,
               status: listFilters.status || undefined,
+              lifecycle: listFilters.lifecycle,
               page: listFilters.page,
               size: listFilters.size,
               ...(opts?.bustCache ? { _nocache: Date.now() } : {}),
@@ -106,6 +117,16 @@ export default function InvoiceDiscountingPage() {
           grouped[invId].push(loan);
         }
         setLoansByInvoice(grouped);
+
+        try {
+          const pmRes = await paymentCartApi.paymentMethod(borrowerId);
+          const pm = pmRes.data?.data?.paymentMethod;
+          if (pm === 'PAYU_PG' || pm === 'SMART_COLLECT') {
+            setPaymentMethod(pm);
+          }
+        } catch {
+          setPaymentMethod('SMART_COLLECT');
+        }
       } catch (err) {
         console.error(err);
         setInvoices([]);
@@ -119,6 +140,37 @@ export default function InvoiceDiscountingPage() {
   useEffect(() => {
     void loadInvoices();
   }, [loadInvoices]);
+
+  const refreshCartInvoiceIds = useCallback(async () => {
+    if (!borrowerId || paymentMethod !== 'PAYU_PG') {
+      setCartInvoiceIds(new Set());
+      return;
+    }
+    try {
+      const res = await paymentCartApi.listLines(borrowerId);
+      const lines = res.data?.data ?? [];
+      setCartInvoiceIds(new Set(lines.map((l) => l.invoiceId)));
+    } catch {
+      setCartInvoiceIds(new Set());
+    }
+  }, [borrowerId, paymentMethod]);
+
+  useEffect(() => {
+    void refreshCartInvoiceIds();
+  }, [refreshCartInvoiceIds]);
+
+  useEffect(() => {
+    const handler = () => void refreshCartInvoiceIds();
+    window.addEventListener('plp-payment-cart-changed', handler);
+    return () => window.removeEventListener('plp-payment-cart-changed', handler);
+  }, [refreshCartInvoiceIds]);
+
+  useEffect(() => {
+    setSelectedForCart((prev) => {
+      const next = new Set([...prev].filter((id) => !cartInvoiceIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [cartInvoiceIds]);
 
   useEffect(() => {
     setSelectedInvoice((prev) => {
@@ -180,6 +232,13 @@ export default function InvoiceDiscountingPage() {
     }
     setRequesting(true);
     setRequestMsg('');
+    const amount = parseFloat(requestedAmount);
+    const cap = selectedInvoice.availableAmount ?? selectedInvoice.eligibleAmount ?? 0;
+    if (amount > cap) {
+      setRequestMsg(`Error: Amount cannot exceed ${cap.toFixed(2)} (available for this invoice).`);
+      setRequesting(false);
+      return;
+    }
     try {
       await loanApi.request({
         borrowerId,
@@ -218,6 +277,114 @@ export default function InvoiceDiscountingPage() {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0);
 
+  const REPAYABLE_LOAN = new Set(['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE']);
+
+  const hasRepayableLoan = (invoiceId: string) =>
+    (loansByInvoice[invoiceId] ?? []).some((l) => REPAYABLE_LOAN.has(l.status));
+
+  const isInCart = (invoiceId: string) => cartInvoiceIds.has(invoiceId);
+
+  const canAddToCart = (inv: Invoice) =>
+    usePayu &&
+    hasRepayableLoan(inv.id) &&
+    !(inv.pipAmount && inv.pipAmount > 0) &&
+    !isInCart(inv.id);
+
+  const repayableAmountForInvoice = (invoiceId: string) => {
+    const loan = (loansByInvoice[invoiceId] ?? []).find((l) => REPAYABLE_LOAN.has(l.status));
+    if (!loan) return 0;
+    return loan.outstandingAmount ?? loan.totalRepayable ?? 0;
+  };
+
+  const selectionSummary = useMemo(() => {
+    let total = 0;
+    for (const id of selectedForCart) {
+      total += repayableAmountForInvoice(id);
+    }
+    return { count: selectedForCart.size, total };
+  }, [selectedForCart, loansByInvoice]);
+
+  const cartSelectableIds = useMemo(
+    () => invoices.filter((inv) => canAddToCart(inv)).map((inv) => inv.id),
+    [invoices, usePayu, loansByInvoice, cartInvoiceIds],
+  );
+
+  const allCartSelectableSelected =
+    cartSelectableIds.length > 0 && cartSelectableIds.every((id) => selectedForCart.has(id));
+
+  const toggleSelectAllCart = () => {
+    if (allCartSelectableSelected) {
+      setSelectedForCart(new Set());
+      return;
+    }
+    setSelectedForCart(new Set(cartSelectableIds));
+  };
+
+  const buildInvoiceActions = (inv: Invoice, linkedLoans: Loan[]): InvoiceActionItem[] => {
+    const items: InvoiceActionItem[] = [];
+    if (linkedLoans.length > 0) {
+      items.push({
+        id: 'view-loan',
+        label: expandedLoanInvoiceIds.has(inv.id) ? 'Hide Loan' : 'View Loan',
+        onClick: () => toggleLoanDetails(inv.id),
+      });
+    }
+    if (canAddToCart(inv)) {
+      items.push({
+        id: 'add-cart',
+        label: 'Add to cart',
+        onClick: () => void addToCart(inv.id),
+        disabled: addingToCart,
+      });
+    }
+    return items;
+  };
+
+  const toggleCartSelect = (invoiceId: string) => {
+    setSelectedForCart((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) next.delete(invoiceId);
+      else next.add(invoiceId);
+      return next;
+    });
+  };
+
+  const addToCart = async (invoiceId: string) => {
+    if (!borrowerId) return;
+    setAddingToCart(true);
+    try {
+      await paymentCartApi.addLine(invoiceId, borrowerId);
+      notifySuccess('Added to payment cart');
+      await refreshCartInvoiceIds();
+      setSelectedForCart((prev) => {
+        const next = new Set(prev);
+        next.delete(invoiceId);
+        return next;
+      });
+      window.dispatchEvent(new Event('plp-payment-cart-changed'));
+    } catch (err) {
+      notifyError(err, 'Could not add to cart');
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
+  const addSelectedToCart = async () => {
+    if (!borrowerId || selectedForCart.size === 0) return;
+    setAddingToCart(true);
+    try {
+      await paymentCartApi.addBulk(Array.from(selectedForCart), borrowerId);
+      notifySuccess(`Added ${selectedForCart.size} invoice(s) to cart`);
+      setSelectedForCart(new Set());
+      await refreshCartInvoiceIds();
+      window.dispatchEvent(new Event('plp-payment-cart-changed'));
+    } catch (err) {
+      notifyError(err, 'Bulk add failed');
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
   const financingRequested = selectedInvoice?.status === 'FINANCING_REQUESTED';
   const panelCanFinance =
     selectedInvoice &&
@@ -231,7 +398,15 @@ export default function InvoiceDiscountingPage() {
         <p className="text-sm text-slate-500 mt-1">
           Purchase-flow invoices must be accepted before requesting financing. Sales-flow invoices can proceed when eligible.
           Invoices load automatically from your borrower profile.
+          {usePayu ? ' Repayments use PayU payment gateway (add invoices to cart).' : ''}
         </p>
+        {usePayu && (
+          <div className="mt-3">
+            <Link to="/payments/cart" className="text-sm font-semibold text-sky-700 hover:underline">
+              View payment cart →
+            </Link>
+          </div>
+        )}
       </div>
 
       {loading && invoices.length === 0 && (
@@ -269,7 +444,40 @@ export default function InvoiceDiscountingPage() {
         onChange={(next) => setListFilters((f) => ({ ...f, ...next }))}
       />
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+      {usePayu && selectionSummary.count > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50/80 px-4 py-3">
+          <p className="text-sm text-slate-700">
+            <span className="font-semibold text-sky-900">{selectionSummary.count}</span> invoice
+            {selectionSummary.count === 1 ? '' : 's'} selected
+            <span className="mx-2 text-slate-300" aria-hidden>
+              |
+            </span>
+            Total repayment:{' '}
+            <span className="font-semibold tabular-nums text-slate-900">
+              {formatCurrency(selectionSummary.total)}
+            </span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedForCart(new Set())}
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+            >
+              Clear selection
+            </button>
+            <button
+              type="button"
+              disabled={addingToCart}
+              onClick={() => void addSelectedToCart()}
+              className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-50"
+            >
+              Add selected to cart
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
         <div className="px-5 py-4 border-b border-slate-100">
           <h3 className="text-sm font-semibold text-slate-700">Your invoices</h3>
         </div>
@@ -277,23 +485,36 @@ export default function InvoiceDiscountingPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                {usePayu && (
+                  <th className="px-3 py-3 w-10 text-center">
+                    {cartSelectableIds.length > 0 ? (
+                      <input
+                        type="checkbox"
+                        checked={allCartSelectableSelected}
+                        onChange={toggleSelectAllCart}
+                        aria-label="Select all repayable invoices"
+                      />
+                    ) : null}
+                  </th>
+                )}
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Invoice #</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Flow</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Due Date</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Amount</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Eligible</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Available</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Digital invoice
-                </th>
+                {usePayu && (
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">PRUS</th>
+                )}
+                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Copy</th>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th className="px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-36">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={usePayu ? 10 : 9} className="px-5 py-12 text-center text-slate-400 text-sm">
                     No invoices yet.
                   </td>
                 </tr>
@@ -302,6 +523,25 @@ export default function InvoiceDiscountingPage() {
                   const linkedLoans = loansByInvoice[inv.id] ?? [];
                   const rows = [
                     <tr key={inv.id} className={`hover:bg-slate-50/80 ${selectedInvoice?.id === inv.id ? 'bg-sky-50/50' : ''}`}>
+                    {usePayu && (
+                      <td className="px-3 py-3 text-center align-middle">
+                        {isInCart(inv.id) ? (
+                          <span
+                            className="inline-block rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800"
+                            title="Already in payment cart"
+                          >
+                            In cart
+                          </span>
+                        ) : canAddToCart(inv) ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedForCart.has(inv.id)}
+                            onChange={() => toggleCartSelect(inv.id)}
+                            aria-label={`Select invoice ${inv.invoiceNumber}`}
+                          />
+                        ) : null}
+                      </td>
+                    )}
                     <td className="px-5 py-3 font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</td>
                     <td className="px-5 py-3 text-xs text-slate-600">
                       {isSalesFlow(inv) ? 'Sales' : 'Purchase'}
@@ -310,70 +550,31 @@ export default function InvoiceDiscountingPage() {
                     <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.netAmount)}</td>
                     <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.eligibleAmount)}</td>
                     <td className="px-5 py-3 text-right font-medium text-slate-800">{formatCurrency(inv.availableAmount)}</td>
-                    <td className="px-5 py-3 text-xs text-slate-600 max-w-[160px]">
-                      {inv.digitalInvoiceFileName ? (
-                        <div className="flex flex-col gap-1 items-start">
-                          <span className="font-mono text-[11px] text-slate-700 break-all">{inv.digitalInvoiceFileName}</span>
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  notifyError(e, 'Could not open digital invoice');
-                                });
-                              }}
-                              className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline"
-                            >
-                              View Invoice
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  notifyError(e, 'Could not download digital invoice');
-                                });
-                              }}
-                              className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline"
-                            >
-                              Download Invoice
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    {usePayu && (
+                      <td className="px-5 py-3 text-right text-amber-700 text-xs font-medium tabular-nums align-middle">
+                        {inv.pipAmount && inv.pipAmount > 0 ? formatCurrency(inv.pipAmount) : '—'}
+                      </td>
+                    )}
+                    <td className="px-5 py-3 text-center align-middle">
+                      <DigitalInvoiceAttachment invoiceId={inv.id} fileName={inv.digitalInvoiceFileName} />
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-center align-middle">
                       <InvoiceBadge status={inv.status} />
                     </td>
-                    <td className="px-5 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1.5">
-                        {linkedLoans.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleLoanDetails(inv.id)}
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-                            title={expandedLoanInvoiceIds.has(inv.id) ? 'Hide linked loan details' : 'View linked loan details'}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                              {expandedLoanInvoiceIds.has(inv.id) ? (
-                                <path fillRule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.5 1.5 0 0 0 0-1.5 10.029 10.029 0 0 0-3.3-4.38 1.5 1.5 0 0 0-1.5 0 10.029 10.029 0 0 0-3.3 4.38 1.5 1.5 0 0 0 0 1.5 10.029 10.029 0 0 0 3.3 4.38 1.5 1.5 0 0 0 1.5 0 10.029 10.029 0 0 0 4.38 3.3l1.745 1.745a.75.75 0 0 0 1.06-1.06l-14.5-14.5Z" clipRule="evenodd" />
-                              ) : (
-                                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                              )}
-                              {!expandedLoanInvoiceIds.has(inv.id) && (
-                                <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
-                              )}
-                            </svg>
-                            {expandedLoanInvoiceIds.has(inv.id) ? 'Hide loan' : 'View loan'}
-                          </button>
-                        )}
+                    <td className="px-3 py-3 align-top">
+                      <div className="flex w-36 flex-col items-stretch gap-1.5">
+                        <div className="flex justify-end">
+                          <InvoiceActionsMenu
+                            items={buildInvoiceActions(inv, linkedLoans)}
+                            busy={addingToCart || acceptingId === inv.id}
+                          />
+                        </div>
                         {canShowAcceptInvoice(inv) && (
                           <button
                             type="button"
                             disabled={!borrowerId || acceptingId === inv.id}
                             onClick={() => void handleAcceptInvoice(inv)}
-                            className="bt-btn bt-btn-primary bt-btn-sm disabled:opacity-50"
+                            className="bt-btn bt-btn-primary bt-btn-sm w-full disabled:opacity-50"
                           >
                             {acceptingId === inv.id ? 'Accepting...' : 'Accept Invoice'}
                           </button>
@@ -386,13 +587,10 @@ export default function InvoiceDiscountingPage() {
                               setRequestedAmount(inv.availableAmount?.toString() || '');
                               setEligibilityResult(null);
                             }}
-                            className="bt-btn bt-btn-primary bt-btn-sm"
+                            className="bt-btn bt-btn-primary bt-btn-sm w-full"
                           >
                             Select
                           </button>
-                        )}
-                        {!canShowAcceptInvoice(inv) && !canRequestDiscounting(inv) && linkedLoans.length === 0 && (
-                          <span className="text-[11px] text-slate-400">—</span>
                         )}
                       </div>
                     </td>
@@ -401,16 +599,27 @@ export default function InvoiceDiscountingPage() {
                   if (linkedLoans.length > 0 && expandedLoanInvoiceIds.has(inv.id)) {
                     rows.push(
                       <tr key={`${inv.id}-loans`}>
-                        <td colSpan={9} className="px-5 pb-4 bg-slate-50/40">
-                          {linkedLoans.map((loan) => (
-                            <InvoiceLoanRepaymentCard
-                              key={loan.id}
-                              invoice={inv}
-                              loan={loan}
-                              repaying={repayingLoanId === loan.id}
-                              onRepay={handleRepayLoan}
-                            />
-                          ))}
+                        <td colSpan={usePayu ? 10 : 9} className="px-5 pb-4 bg-slate-50/40">
+                          {linkedLoans.map((loan) =>
+                            usePayu ? (
+                              <div key={loan.id} className="text-xs text-slate-600 py-2 border-b border-slate-100 last:border-0">
+                                Loan {loan.loanNumber || loan.id} — {loan.status}
+                                {inv.pipAmount && inv.pipAmount > 0 ? (
+                                  <span className="ml-2 text-amber-700 font-medium">
+                                    PRUS: {formatCurrency(inv.pipAmount)} (pending settlement)
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <InvoiceLoanRepaymentCard
+                                key={loan.id}
+                                invoice={inv}
+                                loan={loan}
+                                repaying={repayingLoanId === loan.id}
+                                onRepay={handleRepayLoan}
+                              />
+                            ),
+                          )}
                         </td>
                       </tr>,
                     );
@@ -443,31 +652,13 @@ export default function InvoiceDiscountingPage() {
           {selectedInvoice.digitalInvoiceFileName && (
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
               <span className="text-slate-600">
-                Digital invoice:{' '}
+                Invoice copy:{' '}
                 <span className="font-mono text-xs text-slate-800">{selectedInvoice.digitalInvoiceFileName}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  void openDigitalInvoiceDownload(selectedInvoice.id).catch((e: unknown) => {
-                    notifyError(e, 'Could not open digital invoice');
-                  });
-                }}
-                className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline"
-              >
-                View Invoice
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void openDigitalInvoiceDownload(selectedInvoice.id).catch((e: unknown) => {
-                    notifyError(e, 'Could not download digital invoice');
-                  });
-                }}
-                className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline"
-              >
-                Download Invoice
-              </button>
+              <DigitalInvoiceAttachment
+                invoiceId={selectedInvoice.id}
+                fileName={selectedInvoice.digitalInvoiceFileName}
+              />
             </div>
           )}
 

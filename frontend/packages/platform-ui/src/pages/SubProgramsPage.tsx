@@ -4,6 +4,7 @@ import {
   anchorApi,
   subProgramApi,
   borrowerApi,
+  repaymentDefaultsApi,
   extractApiErrorMessage,
   getStoredAuthUser,
   lenderLoanCapabilities,
@@ -13,7 +14,7 @@ import {
   buildBorrowerTermsRowsFromMap,
   buildSubProgramConfigurationRows,
 } from '@plp/shared';
-import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower } from '@plp/shared';
+import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower, ProductRepaymentDefault, ProductType } from '@plp/shared';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
@@ -33,8 +34,10 @@ type BorrowerTermsForm = {
   discountMarginPercent: string;
   creditPeriodDays: string;
   discountHold: string;
+  paymentMethodMode: string;
   paymentMethod: string;
   overdueInterestRate: string;
+  partyCode: string;
 };
 
 const DEFAULT_BORROWER_TERMS: Omit<BorrowerTermsForm, 'borrowerLimit'> = {
@@ -42,9 +45,24 @@ const DEFAULT_BORROWER_TERMS: Omit<BorrowerTermsForm, 'borrowerLimit'> = {
   discountMarginPercent: '',
   creditPeriodDays: '',
   discountHold: 'NO',
+  paymentMethodMode: 'CUSTOM',
   paymentMethod: 'SMART_COLLECT',
   overdueInterestRate: '0',
+  partyCode: '',
 };
+
+function formatRepaymentMechanism(value: string | null | undefined): string {
+  switch (value) {
+    case 'PAYU_PG':
+      return 'PayU (Payment Gateway)';
+    case 'API_PG':
+      return 'API-based PG';
+    case 'SMART_COLLECT':
+      return 'Smart Collect';
+    default:
+      return value?.replace(/_/g, ' ') ?? '—';
+  }
+}
 
 function emptyAddBorrowerForm() {
   return { borrowerId: '', borrowerLimit: '', ...DEFAULT_BORROWER_TERMS };
@@ -57,8 +75,10 @@ function borrowerTermsFormFromMembership(row: SubProgramBorrower): BorrowerTerms
     discountMarginPercent: row.discountMarginPercent != null ? String(row.discountMarginPercent) : '',
     creditPeriodDays: row.creditPeriodDays != null ? String(row.creditPeriodDays) : '',
     discountHold: row.discountHold ?? 'NO',
+    paymentMethodMode: row.paymentMethodMode ?? 'CUSTOM',
     paymentMethod: row.paymentMethod ?? 'SMART_COLLECT',
     overdueInterestRate: row.overdueInterestRate != null ? String(row.overdueInterestRate) : '0',
+    partyCode: row.partyCode ?? '',
   };
 }
 
@@ -74,8 +94,10 @@ function appendBorrowerTermsToPayload(
   if (form.discountMarginPercent.trim()) payload.discountMarginPercent = parseFloat(form.discountMarginPercent);
   if (form.creditPeriodDays.trim()) payload.creditPeriodDays = parseInt(form.creditPeriodDays, 10);
   if (opts.onCreate || form.discountHold) payload.discountHold = form.discountHold;
+  if (opts.onCreate || form.paymentMethodMode) payload.paymentMethodMode = form.paymentMethodMode;
   if (opts.onCreate || form.paymentMethod) payload.paymentMethod = form.paymentMethod;
   if (form.overdueInterestRate.trim()) payload.overdueInterestRate = parseFloat(form.overdueInterestRate);
+  if (form.partyCode.trim()) payload.partyCode = form.partyCode.trim();
 }
 
 function rolesForInvoiceDiscountingFlow(flowType: string): { anchorRole: string; borrowerRole: string } {
@@ -124,6 +146,7 @@ function borrowerHasTermOverrides(row: SubProgramBorrower): boolean {
     row.discountMarginPercent != null ||
     row.creditPeriodDays != null ||
     (row.discountHold != null && row.discountHold !== '') ||
+    (row.paymentMethodMode != null && row.paymentMethodMode !== '' && row.paymentMethodMode !== 'GLOBAL') ||
     (row.paymentMethod != null && row.paymentMethod !== '') ||
     (row.overdueInterestRate != null && Number(row.overdueInterestRate) !== 0)
   );
@@ -396,11 +419,14 @@ function BorrowerTermsFields({
   form,
   onChange,
   limitRequired,
+  globalDefaultMechanism,
 }: {
   form: BorrowerTermsForm;
   onChange: (next: BorrowerTermsForm) => void;
   limitRequired?: boolean;
+  globalDefaultMechanism?: string;
 }) {
+  const useGlobal = form.paymentMethodMode === 'GLOBAL';
   return (
     <>
       <div className={sectionTitleCls}>Borrower terms</div>
@@ -481,6 +507,16 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
+        <label className={labelCls}>Party code (CSV)</label>
+        <input
+          type="text"
+          value={form.partyCode}
+          onChange={(e) => onChange({ ...form, partyCode: e.target.value })}
+          className={inputCls}
+          placeholder="Anchor–borrower code for invoice CSV"
+        />
+      </div>
+      <div>
         <label className={labelCls}>Discount hold</label>
         <select
           value={form.discountHold}
@@ -491,16 +527,49 @@ function BorrowerTermsFields({
           <option value="YES">Yes</option>
         </select>
       </div>
-      <div>
-        <label className={labelCls}>Payment method</label>
-        <select
-          value={form.paymentMethod}
-          onChange={(e) => onChange({ ...form, paymentMethod: e.target.value })}
-          className={inputCls}
-        >
-          <option value="SMART_COLLECT">Smart Collect</option>
-        </select>
+      <div className="col-span-full">
+        <label className={labelCls}>Repayment method</label>
+        <div className="mt-2 flex flex-col gap-2 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="paymentMethodMode"
+              checked={useGlobal}
+              onChange={() => onChange({ ...form, paymentMethodMode: 'GLOBAL' })}
+            />
+            Use platform default
+            {globalDefaultMechanism ? (
+              <span className="text-slate-500">({formatRepaymentMechanism(globalDefaultMechanism)})</span>
+            ) : null}
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="paymentMethodMode"
+              checked={!useGlobal}
+              onChange={() => onChange({ ...form, paymentMethodMode: 'CUSTOM' })}
+            />
+            Custom for this borrower
+          </label>
+        </div>
       </div>
+      {!useGlobal ? (
+        <div>
+          <label className={labelCls}>Custom payment method</label>
+          <select
+            value={form.paymentMethod}
+            onChange={(e) => onChange({ ...form, paymentMethod: e.target.value })}
+            className={inputCls}
+          >
+            <option value="SMART_COLLECT">Smart Collect</option>
+            <option value="PAYU_PG">PayU (Payment Gateway)</option>
+          </select>
+        </div>
+      ) : (
+        <div className="col-span-full text-xs text-slate-500">
+          Effective method follows the platform default configured under Repayment defaults.
+        </div>
+      )}
     </>
   );
 }
@@ -544,6 +613,7 @@ export default function SubProgramsPage() {
   });
   const [editBorrowerSaving, setEditBorrowerSaving] = useState(false);
   const [editBorrowerError, setEditBorrowerError] = useState('');
+  const [repaymentDefaults, setRepaymentDefaults] = useState<ProductRepaymentDefault[]>([]);
 
   const [form, setForm] = useState({
     programId: '',
@@ -560,6 +630,11 @@ export default function SubProgramsPage() {
   const createFormProgram = programs.find((p) => p.id === form.programId) ?? null;
   const detailProgram = detail ? programs.find((p) => p.id === detail.programId) : null;
   const detailAnchor = detail ? anchors.find((a) => a.id === detail.anchorId) : null;
+  const detailGlobalRepayment = useMemo(() => {
+    if (!detailProgram?.productType) return undefined;
+    const row = repaymentDefaults.find((r) => r.productType === detailProgram.productType);
+    return row?.enabled === false ? 'SMART_COLLECT' : row?.repaymentMechanism;
+  }, [detailProgram?.productType, repaymentDefaults]);
 
   const subPrograms = useMemo(() => {
     return allSubPrograms.filter((sp) => {
@@ -600,6 +675,7 @@ export default function SubProgramsPage() {
       programApi.list().then((r) => setPrograms(r.data.data || [])),
       anchorApi.list().then((r) => setAnchors(r.data.data || [])),
       subProgramApi.list().then((r) => setAllSubPrograms(r.data.data || [])),
+      repaymentDefaultsApi.list().then((r) => setRepaymentDefaults(r.data?.data ?? [])).catch(() => []),
     ])
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -1465,6 +1541,7 @@ export default function SubProgramsPage() {
                     form={addBorrowerForm}
                     onChange={(next) => setAddBorrowerForm({ ...addBorrowerForm, ...next })}
                     limitRequired
+                    globalDefaultMechanism={detailGlobalRepayment}
                   />
                 </div>
               </div>
@@ -1481,7 +1558,11 @@ export default function SubProgramsPage() {
                   </p>
                 ) : null}
                 <div className={formGridCls}>
-                  <BorrowerTermsFields form={editBorrowerForm} onChange={setEditBorrowerForm} />
+                  <BorrowerTermsFields
+                    form={editBorrowerForm}
+                    onChange={setEditBorrowerForm}
+                    globalDefaultMechanism={detailGlobalRepayment}
+                  />
                 </div>
               </div>
             </form>

@@ -118,10 +118,9 @@ export default function UsersPage() {
       });
       const email = form.email.trim();
       const role = form.role;
-      const temporaryPassword = form.password;
       setShowModal(false);
       setSuccessBanner(
-        `Lender user created successfully — Email: ${email}, Role: ${role}, Temporary password: ${temporaryPassword}`,
+        `Lender user created — Email: ${email}, Role: ${role}. Temporary password: ${DEFAULT_LENDER_PASSWORD} (must change on first sign-in).`,
       );
       if (isPlatformAdmin) void loadUsers();
     } catch (err: unknown) {
@@ -320,16 +319,17 @@ export default function UsersPage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Password</label>
+                  <label className={labelCls}>Temporary password</label>
                   <input
                     type="text"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className={inputCls}
-                    placeholder={DEFAULT_LENDER_PASSWORD}
-                    disabled={creating}
+                    value={DEFAULT_LENDER_PASSWORD}
+                    className={`${inputCls} bg-slate-100 text-slate-600`}
+                    readOnly
+                    disabled
                   />
-                  <p className="text-xs text-slate-500 mt-1">Temporary password; share securely with the user.</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Assigned automatically. User must change it on first sign-in.
+                  </p>
                 </div>
                 <div>
                   <label className={labelCls}>Full name *</label>

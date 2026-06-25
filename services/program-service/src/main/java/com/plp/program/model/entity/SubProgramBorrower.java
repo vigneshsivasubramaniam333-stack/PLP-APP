@@ -1,5 +1,6 @@
 package com.plp.program.model.entity;
 
+import com.plp.program.model.enums.PaymentMethodMode;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -56,9 +57,18 @@ public class SubProgramBorrower {
     @Builder.Default
     private String paymentMethod = "SMART_COLLECT";
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method_mode", nullable = false, length = 10)
+    @Builder.Default
+    private PaymentMethodMode paymentMethodMode = PaymentMethodMode.CUSTOM;
+
     @Column(name = "overdue_interest_rate", precision = 7, scale = 4, nullable = false)
     @Builder.Default
     private BigDecimal overdueInterestRate = BigDecimal.ZERO;
+
+    /** Anchor-specific counterparty code for CSV invoice upload (unique per sub-program). */
+    @Column(name = "party_code", length = 50)
+    private String partyCode;
 
     @Column(nullable = false, length = 30)
     @Builder.Default

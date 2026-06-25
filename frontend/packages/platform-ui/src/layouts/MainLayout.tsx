@@ -20,6 +20,9 @@ function buildNavGroups(role: string | undefined) {
         { path: '/anchors', label: 'Anchors', icon: AnchorsIcon },
         { path: '/borrowers', label: 'Borrowers', icon: BorrowersIcon },
         { path: '/loans', label: 'Loans', icon: LoansIcon },
+        { path: '/invoices', label: 'Invoices', icon: LoansIcon },
+        { path: '/repayment-defaults', label: 'Repayment defaults', icon: ReportsIcon },
+        { path: '/pg-settlements', label: 'PG settlements', icon: ReportsIcon },
       ],
     },
     {

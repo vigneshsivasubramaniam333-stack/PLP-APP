@@ -11,8 +11,8 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login(email, password);
-      navigate('/');
+      const authUser = await login(email, password);
+      navigate(authUser.passwordResetRequired ? '/change-password' : '/');
     } catch {
       // error handled by useAuth
     }

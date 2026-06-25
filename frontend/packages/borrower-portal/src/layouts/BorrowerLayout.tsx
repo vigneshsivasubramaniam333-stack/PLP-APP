@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useAuth, PortalSidebarBrand, PortalPoweredByFooter } from '@plp/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth, PortalSidebarBrand, PortalPoweredByFooter, paymentCartApi } from '@plp/shared';
 
 const navGroups = [
   {
@@ -14,6 +15,7 @@ const navGroups = [
     items: [
       { path: '/request-loan', label: 'Request Loan', icon: LoanIcon },
       { path: '/invoice-discounting', label: 'Invoice Discounting', icon: InvoiceIcon },
+      { path: '/payments/cart', label: 'Payment cart', icon: CartIcon, badgeKey: 'cart' as const },
       { path: '/my-loans', label: 'My Loans', icon: ListIcon },
     ],
   },
@@ -33,6 +35,21 @@ function navLinkClass(isActive: boolean) {
 export default function BorrowerLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const borrowerId = useMemo(() => {
+    if ((user?.linkedEntityType ?? '').trim().toUpperCase() !== 'BORROWER') return '';
+    return (user?.linkedEntityId ?? '').trim();
+  }, [user?.linkedEntityType, user?.linkedEntityId]);
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    if (!borrowerId) return;
+    const refresh = () => {
+      paymentCartApi.count(borrowerId).then((res) => setCartCount(res.data?.data ?? 0)).catch(() => setCartCount(0));
+    };
+    refresh();
+    window.addEventListener('plp-payment-cart-changed', refresh);
+    return () => window.removeEventListener('plp-payment-cart-changed', refresh);
+  }, [borrowerId]);
 
   return (
     <div className="min-h-screen bt-app-canvas flex flex-col">
@@ -49,7 +66,12 @@ export default function BorrowerLayout() {
                   return (
                     <Link key={item.path} to={item.path} className={navLinkClass(isActive)}>
                       <item.icon active={isActive} />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {'badgeKey' in item && item.badgeKey === 'cart' && cartCount > 0 ? (
+                        <span className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--bt-orange)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {cartCount}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
@@ -113,6 +135,13 @@ function InvoiceIcon({ active }: { active: boolean }) {
   return (
     <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+function CartIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25h9.75m-9.75 0L5.106 5.272M7.5 14.25 5.106 5.272m0 0H3.375m2.731 0h13.11c.552 0 1.02.402 1.106.94l1.149 6.598a1.125 1.125 0 01-1.106 1.315H6.622m0 0a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5zm9 0a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
     </svg>
   );
 }

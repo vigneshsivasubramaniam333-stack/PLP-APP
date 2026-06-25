@@ -87,3 +87,14 @@ plp:
       read-timeout-ms: ${ENCORE_READ_TIMEOUT:30000}
       max-retries-for-get: ${ENCORE_GET_RETRIES:2}
       retry-backoff-ms: ${ENCORE_RETRY_BACKOFF_MS:500}
+
+  payu:
+    merchant-key: ${PAYU_MERCHANT_KEY:g8yc8J}
+    merchant-salt: ${PAYU_MERCHANT_SALT:BBc2U41mOZPLuteAYBW9wJ2Lnm9V9rQV}
+    gateway-url: ${PAYU_GATEWAY_URL:https://test.payu.in/_payment}
+    verify-command: ${PAYU_VERIFY_COMMAND:verify_payment}
+    post-service-url: ${PAYU_POST_SERVICE_URL:}
+    transaction-id-suffix: ${PAYU_TXN_SUFFIX:PLP}
+    callback-base-url: ${PLP_PUBLIC_API_BASE_URL:http://localhost:8180}
+    plp-borrower-ui-url: ${PLP_BORROWER_UI_URL:http://localhost:5174/plp-borrower}
+    los-borrower-ui-url: ${LOS_BORROWER_UI_URL:http://localhost:5173/los/borrower}

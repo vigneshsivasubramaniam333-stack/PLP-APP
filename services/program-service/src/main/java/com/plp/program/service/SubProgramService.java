@@ -1,5 +1,6 @@
 package com.plp.program.service;
 
+import com.plp.program.model.enums.PaymentMethodMode;
 import com.plp.program.model.enums.ProductType;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Program;
@@ -223,8 +224,14 @@ public class SubProgramService {
         if (dto.getPaymentMethod() != null) {
             membership.setPaymentMethod(dto.getPaymentMethod());
         }
+        if (dto.getPaymentMethodMode() != null && !dto.getPaymentMethodMode().isBlank()) {
+            membership.setPaymentMethodMode(parsePaymentMethodMode(dto.getPaymentMethodMode()));
+        }
         if (dto.getOverdueInterestRate() != null) {
             membership.setOverdueInterestRate(dto.getOverdueInterestRate());
+        }
+        if (dto.getPartyCode() != null) {
+            membership.setPartyCode(dto.getPartyCode().isBlank() ? null : dto.getPartyCode().trim());
         }
 
         SubProgramBorrowerTermsValidator.validateAndApplyDefaults(membership, subProgram);
@@ -272,6 +279,15 @@ public class SubProgramService {
 
     private static String normalizeToken(String s) {
         return s == null ? "" : s.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static PaymentMethodMode parsePaymentMethodMode(String raw) {
+        String value = raw.trim().toUpperCase(Locale.ROOT);
+        try {
+            return PaymentMethodMode.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("paymentMethodMode must be GLOBAL or CUSTOM");
+        }
     }
 
     private void validateSubProgramForProgram(Program program, SubProgram subProgram) {

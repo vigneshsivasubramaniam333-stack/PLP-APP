@@ -1,5 +1,10 @@
 export * from './api/client';
 export { extractApiErrorMessage } from './api/extractApiErrorMessage';
+export {
+  fetchDigitalInvoiceFile,
+  openDigitalInvoiceDownload,
+  type DigitalInvoiceFile,
+} from './api/digitalInvoice';
 export * from './api/devReset';
 export * from './auth/lenderLoanHeaders';
 export * from './types';
@@ -44,6 +49,7 @@ export { fetchLoanPayoff, fetchLoanPayoffs, repaymentProgress } from './utils/lo
 export type { LoanPayoffInfo } from './utils/loanPayoff';
 export { loanPrincipalAmount, loanHasLmsAccount } from './utils/loanDisplay';
 export { InvoiceListToolbar } from './components/InvoiceListToolbar';
+export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment';
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';
 export { ProgramConfigDetailsPanel } from './components/ProgramConfigDetailsPanel';
 export {

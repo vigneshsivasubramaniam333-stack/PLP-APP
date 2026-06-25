@@ -5,11 +5,25 @@ import {
   subProgramApi,
   anchorApi,
   authApi,
+  repaymentDefaultsApi,
   extractApiErrorMessage,
   getStoredAuthUser,
   lenderLoanCapabilities,
 } from '@plp/shared';
-import type { Borrower, Program, SubProgram, Anchor } from '@plp/shared';
+import type { Borrower, Program, SubProgram, Anchor, ProductRepaymentDefault } from '@plp/shared';
+
+function formatRepaymentMechanism(value: string | null | undefined): string {
+  switch (value) {
+    case 'PAYU_PG':
+      return 'PayU (Payment Gateway)';
+    case 'API_PG':
+      return 'API-based PG';
+    case 'SMART_COLLECT':
+      return 'Smart Collect';
+    default:
+      return value?.replace(/_/g, ' ') ?? '—';
+  }
+}
 
 const inputCls =
   'w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none';
@@ -25,6 +39,7 @@ export default function BorrowersPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const [subPrograms, setSubPrograms] = useState<SubProgram[]>([]);
+  const [repaymentDefaults, setRepaymentDefaults] = useState<ProductRepaymentDefault[]>([]);
   const [loading, setLoading] = useState(true);
   const [mainTab, setMainTab] = useState<MainTab>('list');
 
@@ -49,6 +64,7 @@ export default function BorrowersPage() {
     discountMarginPercent: '',
     creditPeriodDays: '',
     discountHold: 'NO',
+    paymentMethodMode: 'CUSTOM',
     paymentMethod: 'SMART_COLLECT',
     overdueInterestRate: '0',
   });
@@ -82,6 +98,14 @@ export default function BorrowersPage() {
       });
   }, [subPrograms, programs, anchors]);
 
+  const linkGlobalRepayment = useMemo(() => {
+    const sp = subPrograms.find((s) => s.id === linkForm.subProgramId);
+    const program = sp ? programs.find((p) => p.id === sp.programId) : null;
+    if (!program?.productType) return undefined;
+    const row = repaymentDefaults.find((r) => r.productType === program.productType);
+    return row?.enabled === false ? 'SMART_COLLECT' : row?.repaymentMechanism;
+  }, [linkForm.subProgramId, subPrograms, programs, repaymentDefaults]);
+
   const loadBorrowers = () => {
     borrowerApi
       .list()
@@ -95,6 +119,7 @@ export default function BorrowersPage() {
       programApi.list().then((res) => setPrograms(res.data.data || [])),
       subProgramApi.list().then((res) => setSubPrograms(res.data.data || [])),
       anchorApi.list().then((res) => setAnchors(res.data.data || [])),
+      repaymentDefaultsApi.list().then((res) => setRepaymentDefaults(res.data?.data ?? [])).catch(() => []),
     ])
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -241,6 +266,7 @@ export default function BorrowersPage() {
       }
       if (linkForm.creditPeriodDays.trim()) payload.creditPeriodDays = parseInt(linkForm.creditPeriodDays, 10);
       payload.discountHold = linkForm.discountHold;
+      payload.paymentMethodMode = linkForm.paymentMethodMode;
       payload.paymentMethod = linkForm.paymentMethod;
       if (linkForm.overdueInterestRate.trim()) {
         payload.overdueInterestRate = parseFloat(linkForm.overdueInterestRate);
@@ -254,6 +280,7 @@ export default function BorrowersPage() {
         discountMarginPercent: '',
         creditPeriodDays: '',
         discountHold: 'NO',
+        paymentMethodMode: 'CUSTOM',
         paymentMethod: 'SMART_COLLECT',
         overdueInterestRate: '0',
       });
@@ -470,6 +497,43 @@ export default function BorrowersPage() {
                 <input type="number" min={0} value={linkForm.creditPeriodDays}
                   onChange={(e) => setLinkForm({ ...linkForm, creditPeriodDays: e.target.value })} className={inputCls} placeholder="Inherit" />
               </div>
+              <div className="col-span-full sm:col-span-2">
+                <label className={labelCls}>Repayment method</label>
+                <div className="mt-2 flex flex-col gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={linkForm.paymentMethodMode === 'GLOBAL'}
+                      onChange={() => setLinkForm({ ...linkForm, paymentMethodMode: 'GLOBAL' })}
+                    />
+                    Use platform default
+                    {linkGlobalRepayment ? (
+                      <span className="text-slate-500">({formatRepaymentMechanism(linkGlobalRepayment)})</span>
+                    ) : null}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={linkForm.paymentMethodMode === 'CUSTOM'}
+                      onChange={() => setLinkForm({ ...linkForm, paymentMethodMode: 'CUSTOM' })}
+                    />
+                    Custom for this borrower
+                  </label>
+                </div>
+              </div>
+              {linkForm.paymentMethodMode === 'CUSTOM' ? (
+                <div>
+                  <label className={labelCls}>Custom payment method</label>
+                  <select
+                    value={linkForm.paymentMethod}
+                    onChange={(e) => setLinkForm({ ...linkForm, paymentMethod: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="SMART_COLLECT">Smart Collect</option>
+                    <option value="PAYU_PG">PayU (Payment Gateway)</option>
+                  </select>
+                </div>
+              ) : null}
             </div>
             {errorLink && (
               <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorLink}</div>

@@ -5,8 +5,7 @@ import {
   portalApi,
   subProgramApi,
   useAuth,
-  openDigitalInvoiceDownload,
-  notifyError,
+  DigitalInvoiceAttachment,
   BtPageHeader,
   BtCard,
   BtCardHeader,
@@ -37,7 +36,7 @@ export default function InvoicesPage() {
   const [selectedSubProgramId, setSelectedSubProgramId] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
-  const [listFilters, setListFilters] = useState({ search: '', status: '', page: 0, size: 20 });
+  const [listFilters, setListFilters] = useState({ search: '', status: '', lifecycle: 'active' as const, page: 0, size: 20 });
   const [loading, setLoading] = useState(false);
 
   const idSubPrograms = useMemo(() => {
@@ -64,6 +63,7 @@ export default function InvoicesPage() {
         programId: umbrellaProgramId || undefined,
         search: listFilters.search || undefined,
         status: listFilters.status || undefined,
+        lifecycle: listFilters.lifecycle,
         page: listFilters.page,
         size: listFilters.size,
       })
@@ -177,7 +177,7 @@ export default function InvoicesPage() {
                   <th className="min-w-[120px]">Dates</th>
                   <th className="text-right whitespace-nowrap">Amount</th>
                   <th className="text-right whitespace-nowrap">Net</th>
-                  <th className="min-w-[100px]">Digital</th>
+                  <th className="min-w-[100px] text-center">Copy</th>
                   <th className="text-center whitespace-nowrap">Status</th>
                   <th className="text-center whitespace-nowrap">Actions</th>
                 </tr>
@@ -210,22 +210,8 @@ export default function InvoicesPage() {
                         </td>
                         <td className="text-right tabular-nums whitespace-nowrap text-[var(--bt-gray-700)]">{formatInvoiceCurrency(inv.invoiceAmount)}</td>
                         <td className="text-right tabular-nums whitespace-nowrap font-medium text-[var(--bt-gray-900)]">{formatInvoiceCurrency(inv.netAmount)}</td>
-                        <td className="text-xs text-[var(--bt-gray-600)]">
-                          {inv.digitalInvoiceFileName ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void openDigitalInvoiceDownload(inv.id).catch((e: unknown) => {
-                                  notifyError(e, 'Could not open digital invoice');
-                                });
-                              }}
-                              className="text-left text-xs font-semibold text-[var(--bt-orange)] hover:underline"
-                            >
-                              View / Download
-                            </button>
-                          ) : (
-                            <span className="text-[var(--bt-gray-400)]">—</span>
-                          )}
+                        <td className="text-center whitespace-nowrap">
+                          <DigitalInvoiceAttachment invoiceId={inv.id} fileName={inv.digitalInvoiceFileName} />
                         </td>
                         <td className="text-center whitespace-nowrap">
                           <BtBadge tone="gray">{inv.status}</BtBadge>

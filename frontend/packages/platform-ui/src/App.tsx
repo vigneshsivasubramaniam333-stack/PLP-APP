@@ -6,14 +6,18 @@ import DashboardPage from './pages/DashboardPage';
 import ProgramsPage from './pages/ProgramsPage';
 import AnchorsPage from './pages/AnchorsPage';
 import LoansPage from './pages/LoansPage';
+import InvoicesPage from './pages/InvoicesPage';
 import ReportsPage from './pages/ReportsPage';
 import AuditTrailPage from './pages/AuditTrailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SubProgramsPage from './pages/SubProgramsPage';
 import BorrowersPage from './pages/BorrowersPage';
 import UsersPage from './pages/UsersPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import DesignPreviewPage from './pages/DesignPreviewPage';
 import MakerCheckerPage, { canViewWorkbench } from './pages/MakerCheckerPage';
+import PgSettlementsPage from './pages/PgSettlementsPage';
+import RepaymentDefaultsPage from './pages/RepaymentDefaultsPage';
 
 const LENDER_PORTAL_ROLES = new Set([
   'PLATFORM_ADMIN',
@@ -56,7 +60,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!isLenderPortalRole(user?.role)) return <UnauthorizedPortalAccess />;
+  if (user?.passwordResetRequired) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
+}
+
+function ChangePasswordRoute() {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isLenderPortalRole(user?.role)) return <UnauthorizedPortalAccess />;
+  if (!user?.passwordResetRequired) return <Navigate to="/" replace />;
+  return <ChangePasswordPage />;
 }
 
 function WorkbenchRoute() {
@@ -69,6 +82,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/change-password" element={<ChangePasswordRoute />} />
       <Route
         path="/"
         element={
@@ -84,6 +98,9 @@ export default function App() {
         <Route path="borrowers" element={<BorrowersPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="loans" element={<LoansPage />} />
+        <Route path="invoices" element={<InvoicesPage />} />
+        <Route path="repayment-defaults" element={<RepaymentDefaultsPage />} />
+        <Route path="pg-settlements" element={<PgSettlementsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="workbench" element={<WorkbenchRoute />} />
         <Route path="audit" element={<AuditTrailPage />} />

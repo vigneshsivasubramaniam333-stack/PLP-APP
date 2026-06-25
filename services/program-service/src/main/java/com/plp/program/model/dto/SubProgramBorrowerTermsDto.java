@@ -13,5 +13,7 @@ public class SubProgramBorrowerTermsDto {
     private Integer creditPeriodDays;
     private String discountHold;
     private String paymentMethod;
+    private String paymentMethodMode;
     private BigDecimal overdueInterestRate;
+    private String partyCode;
 }

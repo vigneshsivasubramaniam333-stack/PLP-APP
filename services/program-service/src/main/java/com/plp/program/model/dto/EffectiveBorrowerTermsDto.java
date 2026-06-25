@@ -19,6 +19,7 @@ public class EffectiveBorrowerTermsDto {
     private Integer creditPeriodDays;
     private String discountHold;
     private String paymentMethod;
+    private String paymentMethodMode;
     private BigDecimal overdueInterestRate;
 
     private BigDecimal borrowerLimit;

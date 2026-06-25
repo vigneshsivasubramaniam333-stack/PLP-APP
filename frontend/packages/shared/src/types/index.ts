@@ -152,7 +152,18 @@ export interface SubProgramBorrower {
   creditPeriodDays?: number | null;
   discountHold?: 'YES' | 'NO' | string | null;
   paymentMethod?: string | null;
+  paymentMethodMode?: 'GLOBAL' | 'CUSTOM' | string | null;
   overdueInterestRate?: number | null;
+  partyCode?: string | null;
+}
+
+export interface ProductRepaymentDefault {
+  productType: ProductType;
+  repaymentMechanism: string;
+  pgProviderCode?: string | null;
+  enabled: boolean;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
 }
 
 export interface Anchor {
@@ -301,6 +312,9 @@ export interface Invoice {
   digitalInvoiceFileName?: string | null;
   digitalInvoiceContentType?: string | null;
   digitalInvoiceUploadedAt?: string | null;
+  /** Payment in progress (PRUS) after PayU success, pending admin settlement */
+  pipAmount?: number;
+  pipDiscountAmount?: number;
 }
 
 export interface InvoicePageMeta {

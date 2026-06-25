@@ -182,6 +182,12 @@ services:
       ENCORE_ADMIN_BRANCH: ${ENCORE_ADMIN_BRANCH:-MGPP}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_lending
       PLP_DEV_RESET_ENABLED: ${PLP_DEV_RESET_ENABLED:-true}
+      PAYU_MERCHANT_KEY: ${PAYU_MERCHANT_KEY:-g8yc8J}
+      PAYU_MERCHANT_SALT: ${PAYU_MERCHANT_SALT:-BBc2U41mOZPLuteAYBW9wJ2Lnm9V9rQV}
+      PAYU_GATEWAY_URL: ${PAYU_GATEWAY_URL:-https://test.payu.in/_payment}
+      PLP_PUBLIC_API_BASE_URL: ${PLP_PUBLIC_API_BASE_URL:-http://localhost:8180}
+      PLP_BORROWER_UI_URL: ${PLP_BORROWER_UI_URL:-http://localhost:3012/plp-borrower}
+      LOS_BORROWER_UI_URL: ${LOS_BORROWER_UI_URL:-http://localhost:5173/los/borrower}
     depends_on:
       postgres:
         condition: service_healthy
