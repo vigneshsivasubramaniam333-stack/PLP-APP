@@ -13,7 +13,7 @@ import {
   BtBadge,
   InvoiceListToolbar,
 } from '@plp/shared';
-import type { Program, Invoice, SubProgram, InvoicePageMeta } from '@plp/shared';
+import type { Program, Invoice, SubProgram, InvoiceListFilters, InvoicePageMeta } from '@plp/shared';
 import {
   anchorIdFromUser,
   isInvoiceDiscountingSubProgram,
@@ -36,7 +36,13 @@ export default function InvoicesPage() {
   const [selectedSubProgramId, setSelectedSubProgramId] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
-  const [listFilters, setListFilters] = useState({ search: '', status: '', lifecycle: 'active' as const, page: 0, size: 20 });
+  const [listFilters, setListFilters] = useState<InvoiceListFilters>({
+    search: '',
+    status: '',
+    lifecycle: 'active',
+    page: 0,
+    size: 20,
+  });
   const [loading, setLoading] = useState(false);
 
   const idSubPrograms = useMemo(() => {

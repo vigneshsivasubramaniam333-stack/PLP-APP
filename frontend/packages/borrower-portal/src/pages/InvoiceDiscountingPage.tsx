@@ -12,7 +12,7 @@ import {
   notifySuccess,
   InvoiceListToolbar,
 } from '@plp/shared';
-import type { Invoice, InvoicePageMeta, Loan } from '@plp/shared';
+import type { Invoice, InvoiceListFilters, InvoicePageMeta, Loan } from '@plp/shared';
 import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
 import { InvoiceActionsMenu, type InvoiceActionItem } from '../components/InvoiceActionsMenu';
 
@@ -54,7 +54,13 @@ export default function InvoiceDiscountingPage() {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
-  const [listFilters, setListFilters] = useState({ search: '', status: '', lifecycle: 'active' as const, page: 0, size: 20 });
+  const [listFilters, setListFilters] = useState<InvoiceListFilters>({
+    search: '',
+    status: '',
+    lifecycle: 'active',
+    page: 0,
+    size: 20,
+  });
   const [loansByInvoice, setLoansByInvoice] = useState<Record<string, Loan[]>>({});
   const [loading, setLoading] = useState(true);
   const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);

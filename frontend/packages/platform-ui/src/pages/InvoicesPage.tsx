@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { invoiceApi, notifyError, InvoiceListToolbar } from '@plp/shared';
-import type { Invoice, InvoicePageMeta } from '@plp/shared';
+import type { Invoice, InvoiceListFilters, InvoicePageMeta } from '@plp/shared';
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pageMeta, setPageMeta] = useState<InvoicePageMeta | null>(null);
-  const [listFilters, setListFilters] = useState({
+  const [listFilters, setListFilters] = useState<InvoiceListFilters>({
     search: '',
     status: '',
-    lifecycle: 'active' as const,
+    lifecycle: 'active',
     page: 0,
     size: 20,
   });
