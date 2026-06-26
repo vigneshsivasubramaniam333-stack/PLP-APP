@@ -53,6 +53,19 @@ export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment'
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';
 export { ProgramConfigDetailsPanel } from './components/ProgramConfigDetailsPanel';
 export {
+  FLOW_PURCHASE_BILL_DISCOUNTING,
+  FLOW_SALES_BILL_DISCOUNTING,
+  FLOW_PURCHASE_ORDER_DISCOUNTING,
+  isPurchaseBillFlow,
+  isSalesBillFlow,
+  isPurchaseOrderFlow,
+  isSellerInitiatedFlow,
+  flowTypeLabel,
+  canBorrowerAcceptInvoice,
+  canBorrowerRequestFinance,
+} from './utils/invoiceFlowTypes';
+export type { InvoiceDiscountingFlowType } from './utils/invoiceFlowTypes';
+export {
   buildProgramConfigurationRows,
   buildSubProgramConfigurationRows,
   buildBorrowerTermsRows,

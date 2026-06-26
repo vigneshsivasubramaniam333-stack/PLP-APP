@@ -8,14 +8,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/integrations/los")
@@ -37,6 +40,16 @@ public class LosIamIntegrationController {
         LosProvisionUserResponse data = losIamIntegrationService.provisionUser(request);
         return ResponseEntity.status(data.isCreated() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @DeleteMapping("/users/by-linked-entity")
+    public ResponseEntity<Map<String, Object>> deleteUsersByLinkedEntity(
+            @RequestHeader(value = INTEGRATION_API_KEY_HEADER, required = false) String apiKey,
+            @RequestParam String linkedEntityType,
+            @RequestParam UUID linkedEntityId) {
+        assertIntegrationKey(apiKey);
+        boolean deleted = losIamIntegrationService.deleteUsersByLinkedEntity(linkedEntityType, linkedEntityId);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", Map.of("deleted", deleted)));
     }
 
     private void assertIntegrationKey(String apiKey) {

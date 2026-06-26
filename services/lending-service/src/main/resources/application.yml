@@ -98,3 +98,7 @@ plp:
     callback-base-url: ${PLP_PUBLIC_API_BASE_URL:http://localhost:8180}
     plp-borrower-ui-url: ${PLP_BORROWER_UI_URL:http://localhost:5174/plp-borrower}
     los-borrower-ui-url: ${LOS_BORROWER_UI_URL:http://localhost:5173/los/borrower}
+
+  notification:
+    borrower-portal-url: ${PLP_BORROWER_UI_URL:http://localhost:5174/plp-borrower}
+    invoice-due-reminder-cron: ${INVOICE_DUE_REMINDER_CRON:0 0 8 * * *}

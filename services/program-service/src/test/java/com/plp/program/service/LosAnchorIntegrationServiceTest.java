@@ -113,7 +113,7 @@ class LosAnchorIntegrationServiceTest {
         Anchor captured = captor.getValue();
         assertThat(captured.getAnchorCode()).isEqualTo("CROMPTON");
         assertThat(captured.getEntityType()).isEqualTo("CORPORATE");
-        assertThat(captured.getStatus()).isEqualTo(AnchorStatus.DRAFT);
+        assertThat(captured.getStatus()).isEqualTo(AnchorStatus.ACTIVE);
         assertThat(captured.getContactEmail()).isEqualTo("finance@crompton.co.in");
         assertThat(captured.getContactPhone()).isEqualTo("9876543210");
         assertThat(captured.getAddress()).containsEntry("text", "Mumbai, Maharashtra");

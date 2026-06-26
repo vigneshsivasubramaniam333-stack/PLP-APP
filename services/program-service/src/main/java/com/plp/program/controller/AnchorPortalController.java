@@ -205,6 +205,8 @@ public class AnchorPortalController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String lifecycle,
+            @RequestParam(required = false) String flowType,
+            @RequestParam(required = false) String tab,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestHeader(value = "X-Linked-Entity-Type", required = false) String linkedEntityType,
@@ -215,13 +217,15 @@ public class AnchorPortalController {
             requireProgramBelongsToAnchor(programId, resolvedAnchorId);
         }
         if (page != null || size != null || (search != null && !search.isBlank()) || (status != null && !status.isBlank())
-                || (lifecycle != null && !lifecycle.isBlank())) {
+                || (lifecycle != null && !lifecycle.isBlank()) || flowType != null || tab != null) {
             Map<String, Object> paged = invoiceService.listAnchorInvoicesPaged(
                     resolvedAnchorId,
                     programId,
                     search,
                     status,
                     lifecycle,
+                    flowType,
+                    tab,
                     page != null ? page : 0,
                     size != null ? size : 20);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
@@ -360,5 +364,37 @@ public class AnchorPortalController {
         AnchorPortalInvoiceAuth.rejectCheckerConfirmingOwnUpload(roles, userId, pending.getUploadedByUserId());
         Invoice confirmed = invoiceService.confirmInvoice(id);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", confirmed));
+    }
+
+    @PostMapping("/invoices/{id}/approve")
+    public ResponseEntity<Map<String, Object>> approveSellerInvoice(
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @RequestHeader(value = "X-Linked-Entity-Type", required = false) String linkedEntityType,
+            @RequestHeader(value = "X-Linked-Entity-Id", required = false) String linkedEntityId,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        AnchorPortalInvoiceAuth.requireInvoiceConfirmRole(roles);
+        UUID resolvedAnchorId = requireAnchorFromHeaders(linkedEntityType, linkedEntityId, null, userId);
+        Invoice pending = invoiceService.getInvoice(id);
+        requireInvoiceTenant(pending.getAnchorId(), resolvedAnchorId);
+        Invoice approved = invoiceService.anchorApproveSellerInvoice(id, resolvedAnchorId);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", approved));
+    }
+
+    @PostMapping("/invoices/{id}/reject")
+    public ResponseEntity<Map<String, Object>> rejectSellerInvoice(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, Object> body,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles,
+            @RequestHeader(value = "X-Linked-Entity-Type", required = false) String linkedEntityType,
+            @RequestHeader(value = "X-Linked-Entity-Id", required = false) String linkedEntityId,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        AnchorPortalInvoiceAuth.requireInvoiceConfirmRole(roles);
+        UUID resolvedAnchorId = requireAnchorFromHeaders(linkedEntityType, linkedEntityId, null, userId);
+        Invoice pending = invoiceService.getInvoice(id);
+        requireInvoiceTenant(pending.getAnchorId(), resolvedAnchorId);
+        String reason = body != null && body.get("reason") != null ? body.get("reason").toString() : null;
+        Invoice rejected = invoiceService.anchorRejectSellerInvoice(id, resolvedAnchorId, reason);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", rejected));
     }
 }

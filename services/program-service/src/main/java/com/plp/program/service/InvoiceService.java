@@ -6,6 +6,7 @@ import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.entity.Program;
 import com.plp.program.model.entity.SubProgram;
+import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.enums.InvoiceStatus;
 import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.repository.BorrowerRepository;
@@ -77,20 +78,41 @@ public class InvoiceService {
             DateTimeFormatter.ofPattern("MM/dd/yyyy"),
             DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH));
 
-    private static final String FLOW_PURCHASE_BILL_DISCOUNTING = "PURCHASE_BILL_DISCOUNTING";
-    private static final String FLOW_SALES_BILL_DISCOUNTING = "SALES_BILL_DISCOUNTING";
+    private static final String FLOW_PURCHASE_BILL_DISCOUNTING = InvoiceDiscountingFlowType.PURCHASE_BILL_DISCOUNTING;
+    private static final String FLOW_SALES_BILL_DISCOUNTING = InvoiceDiscountingFlowType.SALES_BILL_DISCOUNTING;
 
     @Transactional
     public Invoice createInvoice(Invoice invoice) {
-        return createInvoice(invoice, null);
+        return createInvoice(invoice, null, true);
     }
 
     @Transactional
     public Invoice createInvoice(Invoice invoice, UUID uploadedByUserId) {
+        return createInvoice(invoice, uploadedByUserId, true);
+    }
+
+    @Transactional
+    public Invoice createBorrowerInvoice(Invoice invoice, UUID uploadedByUserId) {
+        return createInvoice(invoice, uploadedByUserId, false);
+    }
+
+    private Invoice createInvoice(Invoice invoice, UUID uploadedByUserId, boolean anchorInitiated) {
         validateInvoice(invoice);
         applySubProgramLinkForCreate(invoice);
         if (invoice.getSubProgramId() == null) {
             applyFlowTypeDefaultOrValidate(invoice);
+        }
+        String flow = invoice.getFlowType();
+        if (anchorInitiated) {
+            if (InvoiceDiscountingFlowType.isSellerInitiated(flow)) {
+                throw new RuntimeException("Anchor cannot create invoices for seller-initiated flow types");
+            }
+        } else {
+            if (!InvoiceDiscountingFlowType.isSellerInitiated(flow)) {
+                throw new RuntimeException(
+                        "Borrower invoice create is only allowed for SALES_BILL_DISCOUNTING or "
+                                + "PURCHASE_ORDER_DISCOUNTING");
+            }
         }
         computeEligibleAmount(invoice);
         enforceGapBetweenPreviousInvoices(invoice);
@@ -256,12 +278,16 @@ public class InvoiceService {
                 final String resolvedFlowType;
                 final UUID invoiceSubProgramId;
                 if (linkedSub != null) {
+                    if (InvoiceDiscountingFlowType.isSellerInitiated(linkedSub.getFlowType())) {
+                        skipCsvRow(rowNum, "anchor CSV upload supports PURCHASE_BILL_DISCOUNTING only", errors);
+                        continue;
+                    }
                     resolvedFlowType = linkedSub.getFlowType();
                     invoiceSubProgramId = linkedSub.getId();
                 } else {
                     String rft = resolveFlowTypeForCsv(flowRaw, rowNum);
                     if (rft == null) {
-                        skipCsvRow(rowNum, "invalid flowType (use PURCHASE_BILL_DISCOUNTING or SALES_BILL_DISCOUNTING)", errors);
+                        skipCsvRow(rowNum, "invalid flowType (use PURCHASE_BILL_DISCOUNTING only for anchor CSV)", errors);
                         continue;
                     }
                     resolvedFlowType = rft;
@@ -308,6 +334,7 @@ public class InvoiceService {
     @Transactional
     public Invoice verifyInvoice(UUID invoiceId, UUID verifiedBy) {
         Invoice invoice = getInvoice(invoiceId);
+        requirePurchaseBillFlow(invoice, "verify");
         invoice.setVerified(true);
         invoice.setVerifiedAt(Instant.now());
         invoice.setVerifiedBy(verifiedBy);
@@ -320,6 +347,7 @@ public class InvoiceService {
     @Transactional
     public Invoice confirmInvoice(UUID invoiceId) {
         Invoice invoice = getInvoice(invoiceId);
+        requirePurchaseBillFlow(invoice, "confirm");
         if (!"VERIFIED".equals(invoice.getStatus())) {
             throw new RuntimeException(
                     "Invoice must be in VERIFIED state before anchor confirmation. Current status: " + invoice.getStatus());
@@ -332,14 +360,15 @@ public class InvoiceService {
     }
 
     private Invoice applyPostEligibleAutomation(Invoice invoice) {
+        if (InvoiceDiscountingFlowType.isSellerInitiated(invoice.getFlowType())) {
+            return invoice;
+        }
         Map<String, Object> params = programService.getProgramParameters(invoice.getProgramId());
         if (ProgramParametersValidator.parseYesNo(params.get("autoAcceptInvoices"), false)) {
             String flow = invoice.getFlowType();
-            boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
+            boolean purchaseFlow = InvoiceDiscountingFlowType.isPurchaseBill(flow);
             if (purchaseFlow && "ELIGIBLE".equals(invoice.getStatus())) {
                 invoice = borrowerAcceptInvoice(invoice.getId(), invoice.getBorrowerId());
-            } else if (FLOW_SALES_BILL_DISCOUNTING.equals(flow) && "ELIGIBLE".equals(invoice.getStatus())) {
-                maybeAutoPullFinance(invoice);
             }
         } else if (ProgramParametersValidator.parseYesNo(params.get("autoPullOption"), false)) {
             maybeAutoPullFinance(invoice);
@@ -361,9 +390,8 @@ public class InvoiceService {
             throw new RuntimeException("Invoice does not belong to this borrower");
         }
         String flow = invoice.getFlowType();
-        boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
-        if (!purchaseFlow) {
-            throw new RuntimeException("Borrower acceptance does not apply to SALES_BILL_DISCOUNTING invoices");
+        if (!InvoiceDiscountingFlowType.isPurchaseBill(flow)) {
+            throw new RuntimeException("Borrower acceptance does not apply to seller-initiated flow invoices");
         }
         if (!"ELIGIBLE".equals(invoice.getStatus()) && !InvoiceStatus.REJECTED.name().equals(invoice.getStatus())) {
             throw new RuntimeException(
@@ -379,6 +407,48 @@ public class InvoiceService {
     }
 
     /**
+     * Seller-initiated (SBD/PO): anchor approves borrower-uploaded invoice pending review.
+     */
+    @Transactional
+    public Invoice anchorApproveSellerInvoice(UUID invoiceId, UUID anchorId) {
+        Invoice invoice = getInvoice(invoiceId);
+        if (!invoice.getAnchorId().equals(anchorId)) {
+            throw new RuntimeException("Invoice does not belong to this anchor");
+        }
+        requireSellerInitiatedFlow(invoice, "approve");
+        if (!"UPLOADED".equals(invoice.getStatus())) {
+            throw new RuntimeException(
+                    "Anchor approval allowed only when invoice status is UPLOADED. Current: " + invoice.getStatus());
+        }
+        invoice.setVerified(true);
+        invoice.setVerifiedAt(Instant.now());
+        invoice.setAnchorConfirmed(true);
+        invoice.setAnchorConfirmedAt(Instant.now());
+        invoice.setStatus("ELIGIBLE");
+        return invoiceRepository.save(invoice);
+    }
+
+    /**
+     * Seller-initiated (SBD/PO): anchor rejects borrower-uploaded invoice.
+     */
+    @Transactional
+    public Invoice anchorRejectSellerInvoice(UUID invoiceId, UUID anchorId, String reason) {
+        Invoice invoice = getInvoice(invoiceId);
+        if (!invoice.getAnchorId().equals(anchorId)) {
+            throw new RuntimeException("Invoice does not belong to this anchor");
+        }
+        requireSellerInitiatedFlow(invoice, "reject");
+        if (!"UPLOADED".equals(invoice.getStatus())) {
+            throw new RuntimeException(
+                    "Anchor rejection allowed only when invoice status is UPLOADED. Current: " + invoice.getStatus());
+        }
+        invoice.setStatus(InvoiceStatus.REJECTED.name());
+        invoice.setRejectionReason(reason);
+        invoice.setRejectedAt(Instant.now());
+        return invoiceRepository.save(invoice);
+    }
+
+    /**
      * Lending-service calls this before persisting an invoice-discounting loan row so invoice and loan states stay aligned.
      */
     @Transactional
@@ -390,12 +460,10 @@ public class InvoiceService {
             throw new RuntimeException("Financing already requested for this invoice");
         }
         String flow = invoice.getFlowType();
-        boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
-        boolean salesFlow = FLOW_SALES_BILL_DISCOUNTING.equals(flow);
         boolean ok;
-        if (purchaseFlow) {
+        if (InvoiceDiscountingFlowType.isPurchaseBill(flow)) {
             ok = "BORROWER_ACCEPTED".equals(current) || "PARTIALLY_DISCOUNTED".equals(current);
-        } else if (salesFlow) {
+        } else if (InvoiceDiscountingFlowType.isSellerInitiated(flow)) {
             ok = "ELIGIBLE".equals(current) || "PARTIALLY_DISCOUNTED".equals(current);
         } else {
             ok = false;
@@ -462,12 +530,12 @@ public class InvoiceService {
         }
         String flow = invoice.getFlowType();
         boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
-        boolean salesFlow = FLOW_SALES_BILL_DISCOUNTING.equals(flow);
+        boolean sellerInitiated = !purchaseFlow;
         BigDecimal disc = invoice.getDiscountedAmount() != null ? invoice.getDiscountedAmount() : BigDecimal.ZERO;
         boolean partial = disc.compareTo(BigDecimal.ZERO) > 0;
         if (purchaseFlow) {
             invoice.setStatus(partial ? "PARTIALLY_DISCOUNTED" : "BORROWER_ACCEPTED");
-        } else if (salesFlow) {
+        } else if (sellerInitiated) {
             invoice.setStatus(partial ? "PARTIALLY_DISCOUNTED" : "ELIGIBLE");
         } else {
             throw new RuntimeException("Cannot revert FINANCING_REQUESTED for flowType: " + flow);
@@ -705,29 +773,70 @@ public class InvoiceService {
     }
 
     public Map<String, Object> listBorrowerInvoicesPaged(
+            UUID borrowerId,
+            String search,
+            String status,
+            String lifecycle,
+            String flowType,
+            String tab,
+            int page,
+            int size) {
+        return paginateInvoices(getByBorrower(borrowerId), search, status, lifecycle, flowType, tab, page, size);
+    }
+
+    public Map<String, Object> listAnchorInvoicesPaged(
+            UUID anchorId,
+            UUID programId,
+            String search,
+            String status,
+            String lifecycle,
+            String flowType,
+            String tab,
+            int page,
+            int size) {
+        List<Invoice> base =
+                programId != null ? getByAnchorAndProgram(anchorId, programId) : getByAnchor(anchorId);
+        return paginateInvoices(base, search, status, lifecycle, flowType, tab, page, size);
+    }
+
+    public Map<String, Object> listInvoicesPaged(
+            String search, String status, String lifecycle, String flowType, String tab, int page, int size) {
+        return paginateInvoices(invoiceRepository.findAll(), search, status, lifecycle, flowType, tab, page, size);
+    }
+
+    public Map<String, Object> listBorrowerInvoicesPaged(
             UUID borrowerId, String search, String status, String lifecycle, int page, int size) {
-        return paginateInvoices(getByBorrower(borrowerId), search, status, lifecycle, page, size);
+        return listBorrowerInvoicesPaged(borrowerId, search, status, lifecycle, null, null, page, size);
     }
 
     public Map<String, Object> listAnchorInvoicesPaged(
             UUID anchorId, UUID programId, String search, String status, String lifecycle, int page, int size) {
-        List<Invoice> base =
-                programId != null ? getByAnchorAndProgram(anchorId, programId) : getByAnchor(anchorId);
-        return paginateInvoices(base, search, status, lifecycle, page, size);
+        return listAnchorInvoicesPaged(anchorId, programId, search, status, lifecycle, null, null, page, size);
     }
 
     public Map<String, Object> listInvoicesPaged(String search, String status, String lifecycle, int page, int size) {
-        return paginateInvoices(invoiceRepository.findAll(), search, status, lifecycle, page, size);
+        return listInvoicesPaged(search, status, lifecycle, null, null, page, size);
     }
 
     private Map<String, Object> paginateInvoices(
-            List<Invoice> source, String search, String status, String lifecycle, int page, int size) {
+            List<Invoice> source,
+            String search,
+            String status,
+            String lifecycle,
+            String flowType,
+            String tab,
+            int page,
+            int size) {
         int safeSize = Math.min(Math.max(size, 1), 100);
         int safePage = Math.max(page, 0);
         String q = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
         String st = status == null || status.isBlank() ? null : status.trim().toUpperCase(Locale.ROOT);
+        String flowFilter = normalizeFlowFilter(flowType);
+        String tabFilter = tab == null || tab.isBlank() ? null : tab.trim().toLowerCase(Locale.ROOT);
 
         List<Invoice> filtered = source.stream()
+                .filter(inv -> flowFilter == null || flowFilter.equalsIgnoreCase(String.valueOf(inv.getFlowType())))
+                .filter(inv -> matchesSellerInitiatedTab(inv, tabFilter))
                 .filter(inv -> st == null || st.equalsIgnoreCase(String.valueOf(inv.getStatus())))
                 .filter(inv -> InvoiceLifecycleFilter.matchesLifecycle(inv.getStatus(), lifecycle))
                 .filter(inv -> {
@@ -816,6 +925,12 @@ public class InvoiceService {
         }
         SubProgram sub = subProgramRepository.findById(invoice.getSubProgramId())
                 .orElseThrow(() -> new RuntimeException("Sub program not found: " + invoice.getSubProgramId()));
+        if (invoice.getAnchorId() == null && sub.getAnchorId() != null) {
+            invoice.setAnchorId(sub.getAnchorId());
+        }
+        if (invoice.getProgramId() == null && sub.getProgramId() != null) {
+            invoice.setProgramId(sub.getProgramId());
+        }
         validateInvoiceAgainstSubProgram(sub, invoice.getProgramId(), invoice.getAnchorId(), invoice.getBorrowerId());
         invoice.setFlowType(sub.getFlowType());
     }
@@ -854,12 +969,50 @@ public class InvoiceService {
             return;
         }
         String n = ft.trim().toUpperCase(Locale.ROOT);
-        if (FLOW_PURCHASE_BILL_DISCOUNTING.equals(n) || FLOW_SALES_BILL_DISCOUNTING.equals(n)) {
+        if (FLOW_PURCHASE_BILL_DISCOUNTING.equals(n) || FLOW_SALES_BILL_DISCOUNTING.equals(n)
+                || InvoiceDiscountingFlowType.PURCHASE_ORDER_DISCOUNTING.equals(n)) {
             invoice.setFlowType(n);
             return;
         }
-        throw new RuntimeException("Invalid flowType: " + ft + ". Use " + FLOW_PURCHASE_BILL_DISCOUNTING + " or "
-                + FLOW_SALES_BILL_DISCOUNTING);
+        throw new RuntimeException("Invalid flowType: " + ft + ". Use " + FLOW_PURCHASE_BILL_DISCOUNTING + ", "
+                + FLOW_SALES_BILL_DISCOUNTING + ", or " + InvoiceDiscountingFlowType.PURCHASE_ORDER_DISCOUNTING);
+    }
+
+    private static void requirePurchaseBillFlow(Invoice invoice, String action) {
+        if (!InvoiceDiscountingFlowType.isPurchaseBill(invoice.getFlowType())) {
+            throw new RuntimeException("Invoice " + action + " is only allowed for PURCHASE_BILL_DISCOUNTING invoices");
+        }
+    }
+
+    private static void requireSellerInitiatedFlow(Invoice invoice, String action) {
+        if (!InvoiceDiscountingFlowType.isSellerInitiated(invoice.getFlowType())) {
+            throw new RuntimeException(
+                    "Invoice " + action + " is only allowed for SALES_BILL_DISCOUNTING or PURCHASE_ORDER_DISCOUNTING");
+        }
+    }
+
+    private static String normalizeFlowFilter(String flowType) {
+        if (flowType == null || flowType.isBlank()) {
+            return null;
+        }
+        String n = flowType.trim().toUpperCase(Locale.ROOT);
+        InvoiceDiscountingFlowType.requireKnown(n);
+        return n;
+    }
+
+    private static boolean matchesSellerInitiatedTab(Invoice inv, String tab) {
+        if (tab == null) {
+            return true;
+        }
+        String status = inv.getStatus() == null ? "" : inv.getStatus().toUpperCase(Locale.ROOT);
+        return switch (tab) {
+            case "pending" -> "UPLOADED".equals(status);
+            case "approved" -> !"UPLOADED".equals(status)
+                    && !InvoiceStatus.REJECTED.name().equals(status)
+                    && InvoiceLifecycleFilter.matchesLifecycle(status, "active");
+            case "rejected" -> InvoiceStatus.REJECTED.name().equals(status);
+            default -> true;
+        };
     }
 
     /**
@@ -1027,16 +1180,16 @@ public class InvoiceService {
         return m;
     }
 
-    /** @return resolved canonical flow type, or null if row should be skipped */
+    /** @return resolved canonical flow type, or null if row should be skipped (anchor CSV: PBF only) */
     private static String resolveFlowTypeForCsv(String flowRaw, int rowNum) {
         if (flowRaw == null || flowRaw.isBlank()) {
             return FLOW_PURCHASE_BILL_DISCOUNTING;
         }
         String n = flowRaw.trim().toUpperCase(Locale.ROOT);
-        if (FLOW_PURCHASE_BILL_DISCOUNTING.equals(n) || FLOW_SALES_BILL_DISCOUNTING.equals(n)) {
+        if (FLOW_PURCHASE_BILL_DISCOUNTING.equals(n)) {
             return n;
         }
-        log.warn("Skipping row {}: invalid flowType '{}'", rowNum, flowRaw);
+        log.warn("Skipping row {}: invalid flowType '{}' (anchor CSV allows PURCHASE_BILL_DISCOUNTING only)", rowNum, flowRaw);
         return null;
     }
 

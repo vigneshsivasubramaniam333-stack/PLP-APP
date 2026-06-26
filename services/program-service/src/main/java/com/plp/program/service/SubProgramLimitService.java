@@ -6,8 +6,10 @@ import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.repository.SubProgramRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -39,7 +41,8 @@ public class SubProgramLimitService {
         getSubProgram(subProgramId);
         SubProgramBorrower row = subProgramBorrowerRepository
                 .findBySubProgramIdAndBorrowerId(subProgramId, borrowerId)
-                .orElseThrow(() -> new RuntimeException("Borrower not enrolled in sub program: " + borrowerId));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Borrower not enrolled in sub program: " + borrowerId));
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("subProgramId", subProgramId);
         m.put("borrowerId", borrowerId);

@@ -7,3 +7,12 @@ target/
 .DS_Store
 node_modules/
 .env
+
+# Build output
+dist/
+
+# Runtime upload artifacts (digital invoices, documents)
+uploads/
+
+# Local scratch / temp files
+_login-body.json

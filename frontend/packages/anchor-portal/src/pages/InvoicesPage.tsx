@@ -16,7 +16,7 @@ import {
 import type { Program, Invoice, SubProgram, InvoiceListFilters, InvoicePageMeta } from '@plp/shared';
 import {
   anchorIdFromUser,
-  isInvoiceDiscountingSubProgram,
+  isInvoiceDiscountingSubProgramForFlow,
   isCheckerCannotConfirmOwnUpload,
   CONFIRM_SELF_UPLOAD_TOOLTIP,
   formatInvoiceCurrency,
@@ -46,7 +46,9 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(false);
 
   const idSubPrograms = useMemo(() => {
-    return subPrograms.filter((sp) => isInvoiceDiscountingSubProgram(sp, programs) && sp.status === 'ACTIVE');
+    return subPrograms.filter((sp) =>
+      isInvoiceDiscountingSubProgramForFlow(sp, programs, 'PURCHASE_BILL_DISCOUNTING'),
+    );
   }, [subPrograms, programs]);
 
   const umbrellaProgramId = useMemo(() => {
@@ -70,6 +72,7 @@ export default function InvoicesPage() {
         search: listFilters.search || undefined,
         status: listFilters.status || undefined,
         lifecycle: listFilters.lifecycle,
+        flowType: 'PURCHASE_BILL_DISCOUNTING',
         page: listFilters.page,
         size: listFilters.size,
       })

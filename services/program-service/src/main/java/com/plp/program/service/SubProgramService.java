@@ -1,5 +1,6 @@
 package com.plp.program.service;
 
+import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.enums.PaymentMethodMode;
 import com.plp.program.model.enums.ProductType;
 import com.plp.program.model.entity.Borrower;
@@ -324,17 +325,19 @@ public class SubProgramService {
             }
             return;
         }
-        if (FLOW_SALES_BILL_DISCOUNTING.equals(flowType)) {
+        if (InvoiceDiscountingFlowType.SALES_BILL_DISCOUNTING.equals(flowType)
+                || InvoiceDiscountingFlowType.PURCHASE_ORDER_DISCOUNTING.equals(flowType)) {
             if (!ROLE_BUYER.equals(anchorRole) || !ROLE_SELLER.equals(borrowerRole)) {
                 throw new RuntimeException(
-                        "For SALES_BILL_DISCOUNTING, anchor_role must be BUYER and borrower_role must be SELLER");
+                        "For " + flowType + ", anchor_role must be BUYER and borrower_role must be SELLER");
             }
             return;
         }
         throw new RuntimeException(
                 "Unsupported flow_type for invoice discounting: "
                         + flowType
-                        + ". Use PURCHASE_BILL_DISCOUNTING or SALES_BILL_DISCOUNTING");
+                        + ". Use PURCHASE_BILL_DISCOUNTING, SALES_BILL_DISCOUNTING, or "
+                        + InvoiceDiscountingFlowType.PURCHASE_ORDER_DISCOUNTING);
     }
 
     private static void applySubProgramLimitDefaults(SubProgram subProgram) {

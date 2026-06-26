@@ -103,7 +103,7 @@ public class LosBorrowerIntegrationService {
                         .anchorId(anchorId)
                         .sourceSystem(sourceSystem)
                         .losBorrowerId(losBorrowerId)
-                        .status(BorrowerStatus.PENDING_KYC)
+                        .status(BorrowerStatus.ACTIVE)
                         .build();
         Borrower saved = borrowerRepository.save(borrower);
         log.info("LOS borrower created via integration: {} ({})", saved.getBorrowerCode(), saved.getId());

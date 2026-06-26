@@ -8,6 +8,10 @@ import DashboardPage from './pages/DashboardPage';
 import LoanRequestPage from './pages/LoanRequestPage';
 import MyLoansPage from './pages/MyLoansPage';
 import InvoiceDiscountingPage from './pages/InvoiceDiscountingPage';
+import SalesBillDiscountingPage from './pages/SalesBillDiscountingPage';
+import PurchaseOrderDiscountingPage from './pages/PurchaseOrderDiscountingPage';
+import SellerInitiatedInvoiceCreatePage from './pages/SellerInitiatedInvoiceCreatePage';
+import { FLOW_SALES_BILL_DISCOUNTING, FLOW_PURCHASE_ORDER_DISCOUNTING } from '@plp/shared';
 import PaymentCartPage from './pages/PaymentCartPage';
 import PayuCheckoutPage from './pages/PayuCheckoutPage';
 import PaymentResultPage from './pages/PaymentResultPage';
@@ -63,6 +67,10 @@ function App() {
             <Route path="request-loan" element={<LoanRequestPage />} />
             <Route path="my-loans" element={<MyLoansPage />} />
             <Route path="invoice-discounting" element={<InvoiceDiscountingPage />} />
+            <Route path="sales-bill-discounting" element={<SalesBillDiscountingPage />} />
+            <Route path="sales-bill-discounting/create" element={<SellerInitiatedInvoiceCreatePage flowType={FLOW_SALES_BILL_DISCOUNTING} backPath="/sales-bill-discounting" />} />
+            <Route path="purchase-order-discounting" element={<PurchaseOrderDiscountingPage />} />
+            <Route path="purchase-order-discounting/create" element={<SellerInitiatedInvoiceCreatePage flowType={FLOW_PURCHASE_ORDER_DISCOUNTING} backPath="/purchase-order-discounting" />} />
             <Route path="payments/cart" element={<PaymentCartPage />} />
             <Route path="payments/payu" element={<PayuCheckoutPage />} />
             <Route path="payments/result" element={<PaymentResultPage />} />

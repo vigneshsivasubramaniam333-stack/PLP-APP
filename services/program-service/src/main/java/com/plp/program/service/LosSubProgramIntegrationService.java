@@ -128,6 +128,8 @@ public class LosSubProgramIntegrationService {
                         .losSubProgramId(losSid != null && !losSid.isBlank() ? losSid : null)
                         .interestRate(resolveInterestRate(program, req))
                         .maxTenureDays(resolveMaxTenureDays(program, req))
+                        // LOS-originated sub-programs are pre-approved upstream, so auto-activate in PLP.
+                        .status("ACTIVE")
                         .build();
 
         SubProgram saved = subProgramService.createSubProgram(built);

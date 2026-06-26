@@ -101,7 +101,7 @@ function appendBorrowerTermsToPayload(
 }
 
 function rolesForInvoiceDiscountingFlow(flowType: string): { anchorRole: string; borrowerRole: string } {
-  if (flowType === 'SALES_BILL_DISCOUNTING') {
+  if (flowType === 'SALES_BILL_DISCOUNTING' || flowType === 'PURCHASE_ORDER_DISCOUNTING') {
     return { anchorRole: 'BUYER', borrowerRole: 'SELLER' };
   }
   return { anchorRole: 'SELLER', borrowerRole: 'BUYER' };
@@ -119,6 +119,8 @@ function subProgramFlowLabel(flowType: string | undefined | null): string {
       return 'Purchase Bill Discounting';
     case 'SALES_BILL_DISCOUNTING':
       return 'Sales Bill Discounting';
+    case 'PURCHASE_ORDER_DISCOUNTING':
+      return 'Purchase Order Discounting';
     case 'PAY_LOAN':
     case 'PAY_DAY_LOAN':
       return 'Pay Loan';
@@ -950,7 +952,7 @@ export default function SubProgramsPage() {
                 flowType:
                   p?.productType === 'PAY_DAY_LOAN'
                     ? 'PAY_LOAN'
-                    : ['PURCHASE_BILL_DISCOUNTING', 'SALES_BILL_DISCOUNTING'].includes(f.flowType)
+                    : ['PURCHASE_BILL_DISCOUNTING', 'SALES_BILL_DISCOUNTING', 'PURCHASE_ORDER_DISCOUNTING'].includes(f.flowType)
                       ? f.flowType
                       : 'PURCHASE_BILL_DISCOUNTING',
               }));
@@ -1162,7 +1164,7 @@ export default function SubProgramsPage() {
                     programId: pid,
                     ...(p?.productType === 'PAY_DAY_LOAN'
                       ? { flowType: 'PAY_LOAN' }
-                      : !['PURCHASE_BILL_DISCOUNTING', 'SALES_BILL_DISCOUNTING'].includes(f.flowType)
+                      : !['PURCHASE_BILL_DISCOUNTING', 'SALES_BILL_DISCOUNTING', 'PURCHASE_ORDER_DISCOUNTING'].includes(f.flowType)
                         ? { flowType: 'PURCHASE_BILL_DISCOUNTING' }
                         : {}),
                   }));
@@ -1220,6 +1222,7 @@ export default function SubProgramsPage() {
                 >
                   <option value="PURCHASE_BILL_DISCOUNTING">Purchase Bill Discounting</option>
                   <option value="SALES_BILL_DISCOUNTING">Sales Bill Discounting</option>
+                  <option value="PURCHASE_ORDER_DISCOUNTING">Purchase Order Discounting</option>
                 </select>
               </div>
             ) : (

@@ -3,6 +3,7 @@ package com.plp.program.security;
 import com.plp.program.audit.AuditBridge;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -45,6 +46,8 @@ public final class InvoiceAccessGuard {
     public enum InvoiceWriteOperation {
         VERIFY,
         CONFIRM,
+        APPROVE_SELLER_INVOICE,
+        REJECT_SELLER_INVOICE,
         MARK_DISCOUNTED,
         DELETE,
         /** Internal: lending-service after creating an invoice-discounting loan request. */
@@ -151,7 +154,7 @@ public final class InvoiceAccessGuard {
             }
             throw forbidden(MSG_ACCESS_DENIED);
         }
-        // VERIFY, CONFIRM — lender or matching anchor
+        // VERIFY, CONFIRM, APPROVE_SELLER_INVOICE, REJECT_SELLER_INVOICE — lender or matching anchor
         if (isLenderRole(roles)) {
             return;
         }
@@ -165,18 +168,33 @@ public final class InvoiceAccessGuard {
         throw forbidden(MSG_ACCESS_DENIED);
     }
 
-    /** POST JSON create: lender any anchor; anchor only own {@code anchorId}; borrower forbidden. */
+    /**
+     * POST JSON create: lender any; anchor only PBF (not seller-initiated); borrower only SBD/PO on own borrowerId.
+     */
     public static void requireManualInvoiceCreateAllowed(
             Invoice draft,
             String rolesHeader,
             String linkedEntityIdHeader,
             String linkedEntityTypeHeader) {
         Set<String> roles = parseRoles(rolesHeader);
+        String flow = draft.getFlowType();
         if (isBorrowerRole(roles)) {
-            throw forbidden(MSG_BORROWER_CANNOT);
+            if (!InvoiceDiscountingFlowType.isSellerInitiated(flow)) {
+                throw forbidden(MSG_BORROWER_CANNOT);
+            }
+            UUID borrower = parseRequiredLinkedUuid(linkedEntityIdHeader, linkedEntityTypeHeader, LINK_TYPE_BORROWER);
+            if (draft.getBorrowerId() == null || !draft.getBorrowerId().equals(borrower)) {
+                throw forbidden(MSG_NOT_THIS_BORROWER);
+            }
+            return;
         }
+        // Lender / machine identity (e.g. the LOS integration proxy creating on behalf of a
+        // borrower) is trusted for any flow type, including seller-initiated SBD/PO.
         if (isLenderRole(roles)) {
             return;
+        }
+        if (InvoiceDiscountingFlowType.isSellerInitiated(flow)) {
+            throw forbidden("Anchor cannot create invoices for seller-initiated flow types");
         }
         if (isAnchorRole(roles)) {
             if (draft.getAnchorId() == null) {

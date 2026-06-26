@@ -37,6 +37,24 @@ export function isInvoiceDiscountingSubProgram(sp: SubProgram, programs: Program
   return parent?.productType === 'INVOICE_DISCOUNTING';
 }
 
+export function isInvoiceDiscountingSubProgramForFlow(
+  sp: SubProgram,
+  programs: Program[],
+  flowType: string,
+): boolean {
+  if (!isInvoiceDiscountingSubProgram(sp, programs) || sp.status !== 'ACTIVE') return false;
+  const ft = (sp.flowType ?? '').trim() || 'PURCHASE_BILL_DISCOUNTING';
+  return ft === flowType;
+}
+
+export function anchorHasFlowSubProgram(
+  subPrograms: SubProgram[],
+  programs: Program[],
+  flowType: string,
+): boolean {
+  return subPrograms.some((sp) => isInvoiceDiscountingSubProgramForFlow(sp, programs, flowType));
+}
+
 function parseRoleList(role: string): string[] {
   return role
     .split(',')

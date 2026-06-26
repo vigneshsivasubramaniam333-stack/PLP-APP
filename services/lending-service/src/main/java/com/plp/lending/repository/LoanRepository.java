@@ -38,6 +38,14 @@ public interface LoanRepository extends JpaRepository<Loan, UUID> {
 
     List<Loan> findByInvoiceId(UUID invoiceId);
 
+    @Query("""
+            SELECT l FROM Loan l
+            WHERE l.productType = 'INVOICE_DISCOUNTING'
+              AND l.invoiceId IS NOT NULL
+              AND l.status IN :statuses
+            """)
+    List<Loan> findOpenInvoiceDiscountingLoans(@org.springframework.data.repository.query.Param("statuses") List<LoanStatus> statuses);
+
     boolean existsBySalaryDataIdAndStatusIn(UUID salaryDataId, Collection<LoanStatus> statuses);
 
     @Query("SELECT COUNT(l) FROM Loan l WHERE l.borrowerId = :borrowerId AND l.status IN ('DISBURSED', 'REPAYMENT_DUE', 'OVERDUE')")

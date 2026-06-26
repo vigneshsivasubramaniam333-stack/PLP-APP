@@ -109,7 +109,8 @@ public class LosBorrowerProgramMappingIntegrationService {
                         .approvedLimit(req.getApprovedLimit())
                         .validFrom(req.getValidFrom())
                         .validTo(req.getValidTo())
-                        .status(BorrowerProgramMappingStatus.PENDING_APPROVAL)
+                        // LOS-originated enrollments are pre-approved upstream, so auto-approve in PLP.
+                        .status(BorrowerProgramMappingStatus.APPROVED)
                         .build();
 
         BorrowerProgramMapping saved = borrowerProgramMappingRepository.save(mapping);

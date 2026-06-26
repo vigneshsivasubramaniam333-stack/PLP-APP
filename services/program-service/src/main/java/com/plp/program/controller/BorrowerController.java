@@ -5,8 +5,10 @@ import com.plp.program.audit.AuditService;
 import com.plp.program.model.dto.BorrowerCreateRequest;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.BorrowerLimit;
+import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.model.enums.BorrowerStatus;
 import com.plp.program.repository.BorrowerRepository;
+import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.security.LenderPortalRoleAuthorization;
 import com.plp.program.service.BorrowerProvisioningService;
 import com.plp.program.service.BorrowerPaymentProfileService;
@@ -28,6 +30,7 @@ import java.util.UUID;
 public class BorrowerController {
 
     private final BorrowerRepository borrowerRepository;
+    private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final BorrowerProvisioningService borrowerProvisioningService;
     private final LimitService limitService;
     private final AuditService auditService;
@@ -176,6 +179,19 @@ public class BorrowerController {
         BorrowerStatus newStatus = BorrowerStatus.valueOf(body.get("status"));
         borrower.setStatus(newStatus);
         borrowerRepository.save(borrower);
+        if (newStatus == BorrowerStatus.ACTIVE) {
+            activatePendingSubProgramLinks(id);
+        }
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", borrower));
+    }
+
+    /** Workbench borrower approval must also activate sub-program enrollment links. */
+    private void activatePendingSubProgramLinks(UUID borrowerId) {
+        for (SubProgramBorrower link : subProgramBorrowerRepository.findByBorrowerId(borrowerId)) {
+            if ("PENDING_APPROVAL".equals(link.getStatus())) {
+                link.setStatus("ACTIVE");
+                subProgramBorrowerRepository.save(link);
+            }
+        }
     }
 }

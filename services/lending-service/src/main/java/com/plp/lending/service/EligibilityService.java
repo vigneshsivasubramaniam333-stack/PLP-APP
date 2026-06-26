@@ -33,6 +33,7 @@ public class EligibilityService {
 
     private static final String FLOW_PURCHASE_BILL_DISCOUNTING = "PURCHASE_BILL_DISCOUNTING";
     private static final String FLOW_SALES_BILL_DISCOUNTING = "SALES_BILL_DISCOUNTING";
+    private static final String FLOW_PURCHASE_ORDER_DISCOUNTING = "PURCHASE_ORDER_DISCOUNTING";
 
     private static final String FLOW_PAY_LOAN = "PAY_LOAN";
     private static final String FLOW_PAY_DAY_LOAN = "PAY_DAY_LOAN";
@@ -471,7 +472,8 @@ public class EligibilityService {
             } else {
                 boolean purchaseFlow =
                         invoiceFlowType.isEmpty() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(invoiceFlowType);
-                boolean salesFlow = FLOW_SALES_BILL_DISCOUNTING.equals(invoiceFlowType);
+                boolean sellerInitiatedFlow = FLOW_SALES_BILL_DISCOUNTING.equals(invoiceFlowType)
+                        || FLOW_PURCHASE_ORDER_DISCOUNTING.equals(invoiceFlowType);
                 boolean statusOk = false;
                 if (purchaseFlow) {
                     statusOk = "BORROWER_ACCEPTED".equals(invoiceStatus) || "PARTIALLY_DISCOUNTED".equals(invoiceStatus);
@@ -483,7 +485,7 @@ public class EligibilityService {
                             reasons.add("Invoice status not eligible for financing: " + invoiceStatus);
                         }
                     }
-                } else if (salesFlow) {
+                } else if (sellerInitiatedFlow) {
                     statusOk = "ELIGIBLE".equals(invoiceStatus) || "PARTIALLY_DISCOUNTED".equals(invoiceStatus);
                     if (!statusOk) {
                         eligible = false;

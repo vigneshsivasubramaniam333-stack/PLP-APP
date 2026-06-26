@@ -1,8 +1,10 @@
 package com.plp.lending.event;
 
+import com.plp.lending.config.InvoiceNotificationProperties;
 import com.plp.lending.config.RabbitMQConfig;
 import com.plp.lending.integration.BorrowerContactClient;
 import com.plp.lending.model.entity.Loan;
+import com.plp.lending.service.InvoiceDueDateNotificationService.InvoiceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -24,6 +26,7 @@ public class LoanEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
     private final BorrowerContactClient borrowerContactClient;
+    private final InvoiceNotificationProperties notificationProperties;
 
     @Async
     public void publishLoanEvent(String eventType, Loan loan) {
@@ -49,6 +52,39 @@ public class LoanEventPublisher {
             log.info("Published loan event: {} for {}", eventType, loan.getLoanNumber());
         } catch (Exception e) {
             log.error("Failed to publish loan event: {} - {}", eventType, e.getMessage());
+        }
+    }
+
+    @Async
+    public void publishInvoiceDueDateReminder(
+            Loan loan,
+            String eventType,
+            BorrowerContactClient.BorrowerContact contact,
+            InvoiceContext invoiceContext) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("eventType", eventType);
+            event.put("loanId", loan.getId().toString());
+            event.put("loanNumber", loan.getLoanNumber());
+            event.put("borrowerId", loan.getBorrowerId().toString());
+            event.put("borrowerName", contact.name());
+            event.put("borrowerEmail", contact.email());
+            event.put("invoiceId", invoiceContext.invoiceId().toString());
+            event.put("invoiceNumber", invoiceContext.invoiceNumber());
+            event.put("vendorName", invoiceContext.vendorName());
+            event.put("dueDate", invoiceContext.dueDateLabel());
+            event.put("amountDue", invoiceContext.amountDueLabel());
+            event.put("outstanding", invoiceContext.amountDueLabel());
+            event.put("amount", invoiceContext.amountDueLabel());
+            event.put("paymentUrl", notificationProperties.invoicePaymentPath());
+            event.put("productType", loan.getProductType());
+
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.LOAN_EVENT_EXCHANGE, "loan." + eventType.toLowerCase(), event);
+            log.info("Published invoice reminder event: {} for loan {}", eventType, loan.getLoanNumber());
+        } catch (Exception e) {
+            log.error("Failed to publish invoice reminder event {} for {}: {}", eventType, loan.getLoanNumber(),
+                    e.getMessage());
         }
     }
 

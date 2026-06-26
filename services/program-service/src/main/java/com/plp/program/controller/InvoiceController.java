@@ -2,6 +2,7 @@ package com.plp.program.controller;
 
 import com.plp.program.model.dto.InvoiceCsvUploadResult;
 import com.plp.program.model.entity.Invoice;
+import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.entity.Program;
 import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
@@ -42,12 +43,14 @@ public class InvoiceController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String lifecycle,
+            @RequestParam(required = false) String flowType,
+            @RequestParam(required = false) String tab,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader) {
         LenderPortalRoleAuthorization.requireCreditAnalystOrManager(rolesHeader);
         Map<String, Object> paged = invoiceService.listInvoicesPaged(
-                search, status, lifecycle, page != null ? page : 0, size != null ? size : 20);
+                search, status, lifecycle, flowType, tab, page != null ? page : 0, size != null ? size : 20);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
     }
 
@@ -56,9 +59,16 @@ public class InvoiceController {
             @RequestBody Invoice invoice,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
-            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
         InvoiceAccessGuard.requireManualInvoiceCreateAllowed(invoice, rolesHeader, linkedEntityId, linkedEntityType);
-        return ResponseEntity.ok(invoiceService.createInvoice(invoice));
+        Set<String> roles = InvoiceAccessGuard.parseRoles(rolesHeader);
+        UUID uploadedBy = parseOptionalUserId(userId);
+        boolean sellerInitiated = InvoiceDiscountingFlowType.isSellerInitiated(invoice.getFlowType());
+        if (InvoiceAccessGuard.isBorrowerRole(roles) || sellerInitiated) {
+            return ResponseEntity.ok(invoiceService.createBorrowerInvoice(invoice, uploadedBy));
+        }
+        return ResponseEntity.ok(invoiceService.createInvoice(invoice, uploadedBy));
     }
 
     @PostMapping("/upload-csv")
@@ -151,18 +161,22 @@ public class InvoiceController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String lifecycle,
+            @RequestParam(required = false) String flowType,
+            @RequestParam(required = false) String tab,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
             @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         InvoiceAccessGuard.requireBorrowerPathMatchesOrLender(borrowerId, rolesHeader, linkedEntityId, linkedEntityType);
-        if (page != null || size != null) {
+        if (page != null || size != null || flowType != null || tab != null) {
             Map<String, Object> paged = invoiceService.listBorrowerInvoicesPaged(
                     borrowerId,
                     search,
                     status,
                     lifecycle,
+                    flowType,
+                    tab,
                     page != null ? page : 0,
                     size != null ? size : 20);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
@@ -216,6 +230,8 @@ public class InvoiceController {
             return null;
         }
     }
+
+    @PostMapping("/{id}/verify")
     public ResponseEntity<Invoice> verifyInvoice(
             @PathVariable UUID id,
             @RequestParam UUID verifiedBy,
@@ -359,5 +375,16 @@ public class InvoiceController {
             return null;
         }
         return new BigDecimal(raw.toString());
+    }
+
+    private static UUID parseOptionalUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(userId.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

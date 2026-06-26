@@ -23,6 +23,8 @@ import java.util.UUID;
 public class LosSubProgramBorrowerLinkIntegrationService {
 
     private static final String STATUS_PENDING = "PENDING_APPROVAL";
+    // LOS-originated enrollments are pre-approved upstream in LOS, so they are auto-activated in PLP.
+    private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final SubProgramRepository subProgramRepository;
@@ -73,12 +75,13 @@ public class LosSubProgramBorrowerLinkIntegrationService {
                 subProgramBorrowerRepository.findBySubProgramIdAndBorrowerId(subProgramId, borrowerId);
         if (existing.isPresent()) {
             SubProgramBorrower m = existing.get();
-            if (!STATUS_PENDING.equals(m.getStatus())) {
+            if (!STATUS_PENDING.equals(m.getStatus()) && !STATUS_ACTIVE.equals(m.getStatus())) {
                 throw new RuntimeException(
                         "Sub-program borrower link exists with status "
                                 + m.getStatus()
-                                + "; LOS cannot modify non-pending links");
+                                + "; LOS cannot modify this link");
             }
+            m.setStatus(STATUS_ACTIVE);
             m.setBorrowerLimit(limit);
             m.setUtilizedLimit(utilized);
             m.setAvailableLimit(available);
@@ -98,11 +101,11 @@ public class LosSubProgramBorrowerLinkIntegrationService {
                         .borrowerLimit(limit)
                         .utilizedLimit(utilized)
                         .availableLimit(available)
-                        .status(STATUS_PENDING)
+                        .status(STATUS_ACTIVE)
                         .build();
         SubProgramBorrower saved = subProgramBorrowerRepository.save(membership);
         log.info(
-                "LOS sub-program borrower pending link created: subProgram={} borrower={}",
+                "LOS sub-program borrower link auto-activated: subProgram={} borrower={}",
                 subProgramId,
                 borrowerId);
         return LosSubProgramBorrowerLinkResponse.builder()

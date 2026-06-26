@@ -15,7 +15,7 @@ import {
 import type { Program, Invoice, Borrower, SubProgram } from '@plp/shared';
 import {
   anchorIdFromUser,
-  isInvoiceDiscountingSubProgram,
+  isInvoiceDiscountingSubProgramForFlow,
   NO_LINKED_BORROWERS,
   downloadSampleInvoiceCsv,
   inputCls,
@@ -57,7 +57,9 @@ export default function InvoiceCreatePage() {
   const [borrowersPick, setBorrowersPick] = useState<Borrower[]>([]);
 
   const idSubPrograms = useMemo(() => {
-    return subPrograms.filter((sp) => isInvoiceDiscountingSubProgram(sp, programs) && sp.status === 'ACTIVE');
+    return subPrograms.filter((sp) =>
+      isInvoiceDiscountingSubProgramForFlow(sp, programs, 'PURCHASE_BILL_DISCOUNTING'),
+    );
   }, [subPrograms, programs]);
 
   const umbrellaProgramId = useMemo(() => {

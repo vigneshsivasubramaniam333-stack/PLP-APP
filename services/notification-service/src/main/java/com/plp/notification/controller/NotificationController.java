@@ -3,6 +3,8 @@ package com.plp.notification.controller;
 import com.plp.notification.model.entity.Notification;
 import com.plp.notification.model.entity.NotificationTemplate;
 import com.plp.notification.model.enums.NotificationChannel;
+import com.plp.notification.model.entity.NotificationEventSetting;
+import com.plp.notification.service.NotificationEventSettingService;
 import com.plp.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final NotificationEventSettingService eventSettingService;
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getNotifications(
@@ -62,7 +65,10 @@ public class NotificationController {
 
         Notification notification = notificationService.sendNotification(templateCode, recipientId,
                 recipientEmail, recipientPhone, variables, referenceType, referenceId);
-        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", notification.getId()));
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "data", notification != null ? notification.getId() : null,
+                "skipped", notification == null));
     }
 
     @PostMapping("/send-direct")
@@ -93,5 +99,19 @@ public class NotificationController {
         NotificationTemplate template = notificationService.updateTemplate(id,
                 request.get("subject"), request.get("bodyTemplate"));
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", template));
+    }
+
+    @GetMapping("/event-settings")
+    public ResponseEntity<Map<String, Object>> listEventSettings() {
+        List<NotificationEventSetting> settings = eventSettingService.listAll();
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", settings));
+    }
+
+    @PutMapping("/event-settings/{eventCode}")
+    public ResponseEntity<Map<String, Object>> updateEventSetting(
+            @PathVariable String eventCode, @RequestBody Map<String, Object> request) {
+        boolean enabled = Boolean.TRUE.equals(request.get("enabled"));
+        NotificationEventSetting updated = eventSettingService.updateEnabled(eventCode, enabled);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
     }
 }

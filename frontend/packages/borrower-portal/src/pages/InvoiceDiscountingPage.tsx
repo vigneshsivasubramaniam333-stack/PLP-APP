@@ -4,48 +4,46 @@ import {
   portalApi,
   invoiceApi,
   useAuth,
-  apiClient,
   loanApi,
   paymentCartApi,
   DigitalInvoiceAttachment,
   notifyError,
   notifySuccess,
   InvoiceListToolbar,
+  FLOW_PURCHASE_BILL_DISCOUNTING,
+  flowTypeLabel,
+  canBorrowerAcceptInvoice,
+  canBorrowerRequestFinance,
 } from '@plp/shared';
-import type { Invoice, InvoiceListFilters, InvoicePageMeta, Loan } from '@plp/shared';
+import type { Invoice, InvoiceListFilters, InvoicePageMeta, Loan, InvoiceDiscountingFlowType } from '@plp/shared';
 import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
 import { InvoiceActionsMenu, type InvoiceActionItem } from '../components/InvoiceActionsMenu';
 
-const FLOW_PURCHASE = 'PURCHASE_BILL_DISCOUNTING';
-const FLOW_SALES = 'SALES_BILL_DISCOUNTING';
-
-function isPurchaseFlow(inv: Invoice): boolean {
-  const ft = inv.flowType?.trim();
-  return !ft || ft === FLOW_PURCHASE;
-}
-
-function isSalesFlow(inv: Invoice): boolean {
-  return inv.flowType?.trim() === FLOW_SALES;
-}
+type InvoiceDiscountingPageProps = {
+  flowType?: InvoiceDiscountingFlowType;
+  title?: string;
+  description?: string;
+  createPath?: string;
+  createLabel?: string;
+};
 
 /** Purchase / legacy: borrower must accept ELIGIBLE invoices before financing. */
 function canShowAcceptInvoice(inv: Invoice): boolean {
-  return isPurchaseFlow(inv) && inv.status === 'ELIGIBLE';
+  return canBorrowerAcceptInvoice(inv.status, inv.flowType);
 }
 
 /** When borrower may open the discounting request flow for this invoice. */
 function canRequestDiscounting(inv: Invoice): boolean {
-  if (inv.status === 'FINANCING_REQUESTED') return false;
-  if (isPurchaseFlow(inv)) {
-    return inv.status === 'BORROWER_ACCEPTED' || inv.status === 'PARTIALLY_DISCOUNTED';
-  }
-  if (isSalesFlow(inv)) {
-    return inv.status === 'ELIGIBLE' || inv.status === 'PARTIALLY_DISCOUNTED';
-  }
-  return inv.status === 'BORROWER_ACCEPTED' || inv.status === 'PARTIALLY_DISCOUNTED';
+  return canBorrowerRequestFinance(inv.status, inv.flowType);
 }
 
-export default function InvoiceDiscountingPage() {
+export default function InvoiceDiscountingPage({
+  flowType = FLOW_PURCHASE_BILL_DISCOUNTING,
+  title = 'Invoice Discounting',
+  description = 'View eligible invoices and request discounting against your anchor programs.',
+  createPath,
+  createLabel,
+}: InvoiceDiscountingPageProps = {}) {
   const { user } = useAuth();
   const borrowerId = useMemo(() => {
     if ((user?.linkedEntityType ?? '').trim().toUpperCase() !== 'BORROWER') return '';
@@ -95,19 +93,15 @@ export default function InvoiceDiscountingPage() {
       setLoading(true);
       try {
         await portalApi.borrowerLoans(borrowerId).catch(() => null);
-        const invoiceRes = await apiClient.get<{ data?: Invoice[]; page?: InvoicePageMeta }>(
-          `/api/v1/invoices/borrower/${borrowerId}`,
-          {
-            params: {
-              search: listFilters.search || undefined,
-              status: listFilters.status || undefined,
-              lifecycle: listFilters.lifecycle,
-              page: listFilters.page,
-              size: listFilters.size,
-              ...(opts?.bustCache ? { _nocache: Date.now() } : {}),
-            },
-          },
-        );
+        const invoiceRes = await invoiceApi.listForBorrower(borrowerId, {
+          search: listFilters.search || undefined,
+          status: listFilters.status || undefined,
+          lifecycle: listFilters.lifecycle,
+          flowType,
+          page: listFilters.page,
+          size: listFilters.size,
+          ...(opts?.bustCache ? { _nocache: Date.now() } : {}),
+        });
         const body = invoiceRes.data;
         const rows = Array.isArray(body) ? body : body?.data || [];
         setInvoices(rows);
@@ -140,7 +134,7 @@ export default function InvoiceDiscountingPage() {
         setLoading(false);
       }
     },
-    [borrowerId, listFilters],
+    [borrowerId, listFilters, flowType],
   );
 
   useEffect(() => {
@@ -399,20 +393,29 @@ export default function InvoiceDiscountingPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Invoice Discounting</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Purchase-flow invoices must be accepted before requesting financing. Sales-flow invoices can proceed when eligible.
-          Invoices load automatically from your borrower profile.
-          {usePayu ? ' Repayments use PayU payment gateway (add invoices to cart).' : ''}
-        </p>
-        {usePayu && (
-          <div className="mt-3">
-            <Link to="/payments/cart" className="text-sm font-semibold text-sky-700 hover:underline">
-              View payment cart →
-            </Link>
-          </div>
-        )}
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {description}
+            {usePayu ? ' Repayments use PayU payment gateway (add invoices to cart).' : ''}
+          </p>
+          {usePayu && (
+            <div className="mt-3">
+              <Link to="/payments/cart" className="text-sm font-semibold text-sky-700 hover:underline">
+                View payment cart →
+              </Link>
+            </div>
+          )}
+        </div>
+        {createPath ? (
+          <Link
+            to={createPath}
+            className="bt-btn bt-btn-primary shrink-0"
+          >
+            {createLabel ?? 'Create'}
+          </Link>
+        ) : null}
       </div>
 
       {loading && invoices.length === 0 && (
@@ -550,7 +553,7 @@ export default function InvoiceDiscountingPage() {
                     )}
                     <td className="px-5 py-3 font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</td>
                     <td className="px-5 py-3 text-xs text-slate-600">
-                      {isSalesFlow(inv) ? 'Sales' : 'Purchase'}
+                      {flowTypeLabel(inv.flowType)}
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-600">{inv.dueDate}</td>
                     <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.netAmount)}</td>

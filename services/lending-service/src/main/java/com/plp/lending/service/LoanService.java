@@ -59,6 +59,7 @@ public class LoanService {
 
     private static final String FLOW_PURCHASE_BILL_DISCOUNTING = "PURCHASE_BILL_DISCOUNTING";
     private static final String FLOW_SALES_BILL_DISCOUNTING = "SALES_BILL_DISCOUNTING";
+    private static final String FLOW_PURCHASE_ORDER_DISCOUNTING = "PURCHASE_ORDER_DISCOUNTING";
     private static final String FLOW_PAY_LOAN = "PAY_LOAN";
     private static final String FLOW_PAY_DAY_LOAN = "PAY_DAY_LOAN";
 
@@ -125,6 +126,7 @@ public class LoanService {
     private final ProgramServiceSalarySlipClient salarySlipClient;
     private final PlpLmsOrchestrator plpLmsOrchestrator;
     private final RepaymentRepository repaymentRepository;
+    private final InvoiceDueDateNotificationService invoiceDueDateNotificationService;
 
     @Transactional
     public Loan requestLoan(Loan loan) {
@@ -575,6 +577,7 @@ public class LoanService {
 
         log.info("Loan disbursed: {} amount={}", loan.getLoanNumber(), disbursedAmount);
         loanEventPublisher.publishLoanEvent("LOAN_DISBURSED", loan);
+        invoiceDueDateNotificationService.notifyOnDisbursement(loan);
         loanEventPublisher.publishAuditEvent("LOAN", loan.getId().toString(), "DISBURSED",
                 executedBy != null ? executedBy.toString() : null, null,
                 "{\"status\":\"DISBURSEMENT_PENDING\"}", "{\"status\":\"DISBURSED\",\"disbursedAmount\":" + disbursedAmount + "}");
@@ -2287,12 +2290,13 @@ public class LoanService {
         Object flowObj = invoiceResponse.get("flowType");
         String flow = flowObj != null ? flowObj.toString().trim() : "";
         boolean purchaseFlow = flow.isEmpty() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
-        boolean salesFlow = FLOW_SALES_BILL_DISCOUNTING.equals(flow);
+        boolean sellerInitiatedFlow = FLOW_SALES_BILL_DISCOUNTING.equals(flow)
+                || FLOW_PURCHASE_ORDER_DISCOUNTING.equals(flow);
 
         boolean ok;
         if (purchaseFlow) {
             ok = "BORROWER_ACCEPTED".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
-        } else if (salesFlow) {
+        } else if (sellerInitiatedFlow) {
             ok = "ELIGIBLE".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
         } else {
             ok = false;

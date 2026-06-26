@@ -10,6 +10,12 @@ interface Template {
   isActive: boolean;
 }
 
+interface EventSetting {
+  eventCode: string;
+  description: string;
+  enabled: boolean;
+}
+
 const channelStyles: Record<string, string> = {
   EMAIL: 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20',
   SMS: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
@@ -19,14 +25,25 @@ const channelStyles: Record<string, string> = {
 
 export default function NotificationsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [eventSettings, setEventSettings] = useState<EventSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState({ subject: '', bodyTemplate: '' });
+  const [togglingEvent, setTogglingEvent] = useState<string | null>(null);
 
   useEffect(() => {
-    notificationApi.templates()
-      .then((res) => setTemplates(res.data.data || res.data || []))
-      .catch(() => setTemplates([]))
+    Promise.all([
+      notificationApi.templates(),
+      notificationApi.eventSettings(),
+    ])
+      .then(([templatesRes, settingsRes]) => {
+        setTemplates(templatesRes.data.data || templatesRes.data || []);
+        setEventSettings(settingsRes.data.data || settingsRes.data || []);
+      })
+      .catch(() => {
+        setTemplates([]);
+        setEventSettings([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -38,10 +55,25 @@ export default function NotificationsPage() {
   const saveEdit = async (id: string) => {
     try {
       await notificationApi.updateTemplate(id, editData);
-      setTemplates(templates.map((t) => t.id === id ? { ...t, ...editData } : t));
+      setTemplates(templates.map((t) => (t.id === id ? { ...t, ...editData } : t)));
       setEditingId(null);
     } catch (err) {
       console.error('Failed to update template:', err);
+    }
+  };
+
+  const toggleEvent = async (setting: EventSetting) => {
+    setTogglingEvent(setting.eventCode);
+    try {
+      const next = !setting.enabled;
+      await notificationApi.updateEventSetting(setting.eventCode, next);
+      setEventSettings((prev) =>
+        prev.map((s) => (s.eventCode === setting.eventCode ? { ...s, enabled: next } : s)),
+      );
+    } catch (err) {
+      console.error('Failed to update event setting:', err);
+    } finally {
+      setTogglingEvent(null);
     }
   };
 
@@ -52,7 +84,54 @@ export default function NotificationsPage() {
         <p className="text-sm text-slate-500 mt-1">Manage notification templates and delivery settings</p>
       </div>
 
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800">Event delivery</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Enable or disable automated emails. Invoice due-date reminders run daily at 08:00 for open invoice
+            discounting loans.
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-pulse text-slate-400 text-sm">Loading settings…</div>
+          </div>
+        ) : eventSettings.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-slate-400">No event settings found</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {eventSettings.map((setting) => (
+              <div key={setting.eventCode} className="px-5 py-4 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-800">{setting.eventCode}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{setting.description}</div>
+                </div>
+                <button
+                  type="button"
+                  disabled={togglingEvent === setting.eventCode}
+                  onClick={() => void toggleEvent(setting)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                    setting.enabled ? 'bg-blue-600' : 'bg-slate-300'
+                  } ${togglingEvent === setting.eventCode ? 'opacity-60' : ''}`}
+                  aria-pressed={setting.enabled}
+                  aria-label={`Toggle ${setting.eventCode}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform mt-0.5 ${
+                      setting.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-800">Templates</h2>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center h-48">
             <div className="animate-pulse text-slate-400 text-sm">Loading templates...</div>
@@ -89,8 +168,8 @@ export default function NotificationsPage() {
                         <div>
                           <label className="block text-xs font-medium text-slate-500 mb-1">Body Template</label>
                           <textarea value={editData.bodyTemplate} onChange={(e) => setEditData({ ...editData, bodyTemplate: e.target.value })}
-                            rows={3}
-                            className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+                            rows={6}
+                            className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono" />
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => saveEdit(t.id)}
@@ -106,7 +185,7 @@ export default function NotificationsPage() {
                     ) : (
                       <>
                         <div className="text-sm text-slate-700 mt-1">{t.subject}</div>
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{t.bodyTemplate}</div>
+                        <div className="text-xs text-slate-400 mt-1 line-clamp-3 whitespace-pre-wrap">{t.bodyTemplate}</div>
                       </>
                     )}
                   </div>

@@ -81,6 +81,22 @@ public class LosIamIntegrationService {
                 .build();
     }
 
+    @Transactional
+    public boolean deleteUsersByLinkedEntity(String linkedEntityType, UUID linkedEntityId) {
+        if (linkedEntityType == null || linkedEntityType.isBlank() || linkedEntityId == null) {
+            return false;
+        }
+        var users = userRepository.findByLinkedEntityId(linkedEntityId).stream()
+                .filter(u -> linkedEntityType.equalsIgnoreCase(u.getLinkedEntityType()))
+                .toList();
+        if (users.isEmpty()) {
+            return false;
+        }
+        userRepository.deleteAll(users);
+        log.info("Deleted {} IAM user(s) for {} {}", users.size(), linkedEntityType, linkedEntityId);
+        return true;
+    }
+
     private static UserRole defaultRoleForEntity(String linkedEntityType) {
         if ("ANCHOR".equalsIgnoreCase(linkedEntityType)) {
             return UserRole.ANCHOR_ADMIN;

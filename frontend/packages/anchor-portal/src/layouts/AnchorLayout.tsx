@@ -1,35 +1,8 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useMemo } from 'react';
 import { useAuth, PortalSidebarBrand, PortalPoweredByFooter } from '@plp/shared';
-
-const navGroups = [
-  {
-    label: 'Overview',
-    items: [
-      { path: '/', label: 'Dashboard', icon: ChartIcon },
-      { path: '/programs', label: 'Programs', icon: ProgramsIcon },
-    ],
-  },
-  {
-    label: 'Pay Day Loan',
-    items: [
-      { path: '/employees', label: 'Employees', icon: UsersIcon },
-      { path: '/salary-upload', label: 'Salary Upload', icon: UploadIcon },
-    ],
-  },
-  {
-    label: 'Invoice Discounting',
-    items: [
-      { path: '/invoices', label: 'Invoices', icon: DocIcon },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      { path: '/settlements', label: 'Settlements', icon: CardIcon },
-      { path: '/reports', label: 'Reports', icon: ReportIcon },
-    ],
-  },
-];
+import { useAnchorFlowSubPrograms } from '../hooks/useAnchorFlowSubPrograms';
+import { anchorIdFromUser } from '../invoice/invoiceShared';
 
 function isNavActive(pathname: string, itemPath: string): boolean {
   if (itemPath === '/') return pathname === '/';
@@ -43,6 +16,55 @@ function navLinkClass(isActive: boolean) {
 export default function AnchorLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const anchorId = useMemo(
+    () => anchorIdFromUser(user?.linkedEntityType, user?.linkedEntityId),
+    [user?.linkedEntityType, user?.linkedEntityId],
+  );
+  const flowFlags = useAnchorFlowSubPrograms(anchorId);
+
+  const invoiceDiscountingItems = useMemo(() => {
+    const items: { path: string; label: string; icon: typeof DocIcon }[] = [];
+    if (flowFlags.purchaseBill) {
+      items.push({ path: '/invoices', label: 'Invoices', icon: DocIcon });
+    }
+    if (flowFlags.salesBill) {
+      items.push({ path: '/sales-bill-discounting', label: 'Sales Bill Discounting', icon: DocIcon });
+    }
+    if (flowFlags.purchaseOrder) {
+      items.push({ path: '/purchase-order-discounting', label: 'Purchase Order Discounting', icon: DocIcon });
+    }
+    return items;
+  }, [flowFlags]);
+
+  const navGroups = useMemo(() => {
+    const groups = [
+      {
+        label: 'Overview',
+        items: [
+          { path: '/', label: 'Dashboard', icon: ChartIcon },
+          { path: '/programs', label: 'Programs', icon: ProgramsIcon },
+        ],
+      },
+      {
+        label: 'Pay Day Loan',
+        items: [
+          { path: '/employees', label: 'Employees', icon: UsersIcon },
+          { path: '/salary-upload', label: 'Salary Upload', icon: UploadIcon },
+        ],
+      },
+    ];
+    if (invoiceDiscountingItems.length > 0) {
+      groups.push({ label: 'Invoice Discounting', items: invoiceDiscountingItems });
+    }
+    groups.push({
+      label: 'Operations',
+      items: [
+        { path: '/settlements', label: 'Settlements', icon: CardIcon },
+        { path: '/reports', label: 'Reports', icon: ReportIcon },
+      ],
+    });
+    return groups;
+  }, [invoiceDiscountingItems]);
 
   return (
     <div className="min-h-screen bt-app-canvas flex flex-col">

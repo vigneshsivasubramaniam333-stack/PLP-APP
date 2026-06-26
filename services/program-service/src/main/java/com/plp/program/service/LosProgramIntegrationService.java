@@ -4,6 +4,7 @@ import com.plp.program.integration.los.LosIntegrationResourceTypes;
 import com.plp.program.model.dto.integration.LosProgramUpsertRequest;
 import com.plp.program.model.dto.integration.LosProgramUpsertResponse;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.enums.ProgramStatus;
 import com.plp.program.repository.AnchorRepository;
 import com.plp.program.repository.ProgramRepository;
 import com.plp.program.service.audit.LosSyncAuditService;
@@ -122,6 +123,8 @@ public class LosProgramIntegrationService {
                         .validTo(req.getValidTo())
                         .lmsEntryIn(normalizeLmsEntry(req.getLmsEntryIn()))
                         .encoreProductCode(trimOrNull(req.getEncoreProductCode()))
+                        // LOS-originated programs are pre-approved upstream, so auto-activate in PLP.
+                        .status(ProgramStatus.ACTIVE)
                         .build();
         Program saved = programService.createProgram(created);
         log.info("LOS program created via integration: {} ({})", saved.getProgramCode(), saved.getId());

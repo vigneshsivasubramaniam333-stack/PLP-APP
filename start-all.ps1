@@ -1,4 +1,4 @@
-﻿# Start PLP backend alongside LOS (LOS unchanged).
+# Start PLP backend alongside LOS (LOS unchanged).
 # Uses environment variables (works without rebuilding JARs).
 # Prerequisites: docker compose -f docker-compose.infra.yml up -d
 
@@ -78,7 +78,7 @@ $services = @(
         port = 8181
         env  = @{
             SERVER_PORT = "8181"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_iam"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_iam"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
         } + $localSpringProfile + $localRedis + $localDevReset
     },
@@ -88,10 +88,11 @@ $services = @(
         port = 8182
         env  = @{
             SERVER_PORT = "8182"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_program"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_program"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
             PLP_STORAGE_MINIO_ENDPOINT = "http://localhost:9010"
             PLP_IAM_BASE_URL = "http://localhost:8181"
+            PLP_LENDING_BASE_URL = "http://localhost:8183"
             PLP_LOS_INTEGRATION_API_KEY = "plp-los-integration-dev-key"
         } + $localSpringProfile + $localRedis + $localRabbit + $localDevReset
     },
@@ -101,7 +102,7 @@ $services = @(
         port = 8183
         env  = @{
             SERVER_PORT = "8183"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_lending"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_lending"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
             PLP_PUBLIC_API_BASE_URL = "http://localhost:8180"
             PLP_BORROWER_UI_URL = "http://localhost:3012/plp-borrower"
@@ -114,7 +115,7 @@ $services = @(
         port = 8184
         env  = @{
             SERVER_PORT = "8184"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_integration"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_integration"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
         } + $localSpringProfile + $localRabbit
     },
@@ -124,7 +125,7 @@ $services = @(
         port = 8185
         env  = @{
             SERVER_PORT = "8185"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_notification"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_notification"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
         } + $localSpringProfile + $localRabbit
     },
@@ -134,7 +135,7 @@ $services = @(
         port = 8186
         env  = @{
             SERVER_PORT = "8186"
-            SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_report&stringtype=unspecified"
+            SPRING_DATASOURCE_URL = "jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_report&stringtype=unspecified"
             EUREKA_CLIENT_SERVICEURL_DEFAULTZONE = $eurekaUrl
         } + $localSpringProfile + $localRabbit
     }
@@ -144,16 +145,36 @@ Write-DebugLog "H1" "start-all invoked" @{ eurekaUrl = $eurekaUrl }
 
 Write-Host "PLP start-all (env-based config for Postgres :5433)" -ForegroundColor Cyan
 
-if (-not (Test-PortListening 5433)) {
-    Write-Host "WARNING: Port 5433 not listening. Start infra first:" -ForegroundColor Yellow
-    Write-Host "  docker compose -f docker-compose.infra.yml up -d" -ForegroundColor Yellow
-    Write-DebugLog "H3" "postgres 5433 down" @{}
+function Wait-ForPostgres {
+    param([int]$TimeoutSeconds = 90)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Test-PortListening 5433)) {
+            Start-Sleep -Seconds 2
+            continue
+        }
+        docker exec plp-postgres pg_isready -U plp_admin -d plp_db 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+        Start-Sleep -Seconds 2
+    }
+    return $false
 }
+
+if (-not (Wait-ForPostgres)) {
+    Write-Host "ERROR: PLP Postgres is not ready on 127.0.0.1:5433. Start infra first:" -ForegroundColor Red
+    Write-Host "  docker compose -f docker-compose.infra.yml up -d" -ForegroundColor Yellow
+    Write-DebugLog "H3" "postgres 5433 not ready" @{}
+    exit 1
+}
+
+Write-Host "[OK] Postgres ready on 127.0.0.1:5433" -ForegroundColor Green
 
 function Start-PlpService($svc) {
     $jarPath = Join-Path $base $svc.jar
     if (-not (Test-Path $jarPath)) {
-        Write-Host "ERROR: Missing $jarPath — run: .\mvnw.cmd install -DskipTests" -ForegroundColor Red
+        Write-Host "ERROR: Missing $jarPath - run: .\mvnw.cmd install -DskipTests" -ForegroundColor Red
         exit 1
     }
     $cmd = Build-StartCommand $jarPath $svc.env
@@ -172,7 +193,7 @@ if (Test-PortListening 8861) {
     Write-Host "[OK] Discovery listening on 8861" -ForegroundColor Green
 } else {
     Write-DebugLog "H1" "discovery port still down" @{ port = 8861 }
-    Write-Host "[WARN] Discovery not on 8861 yet — check its window" -ForegroundColor Yellow
+    Write-Host "[WARN] Discovery not on 8861 yet - check its window" -ForegroundColor Yellow
 }
 
 foreach ($s in $services[1..($services.Length - 1)]) {

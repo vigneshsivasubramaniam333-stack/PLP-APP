@@ -169,12 +169,46 @@ export const borrowerApi = {
 };
 
 export const invoiceApi = {
-  list: (opts?: { search?: string; status?: string; lifecycle?: string; page?: number; size?: number }) =>
+  list: (opts?: {
+    search?: string;
+    status?: string;
+    lifecycle?: string;
+    flowType?: string;
+    tab?: string;
+    page?: number;
+    size?: number;
+  }) =>
     apiClient.get('/api/v1/invoices', {
       params: {
         ...(opts?.search ? { search: opts.search } : {}),
         ...(opts?.status ? { status: opts.status } : {}),
         ...(opts?.lifecycle ? { lifecycle: opts.lifecycle } : {}),
+        ...(opts?.flowType ? { flowType: opts.flowType } : {}),
+        ...(opts?.tab ? { tab: opts.tab } : {}),
+        ...(opts?.page != null ? { page: opts.page } : {}),
+        ...(opts?.size != null ? { size: opts.size } : {}),
+      },
+    }),
+  create: (data: Record<string, unknown>) => apiClient.post('/api/v1/invoices', data),
+  listForBorrower: (
+    borrowerId: string,
+    opts?: {
+      search?: string;
+      status?: string;
+      lifecycle?: string;
+      flowType?: string;
+      tab?: string;
+      page?: number;
+      size?: number;
+    },
+  ) =>
+    apiClient.get(`/api/v1/invoices/borrower/${borrowerId}`, {
+      params: {
+        ...(opts?.search ? { search: opts.search } : {}),
+        ...(opts?.status ? { status: opts.status } : {}),
+        ...(opts?.lifecycle ? { lifecycle: opts.lifecycle } : {}),
+        ...(opts?.flowType ? { flowType: opts.flowType } : {}),
+        ...(opts?.tab ? { tab: opts.tab } : {}),
         ...(opts?.page != null ? { page: opts.page } : {}),
         ...(opts?.size != null ? { size: opts.size } : {}),
       },
@@ -266,7 +300,16 @@ export const portalApi = {
   borrowerRequestLoan: (data: Record<string, unknown>) => apiClient.post('/api/v1/portal/borrower/loans/request', data),
   anchorInvoices: (
     anchorId: string,
-    opts?: { programId?: string; search?: string; status?: string; lifecycle?: string; page?: number; size?: number },
+    opts?: {
+      programId?: string;
+      search?: string;
+      status?: string;
+      lifecycle?: string;
+      flowType?: string;
+      tab?: string;
+      page?: number;
+      size?: number;
+    },
   ) =>
     apiClient.get('/api/v1/portal/anchor/invoices', {
       params: {
@@ -275,6 +318,8 @@ export const portalApi = {
         ...(opts?.search ? { search: opts.search } : {}),
         ...(opts?.status ? { status: opts.status } : {}),
         ...(opts?.lifecycle ? { lifecycle: opts.lifecycle } : {}),
+        ...(opts?.flowType ? { flowType: opts.flowType } : {}),
+        ...(opts?.tab ? { tab: opts.tab } : {}),
         ...(opts?.page != null ? { page: opts.page } : {}),
         ...(opts?.size != null ? { size: opts.size } : {}),
       },
@@ -300,6 +345,10 @@ export const portalApi = {
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/verify`),
   anchorConfirmInvoice: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/confirm`),
+  anchorApproveSellerInvoice: (invoiceId: string) =>
+    apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/approve`),
+  anchorRejectSellerInvoice: (invoiceId: string, reason?: string) =>
+    apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/reject`, reason ? { reason } : {}),
 };
 
 export const integrationApi = {
@@ -321,6 +370,9 @@ export const notificationApi = {
   templates: () => apiClient.get('/api/v1/notifications/templates'),
   updateTemplate: (id: string, data: Record<string, string>) =>
     apiClient.put(`/api/v1/notifications/templates/${id}`, data),
+  eventSettings: () => apiClient.get('/api/v1/notifications/event-settings'),
+  updateEventSetting: (eventCode: string, enabled: boolean) =>
+    apiClient.put(`/api/v1/notifications/event-settings/${eventCode}`, { enabled }),
 };
 
 export const reportApi = {

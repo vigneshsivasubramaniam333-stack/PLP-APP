@@ -32,6 +32,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationTemplateRepository templateRepository;
+    private final NotificationEventSettingService eventSettingService;
     private final TemplateRenderer templateRenderer;
     private final JavaMailSender mailSender;
     private final EmailNotificationProperties emailProperties;
@@ -41,8 +42,46 @@ public class NotificationService {
                                           String recipientEmail, String recipientPhone,
                                           Map<String, String> variables,
                                           String referenceType, UUID referenceId) {
+        return sendNotificationForEvent(templateCode, templateCode, recipientId, recipientEmail, recipientPhone,
+                variables, referenceType, referenceId, false);
+    }
+
+    /**
+     * Sends a templated notification when the admin event toggle is enabled.
+     * When {@code skipIfSentToday} is true, skips if the same template was already sent today for the reference.
+     */
+    @Transactional
+    public Notification sendNotificationForEvent(
+            String eventCode,
+            String templateCode,
+            UUID recipientId,
+            String recipientEmail,
+            String recipientPhone,
+            Map<String, String> variables,
+            String referenceType,
+            UUID referenceId,
+            boolean skipIfSentToday) {
+        if (!eventSettingService.isEnabled(eventCode)) {
+            log.info("Notification skipped — event disabled: {}", eventCode);
+            return null;
+        }
+
         NotificationTemplate template = templateRepository.findByTemplateCode(templateCode)
                 .orElseThrow(() -> new RuntimeException("Template not found: " + templateCode));
+        if (Boolean.FALSE.equals(template.getIsActive())) {
+            log.info("Notification skipped — template inactive: {}", templateCode);
+            return null;
+        }
+
+        if (skipIfSentToday && referenceType != null && referenceId != null) {
+            OffsetDateTime startOfDay = OffsetDateTime.now().toLocalDate().atStartOfDay(OffsetDateTime.now().getOffset())
+                    .toOffsetDateTime();
+            if (notificationRepository.wasSentSince(referenceType, referenceId, templateCode, startOfDay)) {
+                log.debug("Notification skipped — already sent today for {} {} template {}", referenceType, referenceId,
+                        templateCode);
+                return null;
+            }
+        }
 
         String subject = templateRenderer.render(template.getSubject(), variables);
         String body = templateRenderer.render(template.getBodyTemplate(), variables);

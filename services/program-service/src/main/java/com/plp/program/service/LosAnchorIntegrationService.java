@@ -104,7 +104,7 @@ public class LosAnchorIntegrationService {
                         .address(buildAddressJson(payload.getAddress()))
                         .sourceSystem(sourceSystem)
                         .losAnchorId(losAnchorId)
-                        .status(AnchorStatus.DRAFT)
+                        .status(AnchorStatus.ACTIVE)
                         .build();
 
         Anchor saved = anchorRepository.save(created);

@@ -2,6 +2,7 @@ package com.plp.program.service;
 
 import com.plp.program.integration.LendingServiceFinanceClient;
 import com.plp.program.model.entity.Invoice;
+import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.entity.Program;
 import com.plp.program.model.enums.InvoiceStatus;
 import com.plp.program.repository.InvoiceRepository;
@@ -25,8 +26,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class InvoiceAutoFinanceService {
 
-    private static final String FLOW_PURCHASE_BILL_DISCOUNTING = "PURCHASE_BILL_DISCOUNTING";
-    private static final String FLOW_SALES_BILL_DISCOUNTING = "SALES_BILL_DISCOUNTING";
+    private static final String FLOW_PURCHASE_BILL_DISCOUNTING = InvoiceDiscountingFlowType.PURCHASE_BILL_DISCOUNTING;
 
     private final InvoiceRepository invoiceRepository;
     private final ProgramService programService;
@@ -82,7 +82,7 @@ public class InvoiceAutoFinanceService {
         boolean purchaseReady = "BORROWER_ACCEPTED".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
         boolean salesReady = "ELIGIBLE".equals(status) || "PARTIALLY_DISCOUNTED".equals(status);
         String flow = invoice.getFlowType();
-        boolean purchaseFlow = flow == null || flow.isBlank() || FLOW_PURCHASE_BILL_DISCOUNTING.equals(flow);
+        boolean purchaseFlow = InvoiceDiscountingFlowType.isPurchaseBill(flow);
         return purchaseFlow ? purchaseReady : salesReady;
     }
 

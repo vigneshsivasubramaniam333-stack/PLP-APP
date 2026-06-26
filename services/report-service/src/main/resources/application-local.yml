@@ -3,7 +3,7 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://localhost:5433/plp_db?currentSchema=plp_report&stringtype=unspecified
+    url: jdbc:postgresql://127.0.0.1:5433/plp_db?currentSchema=plp_report&stringtype=unspecified
   rabbitmq:
     port: 5673
 

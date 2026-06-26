@@ -1,32 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth, PortalSidebarBrand, PortalPoweredByFooter, paymentCartApi } from '@plp/shared';
-
-const navGroups = [
-  {
-    label: 'Overview',
-    items: [
-      { path: '/', label: 'Dashboard', icon: HomeIcon },
-      { path: '/programs', label: 'Programs', icon: ProgramsIcon },
-    ],
-  },
-  {
-    label: 'Lending',
-    items: [
-      { path: '/request-loan', label: 'Request Loan', icon: LoanIcon },
-      { path: '/invoice-discounting', label: 'Invoice Discounting', icon: InvoiceIcon },
-      { path: '/payments/cart', label: 'Payment cart', icon: CartIcon, badgeKey: 'cart' as const },
-      { path: '/my-loans', label: 'My Loans', icon: ListIcon },
-    ],
-  },
-  {
-    label: 'Account',
-    items: [
-      { path: '/repayments', label: 'Repayments', icon: RepaymentIcon },
-      { path: '/notifications', label: 'Notifications', icon: BellIcon },
-    ],
-  },
-];
+import { useBorrowerFlowEnrollments } from '../hooks/useBorrowerFlowEnrollments';
 
 function navLinkClass(isActive: boolean) {
   return `${isActive ? 'bt-sidebar-link active' : 'bt-sidebar-link'} flex items-center gap-3`;
@@ -39,7 +14,49 @@ export default function BorrowerLayout() {
     if ((user?.linkedEntityType ?? '').trim().toUpperCase() !== 'BORROWER') return '';
     return (user?.linkedEntityId ?? '').trim();
   }, [user?.linkedEntityType, user?.linkedEntityId]);
+  const flowFlags = useBorrowerFlowEnrollments(borrowerId);
   const [cartCount, setCartCount] = useState(0);
+
+  const lendingItems = useMemo(() => {
+    const items: { path: string; label: string; icon: typeof InvoiceIcon; badgeKey?: 'cart' }[] = [
+      { path: '/request-loan', label: 'Request Loan', icon: LoanIcon },
+    ];
+    if (flowFlags.purchaseBill) {
+      items.push({ path: '/invoice-discounting', label: 'Invoice Discounting', icon: InvoiceIcon });
+    }
+    if (flowFlags.salesBill) {
+      items.push({ path: '/sales-bill-discounting', label: 'Sales Bill Discounting', icon: InvoiceIcon });
+    }
+    if (flowFlags.purchaseOrder) {
+      items.push({ path: '/purchase-order-discounting', label: 'Purchase Order Discounting', icon: InvoiceIcon });
+    }
+    if (flowFlags.purchaseBill || flowFlags.salesBill || flowFlags.purchaseOrder) {
+      items.push({ path: '/payments/cart', label: 'Payment cart', icon: CartIcon, badgeKey: 'cart' });
+    }
+    items.push({ path: '/my-loans', label: 'My Loans', icon: ListIcon });
+    return items;
+  }, [flowFlags]);
+
+  const navGroups = useMemo(
+    () => [
+      {
+        label: 'Overview',
+        items: [
+          { path: '/', label: 'Dashboard', icon: HomeIcon },
+          { path: '/programs', label: 'Programs', icon: ProgramsIcon },
+        ],
+      },
+      { label: 'Lending', items: lendingItems },
+      {
+        label: 'Account',
+        items: [
+          { path: '/repayments', label: 'Repayments', icon: RepaymentIcon },
+          { path: '/notifications', label: 'Notifications', icon: BellIcon },
+        ],
+      },
+    ],
+    [lendingItems],
+  );
 
   useEffect(() => {
     if (!borrowerId) return;
@@ -62,12 +79,12 @@ export default function BorrowerLayout() {
               <div key={group.label} className="mb-1">
                 <div className="bt-sidebar-group-label">{group.label}</div>
                 {group.items.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
                   return (
                     <Link key={item.path} to={item.path} className={navLinkClass(isActive)}>
                       <item.icon active={isActive} />
                       <span className="flex-1">{item.label}</span>
-                      {'badgeKey' in item && item.badgeKey === 'cart' && cartCount > 0 ? (
+                      {item.badgeKey === 'cart' && cartCount > 0 ? (
                         <span className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--bt-orange)] px-1.5 py-0.5 text-[10px] font-bold text-white">
                           {cartCount}
                         </span>
