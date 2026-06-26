@@ -155,6 +155,22 @@ export interface SubProgramBorrower {
   paymentMethodMode?: 'GLOBAL' | 'CUSTOM' | string | null;
   overdueInterestRate?: number | null;
   partyCode?: string | null;
+  borrowerOdAccountNumber?: string | null;
+  borrowerOdBankName?: string | null;
+  borrowerOdBankIfsc?: string | null;
+  borrowerOdAccountName?: string | null;
+  idfcCollectionAccountName?: string | null;
+  idfcOdAccountNumber?: string | null;
+  idfcIfscCode?: string | null;
+  idfcUpiId?: string | null;
+  castlerEscrowAccountIn?: string | null;
+  castlerEscrowAccountId?: string | null;
+  castlerEscrowPayeeId?: string | null;
+  razorpayRouteAccountId?: string | null;
+  razorpaySmartCollectAcId?: string | null;
+  razorpayFee?: number | null;
+  hdfcAccountNo?: string | null;
+  hdfcIfscCode?: string | null;
 }
 
 export interface ProductRepaymentDefault {
@@ -219,6 +235,7 @@ export interface Loan {
   outstandingAmount: number;
   status: LoanStatus;
   requestDate: string;
+  sanctionDate?: string | null;
   dueDate: string;
   /** ISO timestamp when the loan row was created (lending-service). */
   createdAt?: string | null;

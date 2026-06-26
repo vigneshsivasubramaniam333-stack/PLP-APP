@@ -132,27 +132,27 @@ export default function PgSettlementsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-2 w-10" />
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Invoice</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Borrower</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Amount</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Created</th>
+                  <th className="px-4 py-2 w-10 align-middle" />
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Invoice</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Borrower</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase align-middle whitespace-nowrap tabular-nums">Amount</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Created</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pipRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-4 py-2 text-center align-middle">
                       <input
                         type="checkbox"
                         checked={selected.has(row.id)}
                         onChange={() => toggle(row.id)}
                       />
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs">{row.invoiceId}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{row.borrowerId}</td>
-                    <td className="px-4 py-2 text-right font-medium">{formatCurrency(row.principalAmount)}</td>
-                    <td className="px-4 py-2 text-xs text-slate-500">
+                    <td className="px-4 py-2 font-mono text-xs align-middle">{row.invoiceId}</td>
+                    <td className="px-4 py-2 font-mono text-xs align-middle">{row.borrowerId}</td>
+                    <td className="px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap align-middle">{formatCurrency(row.principalAmount)}</td>
+                    <td className="px-4 py-2 text-xs text-slate-500 align-middle whitespace-nowrap">
                       {row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
                     </td>
                   </tr>

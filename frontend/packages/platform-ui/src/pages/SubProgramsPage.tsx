@@ -38,6 +38,41 @@ type BorrowerTermsForm = {
   paymentMethod: string;
   overdueInterestRate: string;
   partyCode: string;
+  borrowerOdAccountNumber: string;
+  borrowerOdBankName: string;
+  borrowerOdBankIfsc: string;
+  borrowerOdAccountName: string;
+  idfcCollectionAccountName: string;
+  idfcOdAccountNumber: string;
+  idfcIfscCode: string;
+  idfcUpiId: string;
+  castlerEscrowAccountIn: string;
+  castlerEscrowAccountId: string;
+  castlerEscrowPayeeId: string;
+  razorpayRouteAccountId: string;
+  razorpaySmartCollectAcId: string;
+  razorpayFee: string;
+  hdfcAccountNo: string;
+  hdfcIfscCode: string;
+};
+
+const DEFAULT_REPAYMENT_ACCOUNT_FIELDS = {
+  borrowerOdAccountNumber: '',
+  borrowerOdBankName: '',
+  borrowerOdBankIfsc: '',
+  borrowerOdAccountName: '',
+  idfcCollectionAccountName: '',
+  idfcOdAccountNumber: '',
+  idfcIfscCode: '',
+  idfcUpiId: '',
+  castlerEscrowAccountIn: '',
+  castlerEscrowAccountId: '',
+  castlerEscrowPayeeId: '',
+  razorpayRouteAccountId: '',
+  razorpaySmartCollectAcId: '',
+  razorpayFee: '',
+  hdfcAccountNo: '',
+  hdfcIfscCode: '',
 };
 
 const DEFAULT_BORROWER_TERMS: Omit<BorrowerTermsForm, 'borrowerLimit'> = {
@@ -49,6 +84,7 @@ const DEFAULT_BORROWER_TERMS: Omit<BorrowerTermsForm, 'borrowerLimit'> = {
   paymentMethod: 'SMART_COLLECT',
   overdueInterestRate: '0',
   partyCode: '',
+  ...DEFAULT_REPAYMENT_ACCOUNT_FIELDS,
 };
 
 function formatRepaymentMechanism(value: string | null | undefined): string {
@@ -79,7 +115,51 @@ function borrowerTermsFormFromMembership(row: SubProgramBorrower): BorrowerTerms
     paymentMethod: row.paymentMethod ?? 'SMART_COLLECT',
     overdueInterestRate: row.overdueInterestRate != null ? String(row.overdueInterestRate) : '0',
     partyCode: row.partyCode ?? '',
+    borrowerOdAccountNumber: row.borrowerOdAccountNumber ?? '',
+    borrowerOdBankName: row.borrowerOdBankName ?? '',
+    borrowerOdBankIfsc: row.borrowerOdBankIfsc ?? '',
+    borrowerOdAccountName: row.borrowerOdAccountName ?? '',
+    idfcCollectionAccountName: row.idfcCollectionAccountName ?? '',
+    idfcOdAccountNumber: row.idfcOdAccountNumber ?? '',
+    idfcIfscCode: row.idfcIfscCode ?? '',
+    idfcUpiId: row.idfcUpiId ?? '',
+    castlerEscrowAccountIn: row.castlerEscrowAccountIn ?? '',
+    castlerEscrowAccountId: row.castlerEscrowAccountId ?? '',
+    castlerEscrowPayeeId: row.castlerEscrowPayeeId ?? '',
+    razorpayRouteAccountId: row.razorpayRouteAccountId ?? '',
+    razorpaySmartCollectAcId: row.razorpaySmartCollectAcId ?? '',
+    razorpayFee: row.razorpayFee != null ? String(row.razorpayFee) : '',
+    hdfcAccountNo: row.hdfcAccountNo ?? '',
+    hdfcIfscCode: row.hdfcIfscCode ?? '',
   };
+}
+
+function appendRepaymentAccountFieldsToPayload(payload: Record<string, unknown>, form: BorrowerTermsForm) {
+  const stringFields: Array<keyof BorrowerTermsForm> = [
+    'borrowerOdAccountNumber',
+    'borrowerOdBankName',
+    'borrowerOdBankIfsc',
+    'borrowerOdAccountName',
+    'idfcCollectionAccountName',
+    'idfcOdAccountNumber',
+    'idfcIfscCode',
+    'idfcUpiId',
+    'castlerEscrowAccountIn',
+    'castlerEscrowAccountId',
+    'castlerEscrowPayeeId',
+    'razorpayRouteAccountId',
+    'razorpaySmartCollectAcId',
+    'hdfcAccountNo',
+    'hdfcIfscCode',
+  ];
+  for (const key of stringFields) {
+    payload[key] = form[key].trim() || null;
+  }
+  if (form.razorpayFee.trim()) {
+    payload.razorpayFee = parseFloat(form.razorpayFee);
+  } else {
+    payload.razorpayFee = null;
+  }
 }
 
 function appendBorrowerTermsToPayload(
@@ -98,6 +178,7 @@ function appendBorrowerTermsToPayload(
   if (opts.onCreate || form.paymentMethod) payload.paymentMethod = form.paymentMethod;
   if (form.overdueInterestRate.trim()) payload.overdueInterestRate = parseFloat(form.overdueInterestRate);
   if (form.partyCode.trim()) payload.partyCode = form.partyCode.trim();
+  appendRepaymentAccountFieldsToPayload(payload, form);
 }
 
 function rolesForInvoiceDiscountingFlow(flowType: string): { anchorRole: string; borrowerRole: string } {
@@ -417,6 +498,178 @@ function BorrowerMembershipCard({
   );
 }
 
+function BorrowerRepaymentAccountFields({
+  form,
+  onChange,
+}: {
+  form: BorrowerTermsForm;
+  onChange: (next: BorrowerTermsForm) => void;
+}) {
+  return (
+    <>
+      <div className={sectionTitleCls}>Lender borrower OD account info</div>
+      <div>
+        <label className={labelCls}>Borrower OD account #</label>
+        <input
+          type="text"
+          value={form.borrowerOdAccountNumber}
+          onChange={(e) => onChange({ ...form, borrowerOdAccountNumber: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Borrower OD bank name</label>
+        <input
+          type="text"
+          value={form.borrowerOdBankName}
+          onChange={(e) => onChange({ ...form, borrowerOdBankName: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Borrower OD bank IFSC code</label>
+        <input
+          type="text"
+          value={form.borrowerOdBankIfsc}
+          onChange={(e) => onChange({ ...form, borrowerOdBankIfsc: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Borrower OD account name</label>
+        <input
+          type="text"
+          value={form.borrowerOdAccountName}
+          onChange={(e) => onChange({ ...form, borrowerOdAccountName: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+
+      <div className={sectionTitleCls}>IDFC collection account info</div>
+      <div>
+        <label className={labelCls}>Account name</label>
+        <input
+          type="text"
+          value={form.idfcCollectionAccountName}
+          onChange={(e) => onChange({ ...form, idfcCollectionAccountName: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>OD account #</label>
+        <input
+          type="text"
+          value={form.idfcOdAccountNumber}
+          onChange={(e) => onChange({ ...form, idfcOdAccountNumber: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>IFSC code</label>
+        <input
+          type="text"
+          value={form.idfcIfscCode}
+          onChange={(e) => onChange({ ...form, idfcIfscCode: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>UPI ID</label>
+        <input
+          type="text"
+          value={form.idfcUpiId}
+          onChange={(e) => onChange({ ...form, idfcUpiId: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+
+      <div className={sectionTitleCls}>Castler escrow account info</div>
+      <div className="col-span-full md:col-span-1">
+        <label className={labelCls}>Escrow account in</label>
+        <select
+          value={form.castlerEscrowAccountIn}
+          onChange={(e) => onChange({ ...form, castlerEscrowAccountIn: e.target.value })}
+          className={inputCls}
+        >
+          <option value="">-- Select escrow account --</option>
+          <option value="ESCROW_ICICI">Escrow ICICI</option>
+          <option value="ESCROW_CASTLER">Escrow CASTLER</option>
+          <option value="NOT_REQUIRED">Not Required</option>
+        </select>
+      </div>
+      <div>
+        <label className={labelCls}>Escrow account ID</label>
+        <input
+          type="text"
+          value={form.castlerEscrowAccountId}
+          onChange={(e) => onChange({ ...form, castlerEscrowAccountId: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Escrow payee ID</label>
+        <input
+          type="text"
+          value={form.castlerEscrowPayeeId}
+          onChange={(e) => onChange({ ...form, castlerEscrowPayeeId: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+
+      <div className={sectionTitleCls}>Razorpay route / SC info</div>
+      <div>
+        <label className={labelCls}>Razorpay route account ID</label>
+        <input
+          type="text"
+          value={form.razorpayRouteAccountId}
+          onChange={(e) => onChange({ ...form, razorpayRouteAccountId: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Razorpay smart collect AC ID</label>
+        <input
+          type="text"
+          value={form.razorpaySmartCollectAcId}
+          onChange={(e) => onChange({ ...form, razorpaySmartCollectAcId: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Razorpay fee</label>
+        <input
+          type="number"
+          step="0.01"
+          min={0}
+          value={form.razorpayFee}
+          onChange={(e) => onChange({ ...form, razorpayFee: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+
+      <div className={sectionTitleCls}>HDFC alert info</div>
+      <div>
+        <label className={labelCls}>HDFC account no</label>
+        <input
+          type="text"
+          value={form.hdfcAccountNo}
+          onChange={(e) => onChange({ ...form, hdfcAccountNo: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>IFSC code</label>
+        <input
+          type="text"
+          value={form.hdfcIfscCode}
+          onChange={(e) => onChange({ ...form, hdfcIfscCode: e.target.value })}
+          className={inputCls}
+        />
+      </div>
+    </>
+  );
+}
+
 function BorrowerTermsFields({
   form,
   onChange,
@@ -572,6 +825,7 @@ function BorrowerTermsFields({
           Effective method follows the platform default configured under Repayment defaults.
         </div>
       )}
+      <BorrowerRepaymentAccountFields form={form} onChange={onChange} />
     </>
   );
 }

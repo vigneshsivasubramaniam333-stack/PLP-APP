@@ -53,6 +53,11 @@ export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment'
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';
 export { ProgramConfigDetailsPanel } from './components/ProgramConfigDetailsPanel';
 export {
+  LoanRepaymentHistory,
+  LoanSummaryWithRepayments,
+  InvoiceLinkedLoansPanel,
+} from './components/LoanRepaymentPanel';
+export {
   FLOW_PURCHASE_BILL_DISCOUNTING,
   FLOW_SALES_BILL_DISCOUNTING,
   FLOW_PURCHASE_ORDER_DISCOUNTING,

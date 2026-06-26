@@ -234,6 +234,7 @@ public class SubProgramService {
         if (dto.getPartyCode() != null) {
             membership.setPartyCode(dto.getPartyCode().isBlank() ? null : dto.getPartyCode().trim());
         }
+        applyRepaymentAccountFields(membership, dto);
 
         SubProgramBorrowerTermsValidator.validateAndApplyDefaults(membership, subProgram);
         SubProgramBorrower saved = subProgramBorrowerRepository.save(membership);
@@ -289,6 +290,64 @@ public class SubProgramService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("paymentMethodMode must be GLOBAL or CUSTOM");
         }
+    }
+
+    private static void applyRepaymentAccountFields(SubProgramBorrower membership, SubProgramBorrowerTermsDto dto) {
+        if (dto.getBorrowerOdAccountNumber() != null) {
+            membership.setBorrowerOdAccountNumber(trimOrNull(dto.getBorrowerOdAccountNumber()));
+        }
+        if (dto.getBorrowerOdBankName() != null) {
+            membership.setBorrowerOdBankName(trimOrNull(dto.getBorrowerOdBankName()));
+        }
+        if (dto.getBorrowerOdBankIfsc() != null) {
+            membership.setBorrowerOdBankIfsc(trimOrNull(dto.getBorrowerOdBankIfsc()));
+        }
+        if (dto.getBorrowerOdAccountName() != null) {
+            membership.setBorrowerOdAccountName(trimOrNull(dto.getBorrowerOdAccountName()));
+        }
+        if (dto.getIdfcCollectionAccountName() != null) {
+            membership.setIdfcCollectionAccountName(trimOrNull(dto.getIdfcCollectionAccountName()));
+        }
+        if (dto.getIdfcOdAccountNumber() != null) {
+            membership.setIdfcOdAccountNumber(trimOrNull(dto.getIdfcOdAccountNumber()));
+        }
+        if (dto.getIdfcIfscCode() != null) {
+            membership.setIdfcIfscCode(trimOrNull(dto.getIdfcIfscCode()));
+        }
+        if (dto.getIdfcUpiId() != null) {
+            membership.setIdfcUpiId(trimOrNull(dto.getIdfcUpiId()));
+        }
+        if (dto.getCastlerEscrowAccountIn() != null) {
+            membership.setCastlerEscrowAccountIn(trimOrNull(dto.getCastlerEscrowAccountIn()));
+        }
+        if (dto.getCastlerEscrowAccountId() != null) {
+            membership.setCastlerEscrowAccountId(trimOrNull(dto.getCastlerEscrowAccountId()));
+        }
+        if (dto.getCastlerEscrowPayeeId() != null) {
+            membership.setCastlerEscrowPayeeId(trimOrNull(dto.getCastlerEscrowPayeeId()));
+        }
+        if (dto.getRazorpayRouteAccountId() != null) {
+            membership.setRazorpayRouteAccountId(trimOrNull(dto.getRazorpayRouteAccountId()));
+        }
+        if (dto.getRazorpaySmartCollectAcId() != null) {
+            membership.setRazorpaySmartCollectAcId(trimOrNull(dto.getRazorpaySmartCollectAcId()));
+        }
+        if (dto.getRazorpayFee() != null) {
+            membership.setRazorpayFee(dto.getRazorpayFee());
+        }
+        if (dto.getHdfcAccountNo() != null) {
+            membership.setHdfcAccountNo(trimOrNull(dto.getHdfcAccountNo()));
+        }
+        if (dto.getHdfcIfscCode() != null) {
+            membership.setHdfcIfscCode(trimOrNull(dto.getHdfcIfscCode()));
+        }
+    }
+
+    private static String trimOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return raw.trim();
     }
 
     private void validateSubProgramForProgram(Program program, SubProgram subProgram) {

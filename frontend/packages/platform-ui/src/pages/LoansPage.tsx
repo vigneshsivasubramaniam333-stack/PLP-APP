@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
-import { getStoredAuthUser, lenderLoanCapabilities, loanApi, loanHasLmsAccount, loanPrincipalAmount, notifyError, notifySuccess, notifyErrorMessage } from '@plp/shared';
+import {
+  getStoredAuthUser,
+  lenderLoanCapabilities,
+  loanApi,
+  loanHasLmsAccount,
+  loanPrincipalAmount,
+  LoanSummaryWithRepayments,
+  notifyError,
+  notifySuccess,
+  notifyErrorMessage,
+} from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
 function humanizeStatus(status: string): string {
@@ -30,6 +40,11 @@ export default function LoansPage() {
   const [repayModalLoan, setRepayModalLoan] = useState<Loan | null>(null);
   const [repayAmount, setRepayAmount] = useState('');
   const [repaySubmitting, setRepaySubmitting] = useState(false);
+  const [sanctionModalLoan, setSanctionModalLoan] = useState<Loan | null>(null);
+  const [sanctionAmount, setSanctionAmount] = useState('');
+  const [sanctionDate, setSanctionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sanctionSubmitting, setSanctionSubmitting] = useState(false);
+  const [expandedClosedLoanIds, setExpandedClosedLoanIds] = useState<Set<string>>(() => new Set());
 
   const caps = lenderLoanCapabilities(getStoredAuthUser()?.role);
 
@@ -52,13 +67,52 @@ export default function LoansPage() {
   );
 
   const handleSanction = async (loan: Loan) => {
+    setSanctionAmount(String(loan.requestedAmount ?? ''));
+    setSanctionDate(new Date().toISOString().slice(0, 10));
+    setSanctionModalLoan(loan);
+  };
+
+  const closeSanctionModal = () => {
+    if (sanctionSubmitting) return;
+    setSanctionModalLoan(null);
+    setSanctionAmount('');
+  };
+
+  const handleSubmitSanction = async () => {
+    if (!sanctionModalLoan) return;
+    const amount = Number.parseFloat(sanctionAmount.replace(/,/g, ''));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      notifyErrorMessage('Enter a valid sanction amount greater than zero');
+      return;
+    }
+    if (!sanctionDate) {
+      notifyErrorMessage('Select a sanction date');
+      return;
+    }
+    setSanctionSubmitting(true);
     try {
-      await loanApi.approve(loan.id, { sanctionedAmount: loan.requestedAmount });
-      notifySuccess(`Loan ${loan.loanNumber} sanctioned`);
+      await loanApi.approve(sanctionModalLoan.id, {
+        sanctionedAmount: amount,
+        sanctionDate,
+      });
+      notifySuccess(`Loan ${sanctionModalLoan.loanNumber} sanctioned`);
+      setSanctionModalLoan(null);
+      setSanctionAmount('');
       reload();
     } catch (err) {
       notifyError(err, 'Sanction failed');
+    } finally {
+      setSanctionSubmitting(false);
     }
+  };
+
+  const toggleClosedLoanDetails = (loanId: string) => {
+    setExpandedClosedLoanIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(loanId)) next.delete(loanId);
+      else next.add(loanId);
+      return next;
+    });
   };
 
   const handleInitiateDisbursement = async (loan: Loan) => {
@@ -221,24 +275,27 @@ export default function LoansPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleLoans.map((l) => {
+            {visibleLoans.flatMap((l) => {
               const showSanctionReject = l.status === 'REQUESTED' && caps.canSanctionOrReject;
               const showInitiate = l.status === 'SANCTIONED' && caps.canInitiateDisburse;
               const showApproveDisburse = l.status === 'DISBURSEMENT_PENDING' && caps.canApproveDisburse;
               const showCancelDisburse = l.status === 'DISBURSEMENT_PENDING' && caps.canCancelDisburse;
               const showRecordRepayment =
                 caps.canRecordRepayment && (REPAY_ELIGIBLE_STATUSES as readonly string[]).includes(l.status);
+              const showClosedRepayments =
+                loanTab === 'closed' && ['CLOSED', 'REJECTED'].includes(l.status);
               const hasActions =
                 showSanctionReject ||
                 showInitiate ||
                 showApproveDisburse ||
                 showCancelDisburse ||
-                showRecordRepayment;
+                showRecordRepayment ||
+                showClosedRepayments;
               const showStatusHint =
                 !hasActions &&
                 ['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE', 'CLOSED', 'CANCELLED'].includes(l.status);
 
-              return (
+              const rows = [
               <tr key={l.id} className="hover:bg-slate-50/80">
                 <td className="px-5 py-3.5">
                   <div className="font-mono text-xs font-medium text-slate-700">{l.loanNumber}</div>
@@ -320,6 +377,15 @@ export default function LoansPage() {
                         Record Repayment
                       </button>
                     )}
+                    {showClosedRepayments && (
+                      <button
+                        type="button"
+                        onClick={() => toggleClosedLoanDetails(l.id)}
+                        className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 rounded hover:bg-slate-200"
+                      >
+                        {expandedClosedLoanIds.has(l.id) ? 'Hide repayments' : 'View repayments'}
+                      </button>
+                    )}
                     {!hasActions && (
                       <span className="text-xs text-slate-400">
                         {showStatusHint ? l.dueDate || '—' : '—'}
@@ -327,8 +393,20 @@ export default function LoansPage() {
                     )}
                   </div>
                 </td>
-              </tr>
-              );
+              </tr>,
+              ];
+
+              if (showClosedRepayments && expandedClosedLoanIds.has(l.id)) {
+                rows.push(
+                  <tr key={`${l.id}-repayments`}>
+                    <td colSpan={7} className="bg-slate-50/60 px-5 py-4 align-top">
+                      <LoanSummaryWithRepayments loan={l} defaultExpandedHistory />
+                    </td>
+                  </tr>,
+                );
+              }
+
+              return rows;
             })}
             {loans.length === 0 && (
               <tr>
@@ -340,6 +418,68 @@ export default function LoansPage() {
           </tbody>
         </table>
       </div>
+
+      {sanctionModalLoan && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeSanctionModal();
+          }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-lg border border-slate-200 w-full max-w-md p-5"
+            role="dialog"
+            aria-labelledby="sanction-modal-title"
+          >
+            <h2 id="sanction-modal-title" className="text-lg font-semibold text-slate-800">
+              Sanction loan
+            </h2>
+            <p className="text-xs text-slate-500 mt-1 font-mono">{sanctionModalLoan.loanNumber}</p>
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-slate-600">Sanction amount (₹)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={sanctionAmount}
+                onChange={(e) => setSanctionAmount(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
+                placeholder="Amount"
+                disabled={sanctionSubmitting}
+              />
+            </label>
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-slate-600">Sanction date</span>
+              <input
+                type="date"
+                value={sanctionDate}
+                onChange={(e) => setSanctionDate(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
+                disabled={sanctionSubmitting}
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeSanctionModal}
+                disabled={sanctionSubmitting}
+                className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSubmitSanction()}
+                disabled={sanctionSubmitting}
+                className="px-3 py-1.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {sanctionSubmitting ? 'Sanctioning…' : 'Sanction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {repayModalLoan && (
         <div

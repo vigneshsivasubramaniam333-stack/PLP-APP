@@ -12,6 +12,7 @@ import {
   BtButton,
   BtBadge,
   InvoiceListToolbar,
+  InvoiceLinkedLoansPanel,
 } from '@plp/shared';
 import type { Program, Invoice, SubProgram, InvoiceListFilters, InvoicePageMeta } from '@plp/shared';
 import {
@@ -44,6 +45,7 @@ export default function InvoicesPage() {
     size: 20,
   });
   const [loading, setLoading] = useState(false);
+  const [expandedLoanInvoiceIds, setExpandedLoanInvoiceIds] = useState<Set<string>>(() => new Set());
 
   const idSubPrograms = useMemo(() => {
     return subPrograms.filter((sp) =>
@@ -108,6 +110,17 @@ export default function InvoicesPage() {
       console.error(err);
     }
   };
+
+  const toggleLoanDetails = (invoiceId: string) => {
+    setExpandedLoanInvoiceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) next.delete(invoiceId);
+      else next.add(invoiceId);
+      return next;
+    });
+  };
+
+  const showLoanDetails = listFilters.lifecycle === 'closed';
 
   if (!anchorId) {
     return (
@@ -205,9 +218,10 @@ export default function InvoicesPage() {
                     </td>
                   </tr>
                 ) : (
-                  invoices.map((inv) => {
+                  invoices.flatMap((inv) => {
                     const confirmBlocked = isCheckerCannotConfirmOwnUpload(inv, user);
-                    return (
+                    const loanExpanded = expandedLoanInvoiceIds.has(inv.id);
+                    const rows = [
                       <tr key={inv.id}>
                         <td>
                           <div className="font-mono text-xs font-medium text-[var(--bt-gray-800)]">{inv.invoiceNumber}</div>
@@ -248,13 +262,34 @@ export default function InvoicesPage() {
                                 </button>
                               </span>
                             ) : null}
-                            {!['UPLOADED', 'VERIFIED'].includes(inv.status) ? (
+                            {showLoanDetails ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleLoanDetails(inv.id)}
+                                className="bt-btn bt-btn-secondary bt-btn-sm"
+                              >
+                                {loanExpanded ? 'Hide loan' : 'View loan'}
+                              </button>
+                            ) : null}
+                            {!['UPLOADED', 'VERIFIED'].includes(inv.status) && !showLoanDetails ? (
                               <span className="text-xs text-[var(--bt-gray-400)]">—</span>
                             ) : null}
                           </div>
                         </td>
-                      </tr>
-                    );
+                      </tr>,
+                    ];
+
+                    if (showLoanDetails && loanExpanded) {
+                      rows.push(
+                        <tr key={`${inv.id}-loan`}>
+                          <td colSpan={7} className="bg-slate-50/60 px-5 py-4 align-top">
+                            <InvoiceLinkedLoansPanel invoiceId={inv.id} defaultExpandedHistory />
+                          </td>
+                        </tr>,
+                      );
+                    }
+
+                    return rows;
                   })
                 )}
               </tbody>

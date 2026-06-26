@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -124,13 +125,41 @@ public class LoanController {
     public ResponseEntity<Map<String, Object>> listLoans(
             @RequestParam(required = false) UUID borrowerId,
             @RequestParam(required = false) UUID programId,
+            @RequestParam(required = false) UUID invoiceId,
             @RequestHeader(value = LoanAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
             @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
             @RequestHeader(value = LoanAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType,
             @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader) {
         Set<String> roles = LoanAccessGuard.parseRoles(rolesHeader);
         List<Loan> loans;
-        if (LoanAccessGuard.isLenderRole(roles)) {
+        if (invoiceId != null) {
+            loans = loanService.getLoansByInvoice(invoiceId);
+            if (LoanAccessGuard.isLenderRole(roles)) {
+                // full list for invoice
+            } else if (LoanAccessGuard.isBorrowerRole(roles)) {
+                UUID scopedBorrower =
+                        LoanAccessGuard.parseRequiredLinkedBorrower(linkedEntityId, linkedEntityType, rolesHeader);
+                loans = loans.stream()
+                        .filter(l -> scopedBorrower.equals(l.getBorrowerId()))
+                        .collect(Collectors.toList());
+            } else if (LoanAccessGuard.isAnchorRole(roles)) {
+                UUID anchor = LoanAccessGuard.parseRequiredLinkedAnchor(linkedEntityId, linkedEntityType, rolesHeader);
+                loans = loans.stream()
+                        .filter(l -> anchor.equals(l.getAnchorId()))
+                        .collect(Collectors.toList());
+            } else {
+                AuditBridge.accessDenied(
+                        "LOAN",
+                        "",
+                        LoanAccessGuard.MSG_ACCESS_DENIED,
+                        userIdHeader,
+                        rolesHeader,
+                        linkedEntityId,
+                        linkedEntityType);
+                throw new org.springframework.web.server.ResponseStatusException(
+                        HttpStatus.FORBIDDEN, LoanAccessGuard.MSG_ACCESS_DENIED);
+            }
+        } else if (LoanAccessGuard.isLenderRole(roles)) {
             if (borrowerId != null) {
                 loans = loanService.getLoansByBorrower(borrowerId);
             } else if (programId != null) {
@@ -184,7 +213,14 @@ public class LoanController {
         LoanAccessGuard.requireLoanWriteAccess(id, userId, rolesHeader, LoanMutation.SANCTION);
         BigDecimal sanctionedAmount = body != null && body.containsKey("sanctionedAmount")
                 ? new BigDecimal(body.get("sanctionedAmount").toString()) : null;
-        Loan approved = loanService.approveLoan(id, UUID.fromString(userId), sanctionedAmount);
+        LocalDate sanctionDate = null;
+        if (body != null && body.containsKey("sanctionDate") && body.get("sanctionDate") != null) {
+            String raw = body.get("sanctionDate").toString().trim();
+            if (!raw.isBlank()) {
+                sanctionDate = LocalDate.parse(raw);
+            }
+        }
+        Loan approved = loanService.approveLoan(id, UUID.fromString(userId), sanctionedAmount, sanctionDate);
         auditService.logEvent(
                 "LOAN_SANCTIONED",
                 "LOAN",

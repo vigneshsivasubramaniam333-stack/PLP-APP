@@ -320,14 +320,14 @@ public class LoanService {
         if ("INVOICE_DISCOUNTING".equals(loan.getProductType())) {
             Map<String, Object> params = programServiceProgramParametersClient.fetchProgramParameters(loan.getProgramId());
             if ("AUTO".equals(String.valueOf(params.get("sanctionType")))) {
-                loan = approveLoan(loan.getId(), null, loan.getRequestedAmount());
+                loan = approveLoan(loan.getId(), null, loan.getRequestedAmount(), null);
             }
         }
         return loan;
     }
 
     @Transactional
-    public Loan approveLoan(UUID loanId, UUID approvedBy, BigDecimal sanctionedAmount) {
+    public Loan approveLoan(UUID loanId, UUID approvedBy, BigDecimal sanctionedAmount, LocalDate sanctionDate) {
         Loan loan = getLoanForUpdate(loanId);
         if (loan.getStatus() != LoanStatus.REQUESTED && loan.getStatus() != LoanStatus.ELIGIBILITY_CHECK) {
             throw new RuntimeException("Loan cannot be sanctioned. Current status: " + loan.getStatus());
@@ -335,7 +335,7 @@ public class LoanService {
 
         loan.setSanctionedAmount(sanctionedAmount != null ? sanctionedAmount : loan.getRequestedAmount());
         loan.setApprovedBy(approvedBy);
-        loan.setSanctionDate(LocalDate.now());
+        loan.setSanctionDate(sanctionDate != null ? sanctionDate : LocalDate.now());
         loan.setStatus(LoanStatus.SANCTIONED);
         loan.setDueDate(LocalDate.now().plusDays(loan.getTenureDays()));
 
@@ -1123,6 +1123,10 @@ public class LoanService {
 
     public List<Loan> getLoansByAnchor(UUID anchorId) {
         return loanRepository.findByAnchorId(anchorId);
+    }
+
+    public List<Loan> getLoansByInvoice(UUID invoiceId) {
+        return loanRepository.findByInvoiceId(invoiceId);
     }
 
     public void validateBorrowerProgramConsistency(UUID borrowerId, UUID programId) {
