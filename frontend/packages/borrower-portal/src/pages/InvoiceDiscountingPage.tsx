@@ -11,7 +11,6 @@ import {
   notifySuccess,
   InvoiceListToolbar,
   FLOW_PURCHASE_BILL_DISCOUNTING,
-  FLOW_SALES_BILL_DISCOUNTING,
   flowTypeLabel,
   canBorrowerAcceptInvoice,
   canBorrowerRequestFinance,
