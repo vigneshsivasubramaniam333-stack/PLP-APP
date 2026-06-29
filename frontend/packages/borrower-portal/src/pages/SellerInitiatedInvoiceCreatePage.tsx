@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   programApi,
   subProgramApi,
@@ -11,9 +12,10 @@ import {
   BtCard,
   BtButton,
   flowTypeLabel,
+  invoiceDueDateError,
   type InvoiceDiscountingFlowType,
 } from '@plp/shared';
-import type { Program, SubProgram } from '@plp/shared';
+import type { Program, SubProgram, Invoice } from '@plp/shared';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
@@ -26,6 +28,7 @@ type Props = {
 export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const digitalInvoiceFileRef = useRef<HTMLInputElement>(null);
   const borrowerId = useMemo(() => {
     if ((user?.linkedEntityType ?? '').trim().toUpperCase() !== 'BORROWER') return '';
     return (user?.linkedEntityId ?? '').trim();
@@ -69,6 +72,7 @@ export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }:
   }, [borrowerId, subPrograms, programs, flowType]);
 
   const selectedSub = enrolledSubPrograms.find((s) => s.id === selectedSubProgramId);
+  const dateErr = invoiceDueDateError(form.invoiceDate, form.dueDate);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,9 +80,13 @@ export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }:
       notifyError(null, 'Select a sub-program you are enrolled in.');
       return;
     }
+    if (dateErr) {
+      notifyError(null, dateErr);
+      return;
+    }
     setSubmitting(true);
     try {
-      await invoiceApi.create({
+      const createRes = await invoiceApi.create({
         invoiceNumber: form.invoiceNumber.trim(),
         borrowerId,
         anchorId: selectedSub.anchorId,
@@ -92,6 +100,24 @@ export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }:
         poNumber: form.poNumber || undefined,
         description: form.description || undefined,
       });
+      const created = createRes.data as Invoice | undefined;
+      const digitalFile = digitalInvoiceFileRef.current?.files?.[0];
+      if (created?.id && digitalFile) {
+        try {
+          await invoiceApi.uploadDigitalInvoice(created.id, digitalFile);
+        } catch (attachErr: unknown) {
+          let attachDetail = 'Invoice copy upload failed';
+          if (axios.isAxiosError(attachErr)) {
+            const body = attachErr.response?.data as { message?: string } | undefined;
+            attachDetail = body?.message ?? attachErr.message;
+          } else if (attachErr instanceof Error) {
+            attachDetail = attachErr.message;
+          }
+          notifyError(null, `Invoice submitted but ${attachDetail}`);
+          navigate(backPath);
+          return;
+        }
+      }
       notifySuccess('Submitted for anchor review');
       navigate(backPath);
     } catch (err) {
@@ -157,9 +183,11 @@ export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }:
                 type="date"
                 className={inputCls}
                 value={form.dueDate}
+                min={form.invoiceDate || undefined}
                 onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                 required
               />
+              {dateErr ? <p className="text-xs text-rose-700 mt-1">{dateErr}</p> : null}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -203,7 +231,19 @@ export default function SellerInitiatedInvoiceCreatePage({ flowType, backPath }:
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             />
           </div>
-          <BtButton type="submit" disabled={submitting}>
+          <div>
+            <label className={labelCls}>Invoice copy (optional)</label>
+            <div className="mt-1 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:border-[var(--bt-orange)]/50 transition-colors">
+              <input
+                ref={digitalInvoiceFileRef}
+                type="file"
+                accept=".pdf,image/*"
+                className="mx-auto block text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-[var(--bt-orange)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:opacity-90"
+              />
+              <p className="mt-2 text-xs text-slate-500">PDF or image, max 10 MB.</p>
+            </div>
+          </div>
+          <BtButton type="submit" disabled={submitting || !!dateErr}>
             {submitting ? 'Submitting…' : 'Submit for anchor review'}
           </BtButton>
         </form>

@@ -32,15 +32,23 @@ spring:
     host: ${SMTP_HOST:smtp.gmail.com}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:billiontechuat@gmail.com}
-    password: ${SMTP_PASSWORD:}
+    password: ${SMTP_PASSWORD:lqwt apmk jusw hcyo}
     protocol: smtp
     properties:
       mail:
+        debug: ${SMTP_DEBUG:false}
         smtp:
           auth: true
           starttls:
             enable: true
             required: true
+          ssl:
+            enable: false
+            trust: smtp.gmail.com
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+          quitwait: false
 
 plp:
   notification:

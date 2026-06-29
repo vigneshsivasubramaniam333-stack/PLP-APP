@@ -8,6 +8,7 @@ import com.plp.program.model.entity.Program;
 import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.enums.InvoiceStatus;
+import com.plp.program.service.earlypay.EarlyPayEligibilityService;
 import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.repository.BorrowerRepository;
 import com.plp.program.repository.InvoiceRepository;
@@ -60,6 +61,7 @@ public class InvoiceService {
     private final LocalDigitalInvoiceStorage localDigitalInvoiceStorage;
     private final ProgramService programService;
     private final InvoiceAutoFinanceService invoiceAutoFinanceService;
+    private final EarlyPayEligibilityService earlyPayEligibilityService;
 
     private static final List<String> GAP_BLOCKING_STATUSES = List.of(
             InvoiceStatus.FINANCING_REQUESTED.name(),
@@ -116,13 +118,27 @@ public class InvoiceService {
         }
         computeEligibleAmount(invoice);
         enforceGapBetweenPreviousInvoices(invoice);
-        invoice.setStatus("UPLOADED");
+        boolean createAsApproved = anchorInitiated && Boolean.TRUE.equals(invoice.getCreateAsApproved());
+        if (createAsApproved) {
+            requirePurchaseBillFlow(invoice, "create as approved");
+            invoice.setVerified(true);
+            invoice.setVerifiedAt(Instant.now());
+            invoice.setVerifiedBy(uploadedByUserId);
+            invoice.setAnchorConfirmed(true);
+            invoice.setAnchorConfirmedAt(Instant.now());
+            invoice.setStatus("ELIGIBLE");
+        } else {
+            invoice.setStatus("UPLOADED");
+        }
         invoice.setSource("MANUAL");
         invoice.setUploadedByUserId(uploadedByUserId);
         invoice = invoiceRepository.save(invoice);
-        log.info("Invoice created: {} anchor={} borrower={} subProgram={} amount={}",
+        if (createAsApproved) {
+            invoice = applyPostEligibleAutomation(invoice);
+        }
+        log.info("Invoice created: {} anchor={} borrower={} subProgram={} amount={} status={}",
                 invoice.getInvoiceNumber(), invoice.getAnchorId(), invoice.getBorrowerId(),
-                invoice.getSubProgramId(), invoice.getInvoiceAmount());
+                invoice.getSubProgramId(), invoice.getInvoiceAmount(), invoice.getStatus());
         return invoice;
     }
 
@@ -223,6 +239,10 @@ public class InvoiceService {
 
                 LocalDate invoiceDate = parseCsvLocalDate(invoiceDateStr);
                 LocalDate dueDate = parseCsvLocalDate(dueDateStr);
+                if (invoiceDate != null && dueDate != null && dueDate.isBefore(invoiceDate)) {
+                    skipCsvRow(rowNum, "due date cannot be before invoice date", errors);
+                    continue;
+                }
                 if (invoiceDate == null || dueDate == null) {
                     skipCsvRow(
                             rowNum,
@@ -458,6 +478,10 @@ public class InvoiceService {
         String current = invoice.getStatus();
         if (InvoiceStatus.FINANCING_REQUESTED.name().equals(current)) {
             throw new RuntimeException("Financing already requested for this invoice");
+        }
+        if (InvoiceStatus.DISCOUNTED_EP.name().equals(current)
+                || InvoiceStatus.SANCTIONED_EP.name().equals(current)) {
+            throw new RuntimeException("Invoice is on Early Pay path; lender finance is not allowed");
         }
         String flow = invoice.getFlowType();
         boolean ok;
@@ -758,6 +782,14 @@ public class InvoiceService {
         return invoiceRepository.findByBorrowerId(borrowerId);
     }
 
+    public List<Invoice> getByBorrowerEnriched(UUID borrowerId, String flowType) {
+        String flowFilter = normalizeFlowFilter(flowType);
+        return getByBorrower(borrowerId).stream()
+                .filter(inv -> flowFilter == null || flowFilter.equalsIgnoreCase(String.valueOf(inv.getFlowType())))
+                .peek(earlyPayEligibilityService::enrichInvoice)
+                .toList();
+    }
+
     public List<Invoice> getEligibleByBorrower(UUID borrowerId) {
         return invoiceRepository.findByBorrowerIdAndStatusIn(
                 borrowerId,
@@ -859,6 +891,7 @@ public class InvoiceService {
         int from = Math.min(safePage * safeSize, total);
         int to = Math.min(from + safeSize, total);
         List<Invoice> slice = filtered.subList(from, to);
+        slice.forEach(earlyPayEligibilityService::enrichInvoice);
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
 
         Map<String, Object> pageMeta = new LinkedHashMap<>();
@@ -912,6 +945,11 @@ public class InvoiceService {
         }
         if (invoice.getInvoiceAmount() == null || invoice.getInvoiceAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Invoice amount must be positive");
+        }
+        if (invoice.getInvoiceDate() != null
+                && invoice.getDueDate() != null
+                && invoice.getDueDate().isBefore(invoice.getInvoiceDate())) {
+            throw new RuntimeException("Due date cannot be before invoice date");
         }
         assertNoDuplicateInvoice(invoice);
 

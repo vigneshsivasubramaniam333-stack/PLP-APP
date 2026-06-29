@@ -190,6 +190,11 @@ export const invoiceApi = {
       },
     }),
   create: (data: Record<string, unknown>) => apiClient.post('/api/v1/invoices', data),
+  uploadDigitalInvoice: (invoiceId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post(`/api/v1/invoices/${invoiceId}/digital-invoice`, formData);
+  },
   listForBorrower: (
     borrowerId: string,
     opts?: {
@@ -349,6 +354,45 @@ export const portalApi = {
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/approve`),
   anchorRejectSellerInvoice: (invoiceId: string, reason?: string) =>
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/reject`, reason ? { reason } : {}),
+  earlyPayEnabled: () => apiClient.get('/api/v1/portal/anchor/early-pay/enabled'),
+  earlyPaySubPrograms: () => apiClient.get('/api/v1/portal/anchor/early-pay/sub-programs'),
+  earlyPayParameters: (subProgramId?: string) =>
+    apiClient.get('/api/v1/portal/anchor/early-pay/parameters', {
+      params: subProgramId ? { subProgramId } : {},
+    }),
+  earlyPayCreateParameter: (data: Record<string, unknown>) =>
+    apiClient.post('/api/v1/portal/anchor/early-pay/parameters', data),
+  earlyPayBorrowers: (subProgramId: string) =>
+    apiClient.get('/api/v1/portal/anchor/early-pay/borrowers', { params: { subProgramId } }),
+  earlyPayUpdateBorrower: (membershipId: string, enableEarlyPay: string) =>
+    apiClient.put(`/api/v1/portal/anchor/early-pay/borrowers/${membershipId}`, { enableEarlyPay }),
+  earlyPayRequests: (status?: string, subProgramId?: string) =>
+    apiClient.get('/api/v1/portal/anchor/early-pay/requests', {
+      params: {
+        ...(status ? { status } : {}),
+        ...(subProgramId ? { subProgramId } : {}),
+      },
+    }),
+  earlyPayApproveRequests: (requestIds: string[]) =>
+    apiClient.post('/api/v1/portal/anchor/early-pay/requests/approve', { requestIds }),
+  earlyPayRejectRequests: (requestIds: string[]) =>
+    apiClient.post('/api/v1/portal/anchor/early-pay/requests/reject', { requestIds }),
+  earlyPayPayments: () => apiClient.get('/api/v1/portal/anchor/early-pay/payments'),
+  earlyPayClosed: () => apiClient.get('/api/v1/portal/anchor/early-pay/closed'),
+  earlyPayRepayments: () => apiClient.get('/api/v1/portal/anchor/early-pay/repayments'),
+  earlyPayUploadRepayments: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/v1/portal/anchor/early-pay/repayments/upload', formData);
+  },
+};
+
+export const earlyPayApi = {
+  todayParameter: (subProgramId: string) =>
+    apiClient.get('/api/v1/invoices/early-pay/parameters/today', { params: { subProgramId } }),
+  createRequest: (data: Record<string, unknown>) =>
+    apiClient.post('/api/v1/invoices/early-pay/requests', data),
+  listRepayments: () => apiClient.get('/api/v1/invoices/early-pay/repayments'),
 };
 
 export const integrationApi = {

@@ -136,6 +136,8 @@ export interface SubProgram {
   utilizedLimit: number | null;
   availableLimit: number | null;
   status: SubProgramStatus | string;
+  /** YES/NO — SBD Early Pay master switch (only meaningful for SALES_BILL_DISCOUNTING). */
+  allowEarlyPay?: string | null;
   createdAt?: string | null;
 }
 
@@ -286,7 +288,10 @@ export type InvoiceStatus =
   | 'PARTIALLY_DISCOUNTED'
   | 'FULLY_DISCOUNTED'
   | 'EXPIRED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'CLOSED'
+  | 'DISCOUNTED_EP'
+  | 'SANCTIONED_EP';
 
 export interface Invoice {
   id: string;
@@ -332,6 +337,12 @@ export interface Invoice {
   /** Payment in progress (PRUS) after PayU success, pending admin settlement */
   pipAmount?: number;
   pipDiscountAmount?: number;
+  /** SBD Early Pay list enrichment */
+  isEarlyPayAllowed?: string | null;
+  showEarlyPay?: string | null;
+  balDueAmount?: number | null;
+  /** Early Pay payout/repayment amount from the approved EP request */
+  earlyPayRequestedAmount?: number | null;
 }
 
 export interface InvoicePageMeta {

@@ -274,6 +274,12 @@ public class SubProgramService {
                 sp.setAvailableLimit(dto.getSubProgramLimit());
             }
         }
+        if (dto.getAllowEarlyPay() != null && !dto.getAllowEarlyPay().isBlank()) {
+            if (!FLOW_SALES_BILL_DISCOUNTING.equals(sp.getFlowType())) {
+                throw new RuntimeException("allowEarlyPay applies only to SALES_BILL_DISCOUNTING sub-programs");
+            }
+            sp.setAllowEarlyPay("YES".equalsIgnoreCase(dto.getAllowEarlyPay().trim()) ? "YES" : "NO");
+        }
         SubProgram saved = subProgramRepository.save(sp);
         log.info("Sub program updated: {} ({})", saved.getCode(), saved.getId());
         return saved;

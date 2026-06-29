@@ -1,6 +1,7 @@
 package com.plp.program.controller;
 
 import com.plp.program.model.dto.InvoiceCsvUploadResult;
+import com.plp.program.model.dto.InvoiceDigitalAttachmentResult;
 import com.plp.program.model.entity.Invoice;
 import com.plp.program.model.enums.InvoiceDiscountingFlowType;
 import com.plp.program.model.entity.Program;
@@ -138,6 +139,33 @@ public class InvoiceController {
         return ResponseEntity.ok().headers(headers).body(d.body());
     }
 
+    @PostMapping(value = "/{invoiceId}/digital-invoice", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadDigitalInvoice(
+            @PathVariable UUID invoiceId,
+            @RequestParam("file") MultipartFile file,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false)
+                    String linkedEntityType) {
+        Invoice invoice = invoiceService.getInvoice(invoiceId);
+        InvoiceAccessGuard.requireDigitalInvoiceUploadAccess(invoice, rolesHeader, linkedEntityId, linkedEntityType);
+        try {
+            InvoiceDigitalAttachmentResult attachment =
+                    invoiceService.attachDigitalInvoice(invoiceId, file);
+            Invoice inv = invoiceService.getInvoice(invoiceId);
+            Map<String, Object> attachmentPayload = Map.of(
+                    "storageMode", attachment.storageMode(),
+                    "todo", attachment.todo() != null ? attachment.todo() : "");
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "data", inv,
+                    "attachment", attachmentPayload));
+        } catch (Exception e) {
+            log.warn("Digital invoice upload failed for {}: {}", invoiceId, e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
+
     private static String sanitizeDigitalInvoiceDownloadFilename(String name) {
         if (name == null || name.isBlank()) {
             return "invoice.bin";
@@ -181,7 +209,7 @@ public class InvoiceController {
                     size != null ? size : 20);
             return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", paged.get("data"), "page", paged.get("page")));
         }
-        return ResponseEntity.ok(invoiceService.getByBorrower(borrowerId));
+        return ResponseEntity.ok(invoiceService.getByBorrowerEnriched(borrowerId, flowType));
     }
 
     @GetMapping("/borrower/{borrowerId}/eligible")

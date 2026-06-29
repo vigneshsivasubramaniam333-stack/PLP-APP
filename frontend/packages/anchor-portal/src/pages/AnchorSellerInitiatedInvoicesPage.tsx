@@ -10,6 +10,7 @@ import {
   BtCardHeader,
   BtButton,
   BtBadge,
+  InvoiceLinkedLoansPanel,
   notifyError,
   notifySuccess,
   flowTypeLabel,
@@ -24,7 +25,7 @@ import {
   labelCls,
 } from '../invoice/invoiceShared';
 
-type Tab = 'pending' | 'approved' | 'rejected';
+type Tab = 'pending' | 'approved' | 'rejected' | 'closed';
 
 type Props = {
   flowType: InvoiceDiscountingFlowType;
@@ -46,6 +47,16 @@ export default function AnchorSellerInitiatedInvoicesPage({ flowType }: Props) {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actingId, setActingId] = useState<string | null>(null);
+  const [expandedLoanInvoiceIds, setExpandedLoanInvoiceIds] = useState<Set<string>>(() => new Set());
+
+  const toggleLoanDetails = (invoiceId: string) => {
+    setExpandedLoanInvoiceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) next.delete(invoiceId);
+      else next.add(invoiceId);
+      return next;
+    });
+  };
 
   const idSubPrograms = useMemo(
     () => subPrograms.filter((sp) => isInvoiceDiscountingSubProgramForFlow(sp, programs, flowType)),
@@ -71,8 +82,8 @@ export default function AnchorSellerInitiatedInvoicesPage({ flowType }: Props) {
       .anchorInvoices(anchorId, {
         programId: umbrellaProgramId || undefined,
         flowType,
-        tab,
-        lifecycle: tab === 'approved' ? 'active' : undefined,
+        tab: tab === 'closed' ? undefined : tab,
+        lifecycle: tab === 'approved' ? 'active' : tab === 'closed' ? 'closed' : undefined,
         page: 0,
         size: 100,
       })
@@ -155,7 +166,7 @@ export default function AnchorSellerInitiatedInvoicesPage({ flowType }: Props) {
       </BtCard>
 
       <div className="mb-4 flex gap-2">
-        {(['pending', 'approved', 'rejected'] as Tab[]).map((t) => (
+        {(['pending', 'approved', 'rejected', 'closed'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -181,54 +192,77 @@ export default function AnchorSellerInitiatedInvoicesPage({ flowType }: Props) {
                   <th className="text-right">Net</th>
                   <th className="text-center">Copy</th>
                   <th className="text-center">Status</th>
-                  {tab === 'pending' ? <th className="text-center">Actions</th> : null}
+                  {tab === 'pending' || tab === 'closed' ? <th className="text-center">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={tab === 'pending' ? 6 : 5} className="px-5 py-12 text-center text-sm text-[var(--bt-gray-400)]">
+                    <td colSpan={tab === 'pending' || tab === 'closed' ? 6 : 5} className="px-5 py-12 text-center text-sm text-[var(--bt-gray-400)]">
                       No invoices in this tab
                     </td>
                   </tr>
                 ) : (
-                  invoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
-                      <td className="text-xs">
-                        <div>{inv.invoiceDate}</div>
-                        <div className="text-[var(--bt-gray-400)]">Due: {inv.dueDate}</div>
-                      </td>
-                      <td className="text-right tabular-nums">{formatInvoiceCurrency(inv.netAmount)}</td>
-                      <td className="text-center">
-                        <DigitalInvoiceAttachment invoiceId={inv.id} fileName={inv.digitalInvoiceFileName} />
-                      </td>
-                      <td className="text-center">
-                        <BtBadge tone="gray">{inv.status}</BtBadge>
-                      </td>
-                      {tab === 'pending' ? (
+                  invoices.flatMap((inv) => {
+                    const loanExpanded = expandedLoanInvoiceIds.has(inv.id);
+                    const rows = [
+                      <tr key={inv.id}>
+                        <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                        <td className="text-xs">
+                          <div>{inv.invoiceDate}</div>
+                          <div className="text-[var(--bt-gray-400)]">Due: {inv.dueDate}</div>
+                        </td>
+                        <td className="text-right tabular-nums">{formatInvoiceCurrency(inv.netAmount)}</td>
                         <td className="text-center">
-                          <div className="inline-flex gap-2">
-                            <BtButton
-                              size="sm"
-                              disabled={actingId === inv.id}
-                              onClick={() => void handleApprove(inv.id)}
-                            >
-                              Approve
-                            </BtButton>
+                          <DigitalInvoiceAttachment invoiceId={inv.id} fileName={inv.digitalInvoiceFileName} />
+                        </td>
+                        <td className="text-center">
+                          <BtBadge tone="gray">{inv.status}</BtBadge>
+                        </td>
+                        {tab === 'pending' ? (
+                          <td className="text-center">
+                            <div className="inline-flex gap-2">
+                              <BtButton
+                                size="sm"
+                                disabled={actingId === inv.id}
+                                onClick={() => void handleApprove(inv.id)}
+                              >
+                                Approve
+                              </BtButton>
+                              <BtButton
+                                size="sm"
+                                variant="secondary"
+                                disabled={actingId === inv.id}
+                                onClick={() => setRejectId(inv.id)}
+                              >
+                                Reject
+                              </BtButton>
+                            </div>
+                          </td>
+                        ) : tab === 'closed' ? (
+                          <td className="text-center">
                             <BtButton
                               size="sm"
                               variant="secondary"
-                              disabled={actingId === inv.id}
-                              onClick={() => setRejectId(inv.id)}
+                              onClick={() => toggleLoanDetails(inv.id)}
                             >
-                              Reject
+                              {loanExpanded ? 'Hide loan' : 'View loan'}
                             </BtButton>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
+                          </td>
+                        ) : null}
+                      </tr>,
+                    ];
+                    if (tab === 'closed' && loanExpanded) {
+                      rows.push(
+                        <tr key={`${inv.id}-loan`}>
+                          <td colSpan={6} className="bg-slate-50/60 px-5 py-4 align-top">
+                            <InvoiceLinkedLoansPanel invoiceId={inv.id} defaultExpandedHistory />
+                          </td>
+                        </tr>,
+                      );
+                    }
+                    return rows;
+                  })
                 )}
               </tbody>
             </table>

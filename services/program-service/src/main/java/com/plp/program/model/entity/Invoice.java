@@ -173,4 +173,22 @@ public class Invoice {
 
     @UpdateTimestamp
     private Instant updatedAt;
+
+    /** Request-only: anchor manual create skips verify/confirm when true. Not persisted. */
+    @Transient
+    private Boolean createAsApproved;
+
+    /** SBD Early Pay list enrichment — not persisted. */
+    @Transient
+    private String isEarlyPayAllowed;
+
+    @Transient
+    private String showEarlyPay;
+
+    @Transient
+    private BigDecimal balDueAmount;
+
+    /** SBD Early Pay payout/repayment amount (from approved EP request) — not persisted. */
+    @Transient
+    private BigDecimal earlyPayRequestedAmount;
 }

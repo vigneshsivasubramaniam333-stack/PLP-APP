@@ -8,6 +8,7 @@ import {
   useAuth,
   DigitalInvoiceAttachment,
   extractApiErrorMessage,
+  invoiceDueDateError,
 } from '@plp/shared';
 import type { Program, Invoice, AuthUser, Borrower, SubProgram } from '@plp/shared';
 import { downloadSampleInvoiceCsv } from '../invoice/invoiceShared';
@@ -82,6 +83,7 @@ export default function InvoiceUploadPage() {
     description: '',
   });
   const [manualMsg, setManualMsg] = useState('');
+  const [createAsApproved, setCreateAsApproved] = useState(false);
   const [borrowersPick, setBorrowersPick] = useState<Borrower[]>([]);
 
   const idSubPrograms = useMemo(() => {
@@ -160,6 +162,11 @@ export default function InvoiceUploadPage() {
     e.preventDefault();
     setManualMsg('');
     if (!anchorId || !umbrellaProgramId || !selectedSubProgramId) return;
+    const dateErr = invoiceDueDateError(manual.invoiceDate, manual.dueDate);
+    if (dateErr) {
+      setManualMsg('Error: ' + dateErr);
+      return;
+    }
     try {
       const createRes = await portalApi.anchorCreateInvoice({
         invoiceNumber: manual.invoiceNumber,
@@ -179,6 +186,7 @@ export default function InvoiceUploadPage() {
         paymentTerms: manual.paymentTerms || null,
         description: manual.description || null,
         source: 'MANUAL',
+        createAsApproved,
       });
       const created = createRes.data?.data as Invoice | undefined;
       const digitalFile = digitalInvoiceFileRef.current?.files?.[0];
@@ -439,10 +447,16 @@ export default function InvoiceUploadPage() {
               <input
                 type="date"
                 value={manual.dueDate}
+                min={manual.invoiceDate || undefined}
                 onChange={(e) => setManual({ ...manual, dueDate: e.target.value })}
                 className={inputCls}
                 required
               />
+              {invoiceDueDateError(manual.invoiceDate, manual.dueDate) ? (
+                <p className="text-xs text-rose-700 mt-1">
+                  {invoiceDueDateError(manual.invoiceDate, manual.dueDate)}
+                </p>
+              ) : null}
             </div>
             <div>
               <label className={labelCls}>Invoice amount *</label>
@@ -510,10 +524,24 @@ export default function InvoiceUploadPage() {
               </p>
             </div>
           </div>
+          <label className="mt-4 flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={createAsApproved}
+              onChange={(e) => setCreateAsApproved(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Create as approved (skip verify and confirm)
+          </label>
           <div className="mt-4 flex items-center gap-4">
             <button
               type="submit"
-              disabled={!umbrellaProgramId || borrowersPick.length === 0 || !manual.borrowerId}
+              disabled={
+                !umbrellaProgramId ||
+                borrowersPick.length === 0 ||
+                !manual.borrowerId ||
+                !!invoiceDueDateError(manual.invoiceDate, manual.dueDate)
+              }
               className="px-5 py-2.5 bt-btn bt-btn-primary disabled:opacity-50"
             >
               Save invoice

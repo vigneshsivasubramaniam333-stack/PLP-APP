@@ -49,6 +49,7 @@ export function canBorrowerRequestFinance(
   flowType: string | null | undefined,
 ): boolean {
   if (status === 'FINANCING_REQUESTED') return false;
+  if (status === 'DISCOUNTED_EP' || status === 'SANCTIONED_EP') return false;
   if (isPurchaseBillFlow(flowType)) {
     return status === 'BORROWER_ACCEPTED' || status === 'PARTIALLY_DISCOUNTED';
   }
@@ -56,4 +57,18 @@ export function canBorrowerRequestFinance(
     return status === 'ELIGIBLE' || status === 'PARTIALLY_DISCOUNTED';
   }
   return status === 'BORROWER_ACCEPTED' || status === 'PARTIALLY_DISCOUNTED';
+}
+
+export function canBorrowerRequestEarlyPay(inv: {
+  status?: string | null;
+  flowType?: string | null;
+  isEarlyPayAllowed?: string | null;
+  showEarlyPay?: string | null;
+}): boolean {
+  return (
+    isSalesBillFlow(inv.flowType) &&
+    inv.status === 'ELIGIBLE' &&
+    inv.isEarlyPayAllowed === 'YES' &&
+    inv.showEarlyPay === 'YES'
+  );
 }

@@ -48,6 +48,7 @@ export { useBorrowerCreditLimits, useAnchorCreditLimits } from './hooks/useCredi
 export { fetchLoanPayoff, fetchLoanPayoffs, repaymentProgress } from './utils/loanPayoff';
 export type { LoanPayoffInfo } from './utils/loanPayoff';
 export { loanPrincipalAmount, loanHasLmsAccount } from './utils/loanDisplay';
+export { invoiceDueDateError } from './utils/invoiceDates';
 export { InvoiceListToolbar } from './components/InvoiceListToolbar';
 export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment';
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';
@@ -68,6 +69,7 @@ export {
   flowTypeLabel,
   canBorrowerAcceptInvoice,
   canBorrowerRequestFinance,
+  canBorrowerRequestEarlyPay,
 } from './utils/invoiceFlowTypes';
 export type { InvoiceDiscountingFlowType } from './utils/invoiceFlowTypes';
 export {

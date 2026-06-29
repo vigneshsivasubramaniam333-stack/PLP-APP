@@ -861,6 +861,7 @@ export default function SubProgramsPage() {
     marginPercent: '',
     maxTenureDays: '',
     subProgramLimit: '',
+    allowEarlyPay: 'NO',
   });
   const [editBorrowerRow, setEditBorrowerRow] = useState<SubProgramBorrower | null>(null);
   const [editBorrowerForm, setEditBorrowerForm] = useState<BorrowerTermsForm>({
@@ -986,6 +987,7 @@ export default function SubProgramsPage() {
       marginPercent: detail.marginPercent != null ? String(detail.marginPercent) : '',
       maxTenureDays: detail.maxTenureDays != null ? String(detail.maxTenureDays) : '',
       subProgramLimit: detail.subProgramLimit != null ? String(detail.subProgramLimit) : '',
+      allowEarlyPay: detail.allowEarlyPay === 'YES' ? 'YES' : 'NO',
     });
     setDetailSubview('edit');
   };
@@ -1018,6 +1020,9 @@ export default function SubProgramsPage() {
       if (editForm.maxTenureDays.trim()) payload.maxTenureDays = parseInt(editForm.maxTenureDays, 10);
       if (detail.status === 'DRAFT' && editForm.subProgramLimit.trim()) {
         payload.subProgramLimit = parseFloat(editForm.subProgramLimit);
+      }
+      if (detail.flowType === 'SALES_BILL_DISCOUNTING') {
+        payload.allowEarlyPay = editForm.allowEarlyPay === 'YES' ? 'YES' : 'NO';
       }
       const res = await subProgramApi.update(detail.id, payload);
       const updated = res.data.data as SubProgram;
@@ -1728,6 +1733,22 @@ export default function SubProgramsPage() {
                         value={editForm.subProgramLimit}
                         onChange={(e) => setEditForm({ ...editForm, subProgramLimit: e.target.value })}
                       />
+                    </FormField>
+                  ) : null}
+                  {detail.flowType === 'SALES_BILL_DISCOUNTING' ? (
+                    <FormField label="Early Pay (anchor-funded discounting)" span={2}>
+                      <select
+                        className={inputCls}
+                        value={editForm.allowEarlyPay}
+                        onChange={(e) => setEditForm({ ...editForm, allowEarlyPay: e.target.value })}
+                      >
+                        <option value="NO">Disabled</option>
+                        <option value="YES">Enabled</option>
+                      </select>
+                      <p className="text-xs text-slate-500 mt-1">
+                        When enabled, the anchor can configure Early Pay parameters and enable borrowers; eligible
+                        SBD invoices show a “Request Early Pay” action.
+                      </p>
                     </FormField>
                   ) : null}
                 </div>

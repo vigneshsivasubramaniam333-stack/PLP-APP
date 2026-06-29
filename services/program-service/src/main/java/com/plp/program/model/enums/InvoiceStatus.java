@@ -16,5 +16,9 @@ public enum InvoiceStatus {
     REJECTED,
     /** All linked loans repaid / closed. */
     CLOSED,
-    EXPIRED
+    EXPIRED,
+    /** SBD Early Pay: borrower requested anchor-funded discount (legacy DISCOUNTED_EP). */
+    DISCOUNTED_EP,
+    /** SBD Early Pay: anchor approved request (legacy SANCTIONED_EP). */
+    SANCTIONED_EP
 }

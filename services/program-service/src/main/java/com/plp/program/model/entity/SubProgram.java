@@ -75,6 +75,11 @@ public class SubProgram {
     @Column(name = "los_sub_program_id", length = 100)
     private String losSubProgramId;
 
+    /** YES/NO — SBD Early Pay enabled for this sub-program (legacy debtor.allow_early_pay). */
+    @Column(name = "allow_early_pay", nullable = false, length = 3)
+    @Builder.Default
+    private String allowEarlyPay = "NO";
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

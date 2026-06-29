@@ -119,6 +119,11 @@ public class SubProgramBorrower {
     @Column(name = "hdfc_ifsc_code", length = 20)
     private String hdfcIfscCode;
 
+    /** YES/NO — borrower may request Early Pay on this SBD sub-program (legacy borrower_debtor_link). */
+    @Column(name = "enable_early_pay", nullable = false, length = 3)
+    @Builder.Default
+    private String enableEarlyPay = "NO";
+
     @Column(nullable = false, length = 30)
     @Builder.Default
     private String status = "ACTIVE";

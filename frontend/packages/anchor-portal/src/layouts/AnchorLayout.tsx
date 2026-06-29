@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useAuth, PortalSidebarBrand, PortalPoweredByFooter } from '@plp/shared';
 import { useAnchorFlowSubPrograms } from '../hooks/useAnchorFlowSubPrograms';
+import { useAnchorEarlyPayEnabled } from '../hooks/useAnchorEarlyPayEnabled';
 import { anchorIdFromUser } from '../invoice/invoiceShared';
 
 function isNavActive(pathname: string, itemPath: string): boolean {
@@ -21,6 +22,7 @@ export default function AnchorLayout() {
     [user?.linkedEntityType, user?.linkedEntityId],
   );
   const flowFlags = useAnchorFlowSubPrograms(anchorId);
+  const earlyPayEnabled = useAnchorEarlyPayEnabled();
 
   const invoiceDiscountingItems = useMemo(() => {
     const items: { path: string; label: string; icon: typeof DocIcon }[] = [];
@@ -33,8 +35,11 @@ export default function AnchorLayout() {
     if (flowFlags.purchaseOrder) {
       items.push({ path: '/purchase-order-discounting', label: 'Purchase Order Discounting', icon: DocIcon });
     }
+    if (flowFlags.salesBill && earlyPayEnabled) {
+      items.push({ path: '/early-pay', label: 'Early Pay', icon: DocIcon });
+    }
     return items;
-  }, [flowFlags]);
+  }, [flowFlags, earlyPayEnabled]);
 
   const navGroups = useMemo(() => {
     const groups = [

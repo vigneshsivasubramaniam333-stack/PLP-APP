@@ -11,6 +11,7 @@ import SalaryUploadPage from './pages/SalaryUploadPage';
 import InvoicesPage from './pages/InvoicesPage';
 import InvoiceCreatePage from './pages/InvoiceCreatePage';
 import AnchorSellerInitiatedInvoicesPage from './pages/AnchorSellerInitiatedInvoicesPage';
+import EarlyPayPage from './pages/EarlyPayPage';
 import { FLOW_SALES_BILL_DISCOUNTING, FLOW_PURCHASE_ORDER_DISCOUNTING } from '@plp/shared';
 import SettlementsPage from './pages/SettlementsPage';
 import ReportsPage from './pages/ReportsPage';
@@ -89,6 +90,7 @@ function App() {
               path="purchase-order-discounting"
               element={<AnchorSellerInitiatedInvoicesPage flowType={FLOW_PURCHASE_ORDER_DISCOUNTING} />}
             />
+            <Route path="early-pay" element={<EarlyPayPage />} />
             <Route path="invoice-upload" element={<Navigate to="/invoices" replace />} />
             <Route path="settlements" element={<SettlementsPage />} />
             <Route path="reports" element={<ReportsPage />} />

@@ -242,6 +242,17 @@ services:
     environment:
       <<: [*eureka-env, *db-env, *rabbit-env]
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/plp_db?currentSchema=plp_notification
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-billiontechuat@gmail.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-lqwt apmk jusw hcyo}
+      SPRING_MAIL_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SMTP_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SMTP_USERNAME:-billiontechuat@gmail.com}
+      SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD:-lqwt apmk jusw hcyo}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-billiontechuat@gmail.com}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-PLP Platform}
+      EMAIL_SIMULATION_ENABLED: ${EMAIL_SIMULATION_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy

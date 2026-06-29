@@ -11,13 +11,16 @@ import {
   notifySuccess,
   InvoiceListToolbar,
   FLOW_PURCHASE_BILL_DISCOUNTING,
+  FLOW_SALES_BILL_DISCOUNTING,
   flowTypeLabel,
   canBorrowerAcceptInvoice,
   canBorrowerRequestFinance,
+  canBorrowerRequestEarlyPay,
 } from '@plp/shared';
 import type { Invoice, InvoiceListFilters, InvoicePageMeta, Loan, InvoiceDiscountingFlowType } from '@plp/shared';
 import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
 import { InvoiceActionsMenu, type InvoiceActionItem } from '../components/InvoiceActionsMenu';
+import { EarlyPayRequestModal } from '../components/EarlyPayRequestModal';
 
 type InvoiceDiscountingPageProps = {
   flowType?: InvoiceDiscountingFlowType;
@@ -63,6 +66,7 @@ export default function InvoiceDiscountingPage({
   const [loading, setLoading] = useState(true);
   const [repayingLoanId, setRepayingLoanId] = useState<string | null>(null);
   const [expandedLoanInvoiceIds, setExpandedLoanInvoiceIds] = useState<Set<string>>(() => new Set());
+  const [earlyPayInvoice, setEarlyPayInvoice] = useState<Invoice | null>(null);
 
   const toggleLoanDetails = (invoiceId: string) => {
     setExpandedLoanInvoiceIds((prev) => {
@@ -335,6 +339,13 @@ export default function InvoiceDiscountingPage({
         label: 'Add to cart',
         onClick: () => void addToCart(inv.id),
         disabled: addingToCart,
+      });
+    }
+    if (canBorrowerRequestEarlyPay(inv)) {
+      items.push({
+        id: 'early-pay',
+        label: 'Request Early Pay',
+        onClick: () => setEarlyPayInvoice(inv),
       });
     }
     return items;
@@ -749,6 +760,13 @@ export default function InvoiceDiscountingPage({
           )}
         </div>
       )}
+      {earlyPayInvoice && (
+        <EarlyPayRequestModal
+          invoice={earlyPayInvoice}
+          onClose={() => setEarlyPayInvoice(null)}
+          onSuccess={() => void loadInvoices({ bustCache: true })}
+        />
+      )}
     </div>
   );
 }
@@ -761,6 +779,9 @@ function InvoiceBadge({ status }: { status: string }) {
     FINANCING_REQUESTED: 'bg-indigo-50 text-indigo-800 ring-1 ring-indigo-600/25',
     PARTIALLY_DISCOUNTED: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20',
     FULLY_DISCOUNTED: 'bg-slate-50 text-slate-600 ring-1 ring-slate-500/20',
+    DISCOUNTED_EP: 'bg-rose-50 text-rose-800 ring-1 ring-rose-600/20',
+    SANCTIONED_EP: 'bg-fuchsia-50 text-fuchsia-800 ring-1 ring-fuchsia-600/20',
+    CLOSED: 'bg-slate-100 text-slate-600 ring-1 ring-slate-400/20',
   };
   return (
     <span

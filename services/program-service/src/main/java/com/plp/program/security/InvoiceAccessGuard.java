@@ -131,6 +131,35 @@ public final class InvoiceAccessGuard {
     }
 
     /**
+     * Digital invoice upload: lender, owning anchor, or owning borrower.
+     */
+    public static void requireDigitalInvoiceUploadAccess(
+            Invoice invoice,
+            String rolesHeader,
+            String linkedEntityIdHeader,
+            String linkedEntityTypeHeader) {
+        Set<String> roles = parseRoles(rolesHeader);
+        if (isLenderRole(roles)) {
+            return;
+        }
+        if (isBorrowerRole(roles)) {
+            UUID borrower = parseRequiredLinkedUuid(linkedEntityIdHeader, linkedEntityTypeHeader, LINK_TYPE_BORROWER);
+            if (invoice.getBorrowerId().equals(borrower)) {
+                return;
+            }
+            throw forbidden(MSG_NOT_THIS_BORROWER);
+        }
+        if (isAnchorRole(roles)) {
+            UUID anchor = parseRequiredLinkedUuid(linkedEntityIdHeader, linkedEntityTypeHeader, LINK_TYPE_ANCHOR);
+            if (invoice.getAnchorId().equals(anchor)) {
+                return;
+            }
+            throw forbidden(MSG_NOT_THIS_ANCHOR);
+        }
+        throw forbidden(MSG_ACCESS_DENIED);
+    }
+
+    /**
      * VERIFY / CONFIRM: lender or owning anchor. MARK_DISCOUNTED: lender only. Borrowers rejected for all.
      */
     public static void requireInvoiceWriteAccess(
