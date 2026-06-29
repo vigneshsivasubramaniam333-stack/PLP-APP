@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DevProgramDataResetService {
 
+    private final EarlyPayRepaymentRepository earlyPayRepaymentRepository;
+    private final EarlyPayRequestRepository earlyPayRequestRepository;
+    private final EarlyPayParameterRepository earlyPayParameterRepository;
     private final InvoiceRepository invoiceRepository;
     private final EmployeeSalaryDataRepository employeeSalaryDataRepository;
     private final BorrowerProgramMappingRepository borrowerProgramMappingRepository;
@@ -27,6 +30,10 @@ public class DevProgramDataResetService {
 
     @Transactional
     public void resetAllProgramData() {
+        // Early-pay rows reference invoices/sub-programs/anchors — delete them first (FK-safe).
+        earlyPayRepaymentRepository.deleteAllInBatch();
+        earlyPayRequestRepository.deleteAllInBatch();
+        earlyPayParameterRepository.deleteAllInBatch();
         invoiceRepository.deleteAllInBatch();
         employeeSalaryDataRepository.deleteAllInBatch();
         losSyncAuditRepository.deleteAllInBatch();

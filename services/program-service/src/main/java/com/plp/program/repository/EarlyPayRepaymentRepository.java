@@ -17,4 +17,6 @@ public interface EarlyPayRepaymentRepository extends JpaRepository<EarlyPayRepay
     List<EarlyPayRepayment> findByInvoiceId(UUID invoiceId);
 
     boolean existsByInvoiceId(UUID invoiceId);
+
+    void deleteByBorrowerId(UUID borrowerId);
 }

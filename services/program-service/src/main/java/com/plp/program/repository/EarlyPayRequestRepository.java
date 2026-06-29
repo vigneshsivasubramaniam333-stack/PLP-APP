@@ -22,4 +22,6 @@ public interface EarlyPayRequestRepository extends JpaRepository<EarlyPayRequest
     List<EarlyPayRequest> findBySubProgramIdInAndStatusOrderByCreatedAtDesc(List<UUID> subProgramIds, String status);
 
     List<EarlyPayRequest> findByStatus(String status);
+
+    void deleteByBorrowerId(UUID borrowerId);
 }

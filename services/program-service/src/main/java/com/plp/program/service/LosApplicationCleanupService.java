@@ -10,6 +10,8 @@ import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.repository.BorrowerLimitRepository;
 import com.plp.program.repository.BorrowerProgramMappingRepository;
 import com.plp.program.repository.BorrowerRepository;
+import com.plp.program.repository.EarlyPayRepaymentRepository;
+import com.plp.program.repository.EarlyPayRequestRepository;
 import com.plp.program.repository.InvoiceRepository;
 import com.plp.program.repository.SubProgramBorrowerRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,8 @@ public class LosApplicationCleanupService {
 
     private final LendingServiceBorrowerCleanupClient lendingCleanupClient;
     private final IamBorrowerCleanupClient iamBorrowerCleanupClient;
+    private final EarlyPayRepaymentRepository earlyPayRepaymentRepository;
+    private final EarlyPayRequestRepository earlyPayRequestRepository;
     private final InvoiceRepository invoiceRepository;
     private final BorrowerProgramMappingRepository borrowerProgramMappingRepository;
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
@@ -43,6 +47,9 @@ public class LosApplicationCleanupService {
 
         if (borrowerId != null) {
             loansRemoved = lendingCleanupClient.cleanupBorrowerLoans(borrowerId);
+            // Early-pay rows reference invoices via FK — remove them before deleting invoices.
+            earlyPayRepaymentRepository.deleteByBorrowerId(borrowerId);
+            earlyPayRequestRepository.deleteByBorrowerId(borrowerId);
             List<com.plp.program.model.entity.Invoice> invoices = invoiceRepository.findByBorrowerId(borrowerId);
             invoicesRemoved = invoices.size();
             if (!invoices.isEmpty()) {
