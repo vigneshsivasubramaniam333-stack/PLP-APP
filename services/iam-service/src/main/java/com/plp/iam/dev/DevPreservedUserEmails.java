@@ -14,7 +14,7 @@ public class DevPreservedUserEmails {
     private final List<String> preservedEmailsLower;
 
     public DevPreservedUserEmails(
-            @Value("${plp.dev-reset.preserved-user-emails:admin@plp.com,anchor@testcorp.com,raj@testcorp.com,priya@buyerco.com,admin@credinnov.com,creditmanager@credinnov.com,creditofficer@credinnov.com,creditofficer2@credinnov.com,sales@credinnov.com,accounts@credinnov.com,anchor@credinnov.com,borrower@credinnov.com}") String csv) {
+            @Value("${plp.dev-reset.preserved-user-emails:admin@plp.com,anchor@testcorp.com,raj@testcorp.com,priya@buyerco.com,admin@credinnov.com,creditmanager@credinnov.com,creditofficer@credinnov.com,creditofficer2@credinnov.com,sales@credinnov.com,accounts@credinnov.com,anchor@credinnov.com,borrower@credinnov.com,admin@optimo.com,creditmanager@optimo.com,creditofficer@optimo.com,creditofficer2@optimo.com,sales@optimo.com,accounts@optimo.com,anchor@optimo.com,borrower@optimo.com}") String csv) {
         this.preservedEmailsLower = parseCsv(csv);
     }
 

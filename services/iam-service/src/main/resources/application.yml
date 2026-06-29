@@ -40,7 +40,7 @@ plp:
   dev-reset:
     # Local/docker default true; set PLP_DEV_RESET_ENABLED=false in production.
     enabled: ${PLP_DEV_RESET_ENABLED:true}
-    preserved-user-emails: ${PLP_DEV_RESET_PRESERVED_USER_EMAILS:admin@plp.com,anchor@testcorp.com,raj@testcorp.com,priya@buyerco.com,admin@credinnov.com,creditmanager@credinnov.com,creditofficer@credinnov.com,creditofficer2@credinnov.com,sales@credinnov.com,accounts@credinnov.com,anchor@credinnov.com,borrower@credinnov.com}
+    preserved-user-emails: ${PLP_DEV_RESET_PRESERVED_USER_EMAILS:admin@plp.com,anchor@testcorp.com,raj@testcorp.com,priya@buyerco.com,admin@credinnov.com,creditmanager@credinnov.com,creditofficer@credinnov.com,creditofficer2@credinnov.com,sales@credinnov.com,accounts@credinnov.com,anchor@credinnov.com,borrower@credinnov.com,admin@optimo.com,creditmanager@optimo.com,creditofficer@optimo.com,creditofficer2@optimo.com,sales@optimo.com,accounts@optimo.com,anchor@optimo.com,borrower@optimo.com}
 
 eureka:
   client:
