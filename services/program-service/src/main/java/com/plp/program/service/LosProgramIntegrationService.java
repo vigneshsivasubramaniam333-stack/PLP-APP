@@ -1,11 +1,15 @@
 package com.plp.program.service;
 
 import com.plp.program.integration.los.LosIntegrationResourceTypes;
+import com.plp.program.model.dto.integration.LosProgramActivateRequest;
+import com.plp.program.model.dto.integration.LosProgramStatusResponse;
 import com.plp.program.model.dto.integration.LosProgramUpsertRequest;
 import com.plp.program.model.dto.integration.LosProgramUpsertResponse;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.enums.ProgramStatus;
 import com.plp.program.repository.AnchorRepository;
 import com.plp.program.repository.ProgramRepository;
+import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.service.audit.LosSyncAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +83,7 @@ public class LosProgramIntegrationService {
                         .programCode(program.getProgramCode())
                         .created(false)
                         .updated(true)
+                        .status(program.getStatus() != null ? program.getStatus().name() : null)
                         .build();
             }
         }
@@ -97,6 +104,7 @@ public class LosProgramIntegrationService {
                     .programCode(program.getProgramCode())
                     .created(false)
                     .updated(true)
+                    .status(program.getStatus() != null ? program.getStatus().name() : null)
                     .build();
         }
 
@@ -122,7 +130,9 @@ public class LosProgramIntegrationService {
                         .validTo(req.getValidTo())
                         .lmsEntryIn(normalizeLmsEntry(req.getLmsEntryIn()))
                         .encoreProductCode(trimOrNull(req.getEncoreProductCode()))
+                        .status(resolveInitialStatus(req.getPreApproved()))
                         .build();
+        mergeVintageConfig(created, req);
         Program saved = programService.createProgram(created);
         log.info("LOS program created via integration: {} ({})", saved.getProgramCode(), saved.getId());
         return LosProgramUpsertResponse.builder()
@@ -130,6 +140,7 @@ public class LosProgramIntegrationService {
                 .programCode(saved.getProgramCode())
                 .created(true)
                 .updated(false)
+                .status(saved.getStatus() != null ? saved.getStatus().name() : null)
                 .build();
     }
 
@@ -198,6 +209,21 @@ public class LosProgramIntegrationService {
         if (dto.getEncoreProductCode() != null) {
             program.setEncoreProductCode(trimOrNull(dto.getEncoreProductCode()));
         }
+        mergeVintageConfig(program, dto);
+    }
+
+    private static void mergeVintageConfig(Program program, LosProgramUpsertRequest dto) {
+        if (dto.getDependencyVintagePercent() == null && dto.getAnchorRelationshipVintageMonths() == null) {
+            return;
+        }
+        Map<String, Object> config = program.getConfig() != null ? new HashMap<>(program.getConfig()) : new HashMap<>();
+        if (dto.getDependencyVintagePercent() != null) {
+            config.put("dependencyVintagePercent", dto.getDependencyVintagePercent());
+        }
+        if (dto.getAnchorRelationshipVintageMonths() != null) {
+            config.put("anchorRelationshipVintageMonths", dto.getAnchorRelationshipVintageMonths());
+        }
+        program.setConfig(ProgramParametersValidator.validateConfig(config, program.getProductType()));
     }
 
     private static String normalizeLmsEntry(String raw) {
@@ -224,6 +250,43 @@ public class LosProgramIntegrationService {
             return "losProgram:" + los;
         }
         return "programCode:" + normalize(req.getProgramCode());
+    }
+
+    @Transactional
+    public LosProgramUpsertResponse activate(LosProgramActivateRequest req) {
+        String sourceSystem = normalize(req.getSourceSystem());
+        String losPid = normalize(req.getLosProgramId());
+        Program program = programRepository
+                .findBySourceSystemAndLosProgramId(sourceSystem, losPid)
+                .orElseThrow(() -> new RuntimeException("Program not found for LOS id: " + losPid));
+        programService.updateStatus(program.getId(), ProgramStatus.ACTIVE);
+        program = programRepository.findById(program.getId()).orElse(program);
+        log.info("LOS program activated via integration: {} ({})", program.getProgramCode(), program.getId());
+        return LosProgramUpsertResponse.builder()
+                .plpProgramId(program.getId())
+                .programCode(program.getProgramCode())
+                .created(false)
+                .updated(true)
+                .status(program.getStatus() != null ? program.getStatus().name() : null)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public LosProgramStatusResponse getStatus(String sourceSystem, String losProgramId) {
+        String src = normalize(sourceSystem);
+        String losPid = normalize(losProgramId);
+        Program program = programRepository
+                .findBySourceSystemAndLosProgramId(src, losPid)
+                .orElseThrow(() -> new RuntimeException("Program not found for LOS id: " + losPid));
+        return LosProgramStatusResponse.builder()
+                .plpProgramId(program.getId())
+                .programCode(program.getProgramCode())
+                .status(program.getStatus() != null ? program.getStatus().name() : null)
+                .build();
+    }
+
+    private static ProgramStatus resolveInitialStatus(Boolean preApproved) {
+        return Boolean.TRUE.equals(preApproved) ? ProgramStatus.ACTIVE : ProgramStatus.DRAFT;
     }
 
     private static String normalize(String raw) {

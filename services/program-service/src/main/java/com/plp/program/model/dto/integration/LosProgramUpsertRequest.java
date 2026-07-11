@@ -62,4 +62,11 @@ public class LosProgramUpsertRequest extends LosIntegrationBaseRequest {
 
     @Size(max = 50)
     private String encoreProductCode;
+
+    /** When true, program is created as ACTIVE (legacy). Default false → DRAFT pending LOS approval. */
+    private Boolean preApproved;
+
+    private BigDecimal dependencyVintagePercent;
+
+    private Integer anchorRelationshipVintageMonths;
 }
