@@ -5,9 +5,11 @@ import com.plp.program.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -41,6 +43,20 @@ public class LosIntegrationController {
     @PostMapping("/programs")
     public ResponseEntity<Map<String, Object>> upsertProgram(@Valid @RequestBody LosProgramUpsertRequest body) {
         LosProgramUpsertResponse data = losProgramIntegrationService.upsert(body);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @PostMapping("/programs/activate")
+    public ResponseEntity<Map<String, Object>> activateProgram(@Valid @RequestBody LosProgramActivateRequest body) {
+        LosProgramUpsertResponse data = losProgramIntegrationService.activate(body);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/programs/status")
+    public ResponseEntity<Map<String, Object>> getProgramStatus(
+            @RequestParam String sourceSystem,
+            @RequestParam String losProgramId) {
+        LosProgramStatusResponse data = losProgramIntegrationService.getStatus(sourceSystem, losProgramId);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
     }
 

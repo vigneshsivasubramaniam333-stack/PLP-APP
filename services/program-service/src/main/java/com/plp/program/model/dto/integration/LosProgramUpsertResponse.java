@@ -18,4 +18,6 @@ public class LosProgramUpsertResponse {
     private boolean created;
     /** Present when an existing program row was updated. */
     private Boolean updated;
+    /** PLP operational status: DRAFT, ACTIVE, PAUSED, CLOSED */
+    private String status;
 }
