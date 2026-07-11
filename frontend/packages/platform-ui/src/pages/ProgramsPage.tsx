@@ -2,6 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard, useAuth } from '@plp/shared';
 import type { Program, ProgramEligibilityConfig, ProgramOperationalParameters } from '@plp/shared';
 import { ClearDemoDataButton } from '../components/ClearDemoDataButton';
+import {
+  ProgramApprovalActions,
+  ProgramApprovalToolbar,
+  useProgramApprovalConfig,
+} from '../components/ProgramApprovalActions';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
@@ -319,12 +324,22 @@ function EligibilityFields({
   maxInvoiceAgeDays,
   minInvoiceAmount,
   minDaysToDueDate,
+  dependencyVintagePercent,
+  anchorRelationshipVintageMonths,
   onChange,
 }: {
   maxInvoiceAgeDays: string;
   minInvoiceAmount: string;
   minDaysToDueDate: string;
-  onChange: (patch: { maxInvoiceAgeDays?: string; minInvoiceAmount?: string; minDaysToDueDate?: string }) => void;
+  dependencyVintagePercent: string;
+  anchorRelationshipVintageMonths: string;
+  onChange: (patch: {
+    maxInvoiceAgeDays?: string;
+    minInvoiceAmount?: string;
+    minDaysToDueDate?: string;
+    dependencyVintagePercent?: string;
+    anchorRelationshipVintageMonths?: string;
+  }) => void;
 }) {
   return (
     <>
@@ -363,6 +378,34 @@ function EligibilityFields({
           onChange={(e) => onChange({ minDaysToDueDate: e.target.value })}
           className={inputCls}
           placeholder="Leave blank to skip"
+        />
+      </ProgramField>
+      <ProgramField
+        label="Dependency vintage (%)"
+        hint="Minimum borrower dependency on anchor required for eligibility"
+      >
+        <input
+          type="number"
+          step="0.01"
+          min={0}
+          value={dependencyVintagePercent}
+          onChange={(e) => onChange({ dependencyVintagePercent: e.target.value })}
+          className={inputCls}
+          placeholder="e.g. 12.00"
+        />
+      </ProgramField>
+      <ProgramField
+        label="Anchor relationship vintage (months)"
+        hint="Minimum months of anchor relationship required for eligibility"
+      >
+        <input
+          type="number"
+          step="1"
+          min={1}
+          value={anchorRelationshipVintageMonths}
+          onChange={(e) => onChange({ anchorRelationshipVintageMonths: e.target.value })}
+          className={inputCls}
+          placeholder="e.g. 10"
         />
       </ProgramField>
       <p className="col-span-full text-[11px] text-slate-400 -mt-1">
@@ -432,6 +475,8 @@ function fmtCfgSummary(c: ProgramEligibilityConfig): string {
   if (c.maxInvoiceAgeDays != null) parts.push(`credit≤${c.maxInvoiceAgeDays}d`);
   if (c.minInvoiceAmount != null) parts.push(`min ₹${Number(c.minInvoiceAmount).toLocaleString('en-IN')}`);
   if (c.minDaysToDueDate != null) parts.push(`due≥${c.minDaysToDueDate}d`);
+  if (c.dependencyVintagePercent != null) parts.push(`dep≥${c.dependencyVintagePercent}%`);
+  if (c.anchorRelationshipVintageMonths != null) parts.push(`anchor≥${c.anchorRelationshipVintageMonths}mo`);
   return parts.length ? parts.join(' · ') : '—';
 }
 
@@ -444,11 +489,13 @@ export default function ProgramsPage() {
   const [editProgram, setEditProgram] = useState<Program | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [editForm, setEditForm] = useState({ ...defaultOperationalSlice(), name: '', description: '', marginPercent: '', maxInvoiceAgeDays: '', minInvoiceAmount: '', minDaysToDueDate: '' });
+  const [editForm, setEditForm] = useState({ ...defaultOperationalSlice(), name: '', description: '', marginPercent: '', maxInvoiceAgeDays: '', minInvoiceAmount: '', minDaysToDueDate: '', dependencyVintagePercent: '', anchorRelationshipVintageMonths: '' });
 
   const portalCaps = lenderLoanCapabilities(getStoredAuthUser()?.role);
   const { user } = useAuth();
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN';
+  const { config: approvalConfig, configModal, openConfig } = useProgramApprovalConfig();
+  const sentBackCount = programs.filter((p) => p.status === 'SENT_BACK').length;
 
   const reloadPrograms = () => {
     programApi.list().then((res) => setPrograms(res.data.data || [])).catch(console.error);
@@ -469,6 +516,8 @@ export default function ProgramsPage() {
     maxInvoiceAgeDays: '',
     minInvoiceAmount: '',
     minDaysToDueDate: '',
+    dependencyVintagePercent: '',
+    anchorRelationshipVintageMonths: '',
     ...defaultOperationalSlice(),
   });
 
@@ -503,6 +552,9 @@ export default function ProgramsPage() {
       maxInvoiceAgeDays: cfg.maxInvoiceAgeDays != null ? String(cfg.maxInvoiceAgeDays) : '',
       minInvoiceAmount: cfg.minInvoiceAmount != null ? String(cfg.minInvoiceAmount) : '',
       minDaysToDueDate: cfg.minDaysToDueDate != null ? String(cfg.minDaysToDueDate) : '',
+      dependencyVintagePercent: cfg.dependencyVintagePercent != null ? String(cfg.dependencyVintagePercent) : '',
+      anchorRelationshipVintageMonths:
+        cfg.anchorRelationshipVintageMonths != null ? String(cfg.anchorRelationshipVintageMonths) : '',
       enablePaymentForBorrower: Boolean(ops.enablePaymentForBorrower),
       autoDiscounting: Boolean(ops.autoDiscounting),
       discountingDay: ops.discountingDay != null ? String(ops.discountingDay) : '0',
@@ -533,6 +585,21 @@ export default function ProgramsPage() {
     return n;
   };
 
+  const parseNonNegativeOptional = (label: string, raw: string): number | undefined => {
+    const t = raw.trim();
+    if (!t) return undefined;
+    const n = Number(t);
+    if (Number.isNaN(n) || n < 0) throw new Error(`${label} must be 0 or greater`);
+    return n;
+  };
+
+  const mergeVintageCfg = (cfg: Record<string, number>, dep: string, anchorMo: string) => {
+    const depPct = parseNonNegativeOptional('Dependency vintage (%)', dep);
+    const anchorMonths = parsePositiveOptional('Anchor relationship vintage (months)', anchorMo);
+    if (depPct !== undefined) cfg.dependencyVintagePercent = depPct;
+    if (anchorMonths !== undefined) cfg.anchorRelationshipVintageMonths = anchorMonths;
+  };
+
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editProgram) return;
@@ -550,6 +617,7 @@ export default function ProgramsPage() {
       if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
       if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
       if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
+      mergeVintageCfg(cfg, editForm.dependencyVintagePercent, editForm.anchorRelationshipVintageMonths);
       if (Object.keys(cfg).length > 0) cfgPayload = cfg;
 
       const marginVal = editForm.marginPercent.trim();
@@ -596,6 +664,7 @@ export default function ProgramsPage() {
         if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
         if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
         if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
+        mergeVintageCfg(cfg, form.dependencyVintagePercent, form.anchorRelationshipVintageMonths);
         if (Object.keys(cfg).length > 0) cfgPayload = cfg;
       }
 
@@ -615,7 +684,7 @@ export default function ProgramsPage() {
         parameters: buildParametersPayload(form),
         lmsEntryIn: form.lmsEntryIn,
         encoreProductCode: form.lmsEntryIn === 'YES' ? form.encoreProductCode.trim() : undefined,
-        status: 'ACTIVE',
+        status: 'DRAFT',
       });
       setShowCreate(false);
       setForm({
@@ -633,6 +702,8 @@ export default function ProgramsPage() {
         maxInvoiceAgeDays: '',
         minInvoiceAmount: '',
         minDaysToDueDate: '',
+        dependencyVintagePercent: '',
+        anchorRelationshipVintageMonths: '',
         ...defaultOperationalSlice(),
       });
       reload();
@@ -656,7 +727,7 @@ export default function ProgramsPage() {
     <div>
       <BtPageHeader
         title="Programs"
-        description="Manage lending programs and configurations"
+        description="Manage lending programs — L1/L2 approval from this listing"
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             {isPlatformAdmin ? <ClearDemoDataButton onCleared={reloadPrograms} /> : null}
@@ -671,6 +742,13 @@ export default function ProgramsPage() {
           </div>
         }
       />
+
+      <ProgramApprovalToolbar
+        isPlatformAdmin={isPlatformAdmin}
+        sentBackCount={sentBackCount}
+        onOpenConfig={openConfig}
+      />
+      {configModal}
 
       {/* Create Program Modal */}
       {showCreate ? (
@@ -772,6 +850,8 @@ export default function ProgramsPage() {
                 maxInvoiceAgeDays={form.maxInvoiceAgeDays}
                 minInvoiceAmount={form.minInvoiceAmount}
                 minDaysToDueDate={form.minDaysToDueDate}
+                dependencyVintagePercent={form.dependencyVintagePercent}
+                anchorRelationshipVintageMonths={form.anchorRelationshipVintageMonths}
                 onChange={(patch) => setForm({ ...form, ...patch })}
               />
             ) : null}
@@ -829,6 +909,8 @@ export default function ProgramsPage() {
                 maxInvoiceAgeDays={editForm.maxInvoiceAgeDays}
                 minInvoiceAmount={editForm.minInvoiceAmount}
                 minDaysToDueDate={editForm.minDaysToDueDate}
+                dependencyVintagePercent={editForm.dependencyVintagePercent}
+                anchorRelationshipVintageMonths={editForm.anchorRelationshipVintageMonths}
                 onChange={(patch) => setEditForm({ ...editForm, ...patch })}
               />
             ) : null}
@@ -896,20 +978,23 @@ export default function ProgramsPage() {
                   <span className="line-clamp-2">{fmtOpsSummary(p)}</span>
                 </td>
                 <td className="px-5 py-4 text-center">
-                  <BtBadge status={p.status}>{p.status}</BtBadge>
+                  <BtBadge status={p.status}>
+                    {p.status === 'PENDING_L2' ? 'Pending L2' : p.status === 'SENT_BACK' ? 'Sent back' : p.status}
+                  </BtBadge>
+                  {p.approvalRemarks ? (
+                    <div className="text-[10px] text-amber-700 mt-1 max-w-[120px] mx-auto line-clamp-2" title={p.approvalRemarks}>
+                      {p.approvalRemarks}
+                    </div>
+                  ) : null}
                 </td>
                 <td className="px-5 py-4 text-center">
-                  {portalCaps.canEditProgramConfig ? (
-                    <button
-                      type="button"
-                      onClick={() => openEdit(p)}
-                      className="bt-btn bt-btn-secondary bt-btn-sm"
-                    >
-                      Edit
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">—</span>
-                  )}
+                  <ProgramApprovalActions
+                    program={p}
+                    approvalConfig={approvalConfig}
+                    onChanged={reload}
+                    canEdit={portalCaps.canEditProgramConfig}
+                    onEdit={() => openEdit(p)}
+                  />
                 </td>
               </tr>
             ))}

@@ -12,7 +12,7 @@ export type UserRole =
 
 export type ProductType = 'PAY_DAY_LOAN' | 'INVOICE_DISCOUNTING';
 
-export type ProgramStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'CLOSED';
+export type ProgramStatus = 'DRAFT' | 'PENDING_L2' | 'SENT_BACK' | 'ACTIVE' | 'PAUSED' | 'CLOSED';
 
 export type LoanStatus =
   | 'REQUESTED'
@@ -70,6 +70,8 @@ export interface ProgramEligibilityConfig {
   maxInvoiceAgeDays?: number;
   minInvoiceAmount?: number;
   minDaysToDueDate?: number;
+  dependencyVintagePercent?: number;
+  anchorRelationshipVintageMonths?: number;
 }
 
 export interface ProgramOperationalParameters {
@@ -116,6 +118,11 @@ export interface Program {
   parameters?: ProgramOperationalParameters | Record<string, unknown> | null;
   lmsEntryIn?: 'YES' | 'NO' | string | null;
   encoreProductCode?: string | null;
+  approvalRemarks?: string | null;
+  submittedAt?: string | null;
+  submittedBy?: string | null;
+  sentBackAt?: string | null;
+  sentBackBy?: string | null;
 }
 
 export type SubProgramStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';

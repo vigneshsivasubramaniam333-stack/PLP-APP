@@ -113,6 +113,12 @@ public final class ProgramParametersValidator {
         if (out.containsKey("minDaysToDueDate") && out.get("minDaysToDueDate") != null) {
             parseNonNegativeInt(out.get("minDaysToDueDate"), 0);
         }
+        if (out.containsKey("dependencyVintagePercent") && out.get("dependencyVintagePercent") != null) {
+            parseNonNegativeDecimal(out.get("dependencyVintagePercent"), "dependencyVintagePercent");
+        }
+        if (out.containsKey("anchorRelationshipVintageMonths") && out.get("anchorRelationshipVintageMonths") != null) {
+            parsePositiveInt(out.get("anchorRelationshipVintageMonths"), "anchorRelationshipVintageMonths");
+        }
         return out;
     }
 
