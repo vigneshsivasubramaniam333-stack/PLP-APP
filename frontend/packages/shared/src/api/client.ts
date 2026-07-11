@@ -105,6 +105,15 @@ export const programApi = {
     apiClient.put(`/api/v1/programs/${id}`, data, { headers: lenderLoanActionHeaders() }),
   updateStatus: (id: string, status: string) =>
     apiClient.patch(`/api/v1/programs/${id}/status`, { status }, { headers: lenderLoanActionHeaders() }),
+  submitForL2: (id: string) =>
+    apiClient.post(`/api/v1/platform/program-approval/programs/${id}/submit-l2`, {}, { headers: lenderLoanActionHeaders() }),
+  sendBack: (id: string, remarks: string) =>
+    apiClient.post(`/api/v1/platform/program-approval/programs/${id}/send-back`, { remarks }, { headers: lenderLoanActionHeaders() }),
+  approveL2: (id: string) =>
+    apiClient.post(`/api/v1/platform/program-approval/programs/${id}/approve-l2`, {}, { headers: lenderLoanActionHeaders() }),
+  getApprovalConfig: () => apiClient.get('/api/v1/platform/program-approval/config'),
+  updateApprovalConfig: (data: { l1Role: string; l2Role: string; enabled: boolean }) =>
+    apiClient.put('/api/v1/platform/program-approval/config', data, { headers: lenderLoanActionHeaders() }),
   getUtilization: (id: string) => apiClient.get(`/api/v1/programs/${id}/utilization`),
 };
 
