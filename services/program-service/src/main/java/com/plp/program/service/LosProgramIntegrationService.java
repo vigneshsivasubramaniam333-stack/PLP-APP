@@ -282,6 +282,7 @@ public class LosProgramIntegrationService {
                 .plpProgramId(program.getId())
                 .programCode(program.getProgramCode())
                 .status(program.getStatus() != null ? program.getStatus().name() : null)
+                .approvalRemarks(program.getApprovalRemarks())
                 .build();
     }
 

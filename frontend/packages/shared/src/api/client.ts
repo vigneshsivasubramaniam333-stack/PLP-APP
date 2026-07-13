@@ -109,6 +109,12 @@ export const programApi = {
     apiClient.post(`/api/v1/platform/program-approval/programs/${id}/submit-l2`, {}, { headers: lenderLoanActionHeaders() }),
   sendBack: (id: string, remarks: string) =>
     apiClient.post(`/api/v1/platform/program-approval/programs/${id}/send-back`, { remarks }, { headers: lenderLoanActionHeaders() }),
+  sendBackToRm: (id: string, remarks?: string) =>
+    apiClient.post(
+      `/api/v1/platform/program-approval/programs/${id}/send-back-to-rm`,
+      { remarks: remarks ?? '' },
+      { headers: lenderLoanActionHeaders() },
+    ),
   approveL2: (id: string) =>
     apiClient.post(`/api/v1/platform/program-approval/programs/${id}/approve-l2`, {}, { headers: lenderLoanActionHeaders() }),
   getApprovalConfig: () => apiClient.get('/api/v1/platform/program-approval/config'),

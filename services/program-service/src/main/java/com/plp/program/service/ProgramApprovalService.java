@@ -93,6 +93,30 @@ public class ProgramApprovalService {
         return saved;
     }
 
+    /**
+     * L1 sends a DRAFT program back to the relationship manager (RM) for revision.
+     * Remarks are optional. Resulting status is {@link ProgramStatus#SENT_BACK}.
+     */
+    @Transactional
+    public Program sendBackToRm(UUID programId, String remarks, String rolesHeader, String userId) {
+        ProgramApprovalConfig cfg = getConfig();
+        requireRole(rolesHeader, cfg.getL1Role(), "Only L1 approver can send program back to RM");
+        Program program = programService.getProgram(programId);
+        ProgramStatus status = program.getStatus();
+        if (status != ProgramStatus.DRAFT) {
+            throw new RuntimeException(
+                    "Send back to RM allowed only when status is DRAFT. Current: " + status);
+        }
+        program.setStatus(ProgramStatus.SENT_BACK);
+        String trimmed = remarks == null ? null : remarks.trim();
+        program.setApprovalRemarks(trimmed == null || trimmed.isEmpty() ? null : trimmed);
+        program.setSentBackAt(Instant.now());
+        program.setSentBackBy(trimUser(userId));
+        Program saved = programService.saveProgram(program);
+        log.info("Program {} sent back to RM by L1 {}", saved.getProgramCode(), userId);
+        return saved;
+    }
+
     @Transactional
     public Program approveL2(UUID programId, String rolesHeader, String userId) {
         ProgramApprovalConfig cfg = getConfig();

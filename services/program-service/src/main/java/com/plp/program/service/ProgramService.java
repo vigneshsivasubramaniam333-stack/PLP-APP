@@ -192,6 +192,12 @@ public class ProgramService {
         if (dto.getMarginPercent() != null) {
             program.setMarginPercent(dto.getMarginPercent());
         }
+        if (dto.getMaxBorrowerLimit() != null) {
+            if (dto.getMaxBorrowerLimit().compareTo(ZERO) <= 0) {
+                throw new RuntimeException("maxBorrowerLimit must be greater than 0");
+            }
+            program.setMaxBorrowerLimit(dto.getMaxBorrowerLimit());
+        }
         if (dto.getConfig() != null && !dto.getConfig().isEmpty()) {
             Map<String, Object> merged =
                     program.getConfig() == null ? new HashMap<>() : new HashMap<>(program.getConfig());

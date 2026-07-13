@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard, useAuth } from '@plp/shared';
 import type { Program, ProgramEligibilityConfig, ProgramOperationalParameters } from '@plp/shared';
 import { ClearDemoDataButton } from '../components/ClearDemoDataButton';
+import { FieldTooltip } from '../components/FieldTooltip';
 import {
   ProgramApprovalActions,
   ProgramApprovalToolbar,
@@ -78,17 +79,22 @@ function ProgramFormModal({
 function ProgramField({
   label,
   hint,
+  tooltip,
   span = 1,
   children,
 }: {
   label: string;
   hint?: string;
+  tooltip?: string;
   span?: 1 | 2;
   children: ReactNode;
 }) {
   return (
     <div className={span === 2 ? 'md:col-span-2' : undefined}>
-      <label className={labelCls}>{label}</label>
+      <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+        <span>{label}</span>
+        {tooltip ? <FieldTooltip text={tooltip} /> : null}
+      </label>
       {children}
       {hint ? <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{hint}</p> : null}
     </div>
@@ -240,7 +246,7 @@ function OperationalParamsFields({
           onChange={(intFreeCreditPeriod) => onChange({ intFreeCreditPeriod })}
         />
       </div>
-      <ProgramField label="Sanction type">
+      <ProgramField label="Sanction type" tooltip="Manual requires credit approval; Auto sanctions eligible invoices without review.">
         <select
           value={values.sanctionType}
           onChange={(e) => onChange({ sanctionType: e.target.value })}
@@ -250,7 +256,7 @@ function OperationalParamsFields({
           <option value="AUTO">Auto</option>
         </select>
       </ProgramField>
-      <ProgramField label="Discounting day (of month)" hint="0–28 when auto discounting is enabled">
+      <ProgramField label="Discounting day (of month)" hint="0–28 when auto discounting is enabled" tooltip="Calendar day used when auto discounting is enabled.">
         <input
           type="number"
           min={0}
@@ -296,7 +302,7 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
-      <ProgramField label="Need LMS entry?">
+      <ProgramField label="Need LMS entry?" tooltip="When Yes, disbursed loans are posted to Encore LMS using the product code.">
         <select
           value={values.lmsEntryIn}
           onChange={(e) => onChange({ lmsEntryIn: e.target.value })}
@@ -489,7 +495,18 @@ export default function ProgramsPage() {
   const [editProgram, setEditProgram] = useState<Program | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [editForm, setEditForm] = useState({ ...defaultOperationalSlice(), name: '', description: '', marginPercent: '', maxInvoiceAgeDays: '', minInvoiceAmount: '', minDaysToDueDate: '', dependencyVintagePercent: '', anchorRelationshipVintageMonths: '' });
+  const [editForm, setEditForm] = useState({
+    ...defaultOperationalSlice(),
+    name: '',
+    description: '',
+    marginPercent: '',
+    maxBorrowerLimit: '',
+    maxInvoiceAgeDays: '',
+    minInvoiceAmount: '',
+    minDaysToDueDate: '',
+    dependencyVintagePercent: '',
+    anchorRelationshipVintageMonths: '',
+  });
 
   const portalCaps = lenderLoanCapabilities(getStoredAuthUser()?.role);
   const { user } = useAuth();
@@ -549,6 +566,7 @@ export default function ProgramsPage() {
       name: p.programName,
       description: p.description ?? '',
       marginPercent: p.marginPercent != null ? String(p.marginPercent) : '',
+      maxBorrowerLimit: p.maxBorrowerLimit != null ? String(p.maxBorrowerLimit) : '',
       maxInvoiceAgeDays: cfg.maxInvoiceAgeDays != null ? String(cfg.maxInvoiceAgeDays) : '',
       minInvoiceAmount: cfg.minInvoiceAmount != null ? String(cfg.minInvoiceAmount) : '',
       minDaysToDueDate: cfg.minDaysToDueDate != null ? String(cfg.minDaysToDueDate) : '',
@@ -626,10 +644,20 @@ export default function ProgramsPage() {
         throw new Error('Margin % must be 0 or greater');
       }
 
+      const maxDealerRaw = editForm.maxBorrowerLimit.trim();
+      let maxDealerNum: number | undefined;
+      if (maxDealerRaw !== '') {
+        maxDealerNum = parseFloat(maxDealerRaw);
+        if (Number.isNaN(maxDealerNum) || maxDealerNum <= 0) {
+          throw new Error('Max. dealer limit must be greater than 0');
+        }
+      }
+
       await programApi.update(editProgram.id, {
         name: editForm.name.trim(),
         description: editForm.description.trim(),
         ...(marginNum !== undefined ? { marginPercent: marginNum } : {}),
+        ...(maxDealerNum !== undefined ? { maxBorrowerLimit: maxDealerNum } : {}),
         ...(cfgPayload ? { config: cfgPayload } : {}),
         parameters: buildParametersPayload(editForm),
         lmsEntryIn: editForm.lmsEntryIn,
@@ -785,7 +813,10 @@ export default function ProgramsPage() {
                 <option value="INVOICE_DISCOUNTING">Invoice Discounting</option>
               </select>
             </ProgramField>
-            <ProgramField label="Umbrella program limit (INR) *">
+            <ProgramField
+              label="Umbrella program limit (INR) *"
+              tooltip="Total sanctioned capacity for this program across all sub-programs and dealers."
+            >
               <input
                 type="number"
                 step="0.01"
@@ -796,7 +827,10 @@ export default function ProgramsPage() {
                 required
               />
             </ProgramField>
-            <ProgramField label="Max Borrower Limit (INR) *">
+            <ProgramField
+              label="Max. dealer limit (INR) *"
+              tooltip="Ceiling for any single dealer/borrower limit under this program."
+            >
               <input
                 type="number"
                 step="0.01"
@@ -807,7 +841,10 @@ export default function ProgramsPage() {
                 required
               />
             </ProgramField>
-            <ProgramField label="Interest Rate (% p.a.) *">
+            <ProgramField
+              label="Interest Rate (% p.a.) *"
+              tooltip="Default interest rate applied when a dealer does not override pricing."
+            >
               <input
                 type="number"
                 step="0.01"
@@ -818,7 +855,11 @@ export default function ProgramsPage() {
                 required
               />
             </ProgramField>
-            <ProgramField label="Margin (%)" hint="0 = eligible equals net amount">
+            <ProgramField
+              label="Margin (%)"
+              hint="0 = eligible equals net amount"
+              tooltip="Percentage deducted from invoice net amount when calculating eligible finance."
+            >
               <input
                 type="number"
                 step="0.01"
@@ -829,7 +870,10 @@ export default function ProgramsPage() {
                 placeholder="0"
               />
             </ProgramField>
-            <ProgramField label="Max Tenure (days)">
+            <ProgramField
+              label="Max Tenure (days)"
+              tooltip="Maximum loan/invoice tenure allowed under this program."
+            >
               <input
                 type="number"
                 value={form.maxTenureDays}
@@ -889,9 +933,24 @@ export default function ProgramsPage() {
               />
             </ProgramField>
             <ProgramField
+              label="Max. dealer limit (INR)"
+              tooltip="Ceiling for any single dealer/borrower limit under this program."
+            >
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                value={editForm.maxBorrowerLimit}
+                onChange={(e) => setEditForm({ ...editForm, maxBorrowerLimit: e.target.value })}
+                className={inputCls}
+                placeholder="e.g., 100000"
+              />
+            </ProgramField>
+            <ProgramField
               label="Margin (%)"
               span={2}
               hint="Deducted from invoice net amount to calculate eligible amount. Leave blank or set to 0 for full eligibility."
+              tooltip="Percentage deducted from invoice net amount when calculating eligible finance."
             >
               <input
                 type="number"

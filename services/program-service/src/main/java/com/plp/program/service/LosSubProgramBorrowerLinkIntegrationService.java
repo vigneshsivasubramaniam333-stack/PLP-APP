@@ -3,8 +3,11 @@ package com.plp.program.service;
 import com.plp.program.integration.los.LosIntegrationResourceTypes;
 import com.plp.program.model.dto.integration.LosSubProgramBorrowerLinkRequest;
 import com.plp.program.model.dto.integration.LosSubProgramBorrowerLinkResponse;
+import com.plp.program.model.entity.Program;
+import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.entity.SubProgramBorrower;
 import com.plp.program.repository.BorrowerRepository;
+import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.repository.SubProgramRepository;
 import com.plp.program.service.audit.LosSyncAuditService;
@@ -29,6 +32,7 @@ public class LosSubProgramBorrowerLinkIntegrationService {
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final SubProgramRepository subProgramRepository;
     private final BorrowerRepository borrowerRepository;
+    private final ProgramRepository programRepository;
     private final LosSyncAuditService losSyncAuditService;
 
     @Transactional
@@ -62,10 +66,14 @@ public class LosSubProgramBorrowerLinkIntegrationService {
         UUID subProgramId = req.getSubProgramId();
         UUID borrowerId = req.getBorrowerId();
 
-        subProgramRepository.findById(subProgramId).orElseThrow(() -> new RuntimeException("Sub-program not found"));
+        SubProgram subProgram =
+                subProgramRepository
+                        .findById(subProgramId)
+                        .orElseThrow(() -> new RuntimeException("Sub-program not found"));
         borrowerRepository.findById(borrowerId).orElseThrow(() -> new RuntimeException("Borrower not found"));
 
         BigDecimal limit = req.getBorrowerLimit();
+        validateBorrowerLimitAgainstProgram(limit, subProgram.getProgramId());
         BigDecimal utilized =
                 req.getUtilizedLimit() != null ? req.getUtilizedLimit() : BigDecimal.ZERO;
         BigDecimal available =
@@ -114,6 +122,20 @@ public class LosSubProgramBorrowerLinkIntegrationService {
                 .created(true)
                 .updated(false)
                 .build();
+    }
+
+    private void validateBorrowerLimitAgainstProgram(BigDecimal borrowerLimit, UUID programId) {
+        if (borrowerLimit == null) {
+            return;
+        }
+        Program program = programRepository
+                .findById(programId)
+                .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
+        BigDecimal max = program.getMaxBorrowerLimit();
+        if (max != null && borrowerLimit.compareTo(max) > 0) {
+            throw new RuntimeException(
+                    "Borrower/dealer limit exceeds Max. dealer limit (₹" + max.toPlainString() + ")");
+        }
     }
 
     private static String normalize(String raw) {

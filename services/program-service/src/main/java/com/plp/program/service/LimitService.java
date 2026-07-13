@@ -38,8 +38,12 @@ public class LimitService {
         Program program = programRepository.findById(programId)
                 .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
 
-        if (sanctionedLimit.compareTo(program.getMaxBorrowerLimit()) > 0) {
-            throw new RuntimeException("Sanctioned limit exceeds program max borrower limit: " + program.getMaxBorrowerLimit());
+        if (program.getMaxBorrowerLimit() != null
+                && sanctionedLimit.compareTo(program.getMaxBorrowerLimit()) > 0) {
+            throw new RuntimeException(
+                    "Borrower/dealer limit exceeds Max. dealer limit (₹"
+                            + program.getMaxBorrowerLimit().toPlainString()
+                            + ")");
         }
 
         BorrowerLimit limit = BorrowerLimit.builder()

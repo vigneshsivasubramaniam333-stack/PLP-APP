@@ -183,6 +183,7 @@ public class SubProgramService {
         }
 
         applyBorrowerLimitDefaults(membership);
+        validateBorrowerLimitAgainstProgram(membership.getBorrowerLimit(), subProgram.getProgramId());
         SubProgramBorrowerTermsValidator.validateAndApplyDefaults(membership, subProgram);
 
         SubProgramBorrower saved = subProgramBorrowerRepository.save(membership);
@@ -209,6 +210,7 @@ public class SubProgramService {
             } else {
                 membership.setAvailableLimit(dto.getBorrowerLimit());
             }
+            validateBorrowerLimitAgainstProgram(dto.getBorrowerLimit(), subProgram.getProgramId());
         }
         if (dto.getInterestRate() != null) {
             membership.setInterestRate(dto.getInterestRate());
@@ -420,6 +422,20 @@ public class SubProgramService {
         }
         if (membership.getAvailableLimit() == null && membership.getBorrowerLimit() != null) {
             membership.setAvailableLimit(membership.getBorrowerLimit());
+        }
+    }
+
+    private void validateBorrowerLimitAgainstProgram(BigDecimal borrowerLimit, UUID programId) {
+        if (borrowerLimit == null) {
+            return;
+        }
+        Program program = programRepository
+                .findById(programId)
+                .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
+        BigDecimal max = program.getMaxBorrowerLimit();
+        if (max != null && borrowerLimit.compareTo(max) > 0) {
+            throw new RuntimeException(
+                    "Borrower/dealer limit exceeds Max. dealer limit (₹" + max.toPlainString() + ")");
         }
     }
 }

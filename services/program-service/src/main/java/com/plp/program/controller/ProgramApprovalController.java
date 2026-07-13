@@ -84,6 +84,29 @@ public class ProgramApprovalController {
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
     }
 
+    @PostMapping("/programs/{id}/send-back-to-rm")
+    public ResponseEntity<Map<String, Object>> sendBackToRm(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> body,
+            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false)
+                    String rolesHeader,
+            @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader) {
+        String remarks = body != null ? body.get("remarks") : null;
+        Program updated = programApprovalService.sendBackToRm(id, remarks, rolesHeader, userIdHeader);
+        auditService.logEvent(
+                "PROGRAM_SENT_BACK_TO_RM",
+                "PROGRAM",
+                id.toString(),
+                "SEND_BACK_TO_RM",
+                userIdHeader,
+                rolesHeader,
+                null,
+                null,
+                "SUCCESS",
+                remarks);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
+    }
+
     @PostMapping("/programs/{id}/approve-l2")
     public ResponseEntity<Map<String, Object>> approveL2(
             @PathVariable UUID id,

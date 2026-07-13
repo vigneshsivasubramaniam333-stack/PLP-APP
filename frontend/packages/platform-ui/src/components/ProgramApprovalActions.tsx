@@ -41,10 +41,32 @@ function ProgramActionsMenu({ items, busy }: { items: MenuItem[]; busy?: boolean
     if (btn) {
       const rect = btn.getBoundingClientRect();
       const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+      // Tentative below; flipped after measure in effect when menu mounts.
       setMenuPos({ top: rect.bottom + 4, left });
     }
     setOpen(true);
   };
+
+  useEffect(() => {
+    if (!open || !menuPos) return;
+    const btn = rootRef.current?.querySelector('button');
+    if (!btn || !menuRef.current) return;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = menuRef.current.getBoundingClientRect().height;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    let top = rect.bottom + gap;
+    if (menuHeight > spaceBelow && spaceAbove > spaceBelow) {
+      top = Math.max(8, rect.top - menuHeight - gap);
+    } else if (top + menuHeight > window.innerHeight - 8) {
+      top = Math.max(8, window.innerHeight - menuHeight - 8);
+    }
+    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+    if (top !== menuPos.top || left !== menuPos.left) {
+      setMenuPos({ top, left });
+    }
+  }, [open, menuPos, items.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -150,7 +172,7 @@ function ProgramReviewModal({ program, onClose }: { program: Program; onClose: (
     { label: 'Program code', value: program.programCode },
     { label: 'Product', value: program.productType },
     { label: 'Program limit', value: `₹${Number(program.programLimit).toLocaleString('en-IN')}` },
-    { label: 'Max borrower limit', value: `₹${Number(program.maxBorrowerLimit).toLocaleString('en-IN')}` },
+    { label: 'Max. dealer limit', value: `₹${Number(program.maxBorrowerLimit).toLocaleString('en-IN')}` },
     { label: 'Interest rate', value: `${program.defaultInterestRate}% p.a.` },
     { label: 'Margin', value: program.marginPercent != null ? `${program.marginPercent}%` : '0%' },
     { label: 'Max tenure', value: `${program.maxTenureDays ?? '—'} days` },
@@ -251,6 +273,53 @@ function SendBackModal({
             onClick={() => onSubmit(remarks.trim())}
           >
             {busy ? 'Sending…' : 'Send back'}
+          </BtButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SendBackToRmModal({
+  program,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  program: Program;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (remarks: string) => void;
+}) {
+  const [remarks, setRemarks] = useState('');
+  return (
+    <div className="bt-modal-overlay">
+      <div className="bt-modal !max-w-lg w-full" role="dialog" aria-modal="true">
+        <div className="bt-modal-header">
+          <h2 className="bt-modal-title">Send back to RM</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div className="bt-modal-body">
+          <p className="text-sm text-slate-600 mb-3">
+            Send <strong>{program.programName}</strong> back to the relationship manager for revision. Remarks are
+            optional.
+          </p>
+          <label className="bt-label">Remarks (optional)</label>
+          <textarea
+            className="bt-input w-full min-h-[100px] resize-y"
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            placeholder="Optional notes for the RM…"
+          />
+        </div>
+        <div className="bt-modal-footer">
+          <button type="button" onClick={onClose} className="bt-btn bt-btn-secondary" disabled={busy}>
+            Cancel
+          </button>
+          <BtButton type="button" disabled={busy} onClick={() => onSubmit(remarks.trim())}>
+            {busy ? 'Sending…' : 'Send back to RM'}
           </BtButton>
         </div>
       </div>
@@ -374,6 +443,7 @@ export function ProgramApprovalActions({
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(false);
   const [sendBack, setSendBack] = useState(false);
+  const [sendBackToRm, setSendBackToRm] = useState(false);
 
   const isL1 = role === approvalConfig.l1Role || role === 'PLATFORM_ADMIN';
   const isL2 = role === approvalConfig.l2Role || role === 'PLATFORM_ADMIN';
@@ -405,6 +475,16 @@ export function ProgramApprovalActions({
       tone: 'primary',
       disabled: busy,
       onClick: () => void run(() => programApi.submitForL2(program.id), 'Submitted for L2 review'),
+    });
+  }
+
+  if (approvalConfig.enabled && isL1 && st === 'DRAFT') {
+    menuItems.push({
+      id: 'send-back-to-rm',
+      label: 'Send back to RM',
+      tone: 'warning',
+      disabled: busy,
+      onClick: () => setSendBackToRm(true),
     });
   }
 
@@ -447,6 +527,17 @@ export function ProgramApprovalActions({
           onSubmit={async (remarks) => {
             await run(() => programApi.sendBack(program.id, remarks), 'Sent back to L1');
             setSendBack(false);
+          }}
+        />
+      ) : null}
+      {sendBackToRm ? (
+        <SendBackToRmModal
+          program={program}
+          busy={busy}
+          onClose={() => setSendBackToRm(false)}
+          onSubmit={async (remarks) => {
+            await run(() => programApi.sendBackToRm(program.id, remarks || undefined), 'Sent back to RM');
+            setSendBackToRm(false);
           }}
         />
       ) : null}

@@ -15,6 +15,7 @@ import {
   buildSubProgramConfigurationRows,
 } from '@plp/shared';
 import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower, ProductRepaymentDefault } from '@plp/shared';
+import { FieldTooltip } from '../components/FieldTooltip';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
@@ -238,17 +239,22 @@ function borrowerHasTermOverrides(row: SubProgramBorrower): boolean {
 function FormField({
   label,
   hint,
+  tooltip,
   span = 1,
   children,
 }: {
   label: string;
   hint?: string;
+  tooltip?: string;
   span?: 1 | 2;
   children: ReactNode;
 }) {
   return (
     <div className={span === 2 ? 'md:col-span-2' : undefined}>
-      <label className={labelCls}>{label}</label>
+      <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+        <span>{label}</span>
+        {tooltip ? <FieldTooltip text={tooltip} /> : null}
+      </label>
       {children}
       {hint ? <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{hint}</p> : null}
     </div>
@@ -690,7 +696,10 @@ function BorrowerTermsFields({
       </p>
       {limitRequired ? (
         <div className="col-span-full md:col-span-1">
-          <label className={labelCls}>Borrower limit *</label>
+          <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+            <span>Borrower limit *</span>
+            <FieldTooltip text="Sanctioned limit for this dealer. Cannot exceed the program Max. dealer limit." />
+          </label>
           <input
             required
             type="number"
@@ -704,7 +713,10 @@ function BorrowerTermsFields({
         </div>
       ) : (
         <div className="col-span-full md:col-span-1">
-          <label className={labelCls}>Borrower limit</label>
+          <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+            <span>Borrower limit</span>
+            <FieldTooltip text="Sanctioned limit for this dealer. Cannot exceed the program Max. dealer limit." />
+          </label>
           <input
             type="number"
             step="0.01"
@@ -716,7 +728,10 @@ function BorrowerTermsFields({
         </div>
       )}
       <div>
-        <label className={labelCls}>Interest rate (%)</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Interest rate (%)</span>
+          <FieldTooltip text="Override interest rate for this dealer; leave blank to inherit from the sub-program." />
+        </label>
         <input
           type="number"
           step="0.01"
@@ -728,7 +743,10 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
-        <label className={labelCls}>Discount margin (%)</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Discount margin (%)</span>
+          <FieldTooltip text="Dealer-specific discount margin; blank inherits the sub-program margin." />
+        </label>
         <input
           type="number"
           step="0.01"
@@ -740,7 +758,10 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
-        <label className={labelCls}>Credit period (days)</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Credit period (days)</span>
+          <FieldTooltip text="Days from invoice date to due date for this dealer." />
+        </label>
         <input
           type="number"
           min={0}
@@ -751,7 +772,10 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
-        <label className={labelCls}>Overdue interest (%)</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Overdue interest (%)</span>
+          <FieldTooltip text="Penal interest applied after the credit period ends." />
+        </label>
         <input
           type="number"
           step="0.01"
@@ -762,7 +786,10 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
-        <label className={labelCls}>Party code (CSV)</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Party code (CSV)</span>
+          <FieldTooltip text="Code matching the dealer on invoice CSV uploads from the anchor." />
+        </label>
         <input
           type="text"
           value={form.partyCode}
@@ -772,7 +799,10 @@ function BorrowerTermsFields({
         />
       </div>
       <div>
-        <label className={labelCls}>Discount hold</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Discount hold</span>
+          <FieldTooltip text="When Yes, discounting is held until manually released." />
+        </label>
         <select
           value={form.discountHold}
           onChange={(e) => onChange({ ...form, discountHold: e.target.value })}
@@ -1411,7 +1441,10 @@ export default function SubProgramsPage() {
         >
           <div className={formGridCls}>
             <div className="col-span-full">
-              <label className={labelCls}>Program</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Program</span>
+                <FieldTooltip text="Parent program this sub-program operates under." />
+              </label>
               <select
                 required
                 value={form.programId}
@@ -1439,7 +1472,10 @@ export default function SubProgramsPage() {
               </select>
             </div>
             <div className="col-span-full">
-              <label className={labelCls}>Anchor</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Anchor</span>
+                <FieldTooltip text="Corporate / counterparty linked to this operating arrangement." />
+              </label>
               <select
                 required
                 value={form.anchorId}
@@ -1455,7 +1491,10 @@ export default function SubProgramsPage() {
               </select>
             </div>
             <div className="col-span-full">
-              <label className={labelCls}>Name</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Name</span>
+                <FieldTooltip text="Display name for this sub-program; code is generated on save." />
+              </label>
               <input
                 required
                 value={form.name}
@@ -1473,7 +1512,10 @@ export default function SubProgramsPage() {
               </div>
             ) : createFormProgram?.productType === 'INVOICE_DISCOUNTING' ? (
               <div className="col-span-full">
-                <label className={labelCls}>Flow type</label>
+                <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                  <span>Flow type</span>
+                  <FieldTooltip text="Determines buyer/seller roles and invoice discounting behaviour." />
+                </label>
                 <select
                   value={form.flowType}
                   onChange={(e) => setForm({ ...form, flowType: e.target.value })}
@@ -1490,7 +1532,10 @@ export default function SubProgramsPage() {
               </p>
             )}
             <div>
-              <label className={labelCls}>Interest rate (%)</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Interest rate (%)</span>
+                <FieldTooltip text="Default interest rate for dealers on this sub-program." />
+              </label>
               <input
                 required
                 type="number"
@@ -1501,7 +1546,10 @@ export default function SubProgramsPage() {
               />
             </div>
             <div>
-              <label className={labelCls}>Margin (%)</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Margin (%)</span>
+                <FieldTooltip text="Default discount margin applied when calculating eligible amounts." />
+              </label>
               <input
                 required
                 type="number"
@@ -1512,7 +1560,10 @@ export default function SubProgramsPage() {
               />
             </div>
             <div>
-              <label className={labelCls}>Max tenure (days)</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Max tenure (days)</span>
+                <FieldTooltip text="Maximum tenure allowed for transactions under this sub-program." />
+              </label>
               <input
                 required
                 type="number"
@@ -1523,7 +1574,10 @@ export default function SubProgramsPage() {
               />
             </div>
             <div>
-              <label className={labelCls}>Sub-program limit</label>
+              <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+                <span>Sub-program limit</span>
+                <FieldTooltip text="Total sanctioned capacity for this sub-program within the parent program." />
+              </label>
               <input
                 required
                 type="number"
@@ -1690,7 +1744,7 @@ export default function SubProgramsPage() {
                   <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{editError}</div>
                 ) : null}
                 <div className={formGridCls}>
-                  <FormField label="Name *" span={2}>
+                  <FormField label="Name *" span={2} tooltip="Display name for this sub-program.">
                     <input
                       className={inputCls}
                       value={editForm.name}
@@ -1698,7 +1752,7 @@ export default function SubProgramsPage() {
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                     />
                   </FormField>
-                  <FormField label="Interest rate (%)">
+                  <FormField label="Interest rate (%)" tooltip="Default interest rate for dealers on this sub-program.">
                     <input
                       type="number"
                       step="0.01"
@@ -1707,7 +1761,7 @@ export default function SubProgramsPage() {
                       onChange={(e) => setEditForm({ ...editForm, interestRate: e.target.value })}
                     />
                   </FormField>
-                  <FormField label="Discount margin (%)">
+                  <FormField label="Discount margin (%)" tooltip="Default discount margin applied when calculating eligible amounts.">
                     <input
                       type="number"
                       step="0.01"
@@ -1716,7 +1770,7 @@ export default function SubProgramsPage() {
                       onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
                     />
                   </FormField>
-                  <FormField label="Max tenure (days)">
+                  <FormField label="Max tenure (days)" tooltip="Maximum tenure allowed for transactions under this sub-program.">
                     <input
                       type="number"
                       className={inputCls}
@@ -1725,7 +1779,10 @@ export default function SubProgramsPage() {
                     />
                   </FormField>
                   {detail.status === 'DRAFT' ? (
-                    <FormField label="Sub-program limit">
+                    <FormField
+                      label="Sub-program limit"
+                      tooltip="Total sanctioned capacity for this sub-program; editable only while DRAFT."
+                    >
                       <input
                         type="number"
                         step="0.01"
@@ -1736,7 +1793,11 @@ export default function SubProgramsPage() {
                     </FormField>
                   ) : null}
                   {detail.flowType === 'SALES_BILL_DISCOUNTING' ? (
-                    <FormField label="Early Pay (anchor-funded discounting)" span={2}>
+                    <FormField
+                      label="Early Pay (anchor-funded discounting)"
+                      span={2}
+                      tooltip="Lets the anchor fund early discounting for eligible SBD invoices."
+                    >
                       <select
                         className={inputCls}
                         value={editForm.allowEarlyPay}

@@ -16,6 +16,9 @@ public class ProgramEditDto {
     /** When non-null, updates the program-level margin applied to invoice eligible amounts. */
     private BigDecimal marginPercent;
 
+    /** When non-null, updates the max dealer / borrower limit for this program (must be &gt; 0). */
+    private BigDecimal maxBorrowerLimit;
+
     /** Partial eligibility-related entries merged into {@code Program.config}; null values skipped. */
     private Map<String, Object> config;
 

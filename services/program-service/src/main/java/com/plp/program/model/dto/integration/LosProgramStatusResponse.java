@@ -16,4 +16,6 @@ public class LosProgramStatusResponse {
     private UUID plpProgramId;
     private String programCode;
     private String status;
+    /** Present when L1/L2 send-back recorded remarks on the program. */
+    private String approvalRemarks;
 }
