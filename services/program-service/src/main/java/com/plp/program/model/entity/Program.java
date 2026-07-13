@@ -149,4 +149,19 @@ public class Program {
 
     @UpdateTimestamp
     private Instant updatedAt;
+
+    @Column(name = "approval_remarks", columnDefinition = "TEXT")
+    private String approvalRemarks;
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    @Column(name = "submitted_by", length = 100)
+    private String submittedBy;
+
+    @Column(name = "sent_back_at")
+    private Instant sentBackAt;
+
+    @Column(name = "sent_back_by", length = 100)
+    private String sentBackBy;
 }

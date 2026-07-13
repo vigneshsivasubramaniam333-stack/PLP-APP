@@ -235,9 +235,17 @@ public class ProgramService {
         ProgramStatus currentStatus = program.getStatus();
         validateStatusTransition(currentStatus, newStatus);
         program.setStatus(newStatus);
+        if (newStatus == ProgramStatus.ACTIVE) {
+            program.setApprovalRemarks(null);
+        }
         programRepository.save(program);
         log.info("Program {} status changed: {} → {}", program.getProgramCode(), currentStatus, newStatus);
         return program;
+    }
+
+    @Transactional
+    public Program saveProgram(Program program) {
+        return programRepository.save(program);
     }
 
     public Map<String, Object> getUtilization(UUID programId) {
@@ -258,7 +266,9 @@ public class ProgramService {
 
     private void validateStatusTransition(ProgramStatus from, ProgramStatus to) {
         boolean valid = switch (from) {
-            case DRAFT -> to == ProgramStatus.ACTIVE;
+            case DRAFT -> to == ProgramStatus.ACTIVE || to == ProgramStatus.PENDING_L2;
+            case PENDING_L2 -> to == ProgramStatus.ACTIVE || to == ProgramStatus.SENT_BACK;
+            case SENT_BACK -> to == ProgramStatus.PENDING_L2;
             case ACTIVE -> to == ProgramStatus.PAUSED || to == ProgramStatus.CLOSED;
             case PAUSED -> to == ProgramStatus.ACTIVE || to == ProgramStatus.CLOSED;
             case CLOSED -> false;
