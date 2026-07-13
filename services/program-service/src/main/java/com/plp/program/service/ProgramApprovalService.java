@@ -57,9 +57,10 @@ public class ProgramApprovalService {
         requireRole(rolesHeader, cfg.getL1Role(), "Only L1 approver can submit program for L2 review");
         Program program = programService.getProgram(programId);
         ProgramStatus status = program.getStatus();
-        if (status != ProgramStatus.DRAFT && status != ProgramStatus.SENT_BACK) {
+        if (status != ProgramStatus.DRAFT) {
             throw new RuntimeException(
-                    "Program can be submitted only from DRAFT or SENT_BACK. Current: " + status);
+                    "Program can be submitted to L2 only from DRAFT (after RM submission or resubmit). Current: "
+                            + status);
         }
         program.setStatus(ProgramStatus.PENDING_L2);
         program.setSubmittedAt(Instant.now());
@@ -103,9 +104,10 @@ public class ProgramApprovalService {
         requireRole(rolesHeader, cfg.getL1Role(), "Only L1 approver can send program back to RM");
         Program program = programService.getProgram(programId);
         ProgramStatus status = program.getStatus();
-        if (status != ProgramStatus.DRAFT) {
+        // Allow another send-back after RM resubmits (DRAFT), and also retract PENDING_L2 back to RM.
+        if (status != ProgramStatus.DRAFT && status != ProgramStatus.PENDING_L2) {
             throw new RuntimeException(
-                    "Send back to RM allowed only when status is DRAFT. Current: " + status);
+                    "Send back to RM allowed when status is DRAFT or PENDING_L2. Current: " + status);
         }
         program.setStatus(ProgramStatus.SENT_BACK);
         String trimmed = remarks == null ? null : remarks.trim();

@@ -105,10 +105,12 @@ function ProgramCheckbox({
   label,
   checked,
   onChange,
+  tooltip,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  tooltip?: string;
 }) {
   return (
     <label className="inline-flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer select-none min-h-[38px]">
@@ -118,7 +120,10 @@ function ProgramCheckbox({
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 shrink-0 rounded border-slate-300"
       />
-      <span className="leading-snug">{label}</span>
+      <span className="inline-flex items-center gap-1.5 leading-snug">
+        <span>{label}</span>
+        {tooltip ? <FieldTooltip text={tooltip} /> : null}
+      </span>
     </label>
   );
 }
@@ -201,31 +206,37 @@ function OperationalParamsFields({
           <div className={checkboxGridCls}>
             <ProgramCheckbox
               label="Auto discounting"
+              tooltip="Automatically discounts eligible invoices on the configured discounting day without a manual trigger."
               checked={values.autoDiscounting}
               onChange={(autoDiscounting) => onChange({ autoDiscounting })}
             />
             <ProgramCheckbox
               label="Auto accept invoices"
+              tooltip="Accepts uploaded invoices into the program queue without a manual accept step."
               checked={values.autoAcceptInvoices}
               onChange={(autoAcceptInvoices) => onChange({ autoAcceptInvoices })}
             />
             <ProgramCheckbox
               label="Auto pull option"
+              tooltip="Pulls invoices from the configured source on a schedule instead of waiting for upload."
               checked={values.autoPullOption}
               onChange={(autoPullOption) => onChange({ autoPullOption })}
             />
             <ProgramCheckbox
               label="Auto payment (borrower)"
+              tooltip="Initiates borrower repayment collection automatically when invoices mature."
               checked={values.autoPaymentBorrower}
               onChange={(autoPaymentBorrower) => onChange({ autoPaymentBorrower })}
             />
             <ProgramCheckbox
               label="Partial discount"
+              tooltip="Allows discounting less than the full eligible invoice amount in a single request."
               checked={values.partialDiscount}
               onChange={(partialDiscount) => onChange({ partialDiscount })}
             />
             <ProgramCheckbox
               label="Invoice delete allowed"
+              tooltip="Lets operators delete invoices from the program queue before they are discounted."
               checked={values.invoiceDelete}
               onChange={(invoiceDelete) => onChange({ invoiceDelete })}
             />
@@ -237,11 +248,13 @@ function OperationalParamsFields({
       <div className={checkboxGridCls}>
         <ProgramCheckbox
           label="Enable payment for borrower"
+          tooltip="Exposes borrower-side payment actions for invoices under this program."
           checked={values.enablePaymentForBorrower}
           onChange={(enablePaymentForBorrower) => onChange({ enablePaymentForBorrower })}
         />
         <ProgramCheckbox
           label="Interest-free credit period"
+          tooltip="When enabled, no interest accrues for the interest-free period days configured below."
           checked={values.intFreeCreditPeriod}
           onChange={(intFreeCreditPeriod) => onChange({ intFreeCreditPeriod })}
         />
@@ -256,7 +269,7 @@ function OperationalParamsFields({
           <option value="AUTO">Auto</option>
         </select>
       </ProgramField>
-      <ProgramField label="Discounting day (of month)" hint="0–28 when auto discounting is enabled" tooltip="Calendar day used when auto discounting is enabled.">
+      <ProgramField label="Discounting day (of month)" hint="0–28 when auto discounting is enabled" tooltip="Calendar day of the month used when auto discounting is enabled (0–28).">
         <input
           type="number"
           min={0}
@@ -266,7 +279,10 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
-      <ProgramField label="Gap b/w discounting (days)">
+      <ProgramField
+        label="Gap b/w discounting (days)"
+        tooltip="Minimum days that must pass between two discounting runs for the same borrower."
+      >
         <input
           type="number"
           min={0}
@@ -275,7 +291,10 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
-      <ProgramField label="Gap b/w previous invoice (days)">
+      <ProgramField
+        label="Gap b/w previous invoice (days)"
+        tooltip="Minimum days between consecutive invoices for the same borrower under this program."
+      >
         <input
           type="number"
           min={0}
@@ -284,7 +303,10 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
-      <ProgramField label="Gap b/w sanction & disbursement (days)">
+      <ProgramField
+        label="Gap b/w sanction & disbursement (days)"
+        tooltip="Minimum waiting period between sanction and disbursement for discounted invoices."
+      >
         <input
           type="number"
           min={0}
@@ -293,7 +315,11 @@ function OperationalParamsFields({
           className={inputCls}
         />
       </ProgramField>
-      <ProgramField label="Interest-free period (days)" hint="Required > 0 when interest-free credit period is enabled">
+      <ProgramField
+        label="Interest-free period (days)"
+        hint="Required > 0 when interest-free credit period is enabled"
+        tooltip="Number of days after disbursement with zero interest when interest-free credit period is enabled."
+      >
         <input
           type="number"
           min={0}
@@ -313,7 +339,11 @@ function OperationalParamsFields({
         </select>
       </ProgramField>
       {values.lmsEntryIn === 'YES' ? (
-        <ProgramField label="LMS loan product (Encore code)" span={2}>
+        <ProgramField
+          label="LMS loan product (Encore code)"
+          span={2}
+          tooltip="Encore LMS product code used when posting disbursements from this program."
+        >
           <input
             value={values.encoreProductCode}
             onChange={(e) => onChange({ encoreProductCode: e.target.value })}
@@ -353,6 +383,7 @@ function EligibilityFields({
       <ProgramField
         label="Age of invoice (days)"
         hint="Credit period: invoice date to due date (default 90 for invoice discounting)"
+        tooltip="Maximum allowed age of an invoice (invoice date to due date) for eligibility."
       >
         <input
           type="number"
@@ -364,7 +395,10 @@ function EligibilityFields({
           placeholder="e.g. 90"
         />
       </ProgramField>
-      <ProgramField label="Min invoice amount">
+      <ProgramField
+        label="Min invoice amount"
+        tooltip="Invoices below this net amount are rejected at eligibility check."
+      >
         <input
           type="number"
           step="0.01"
@@ -375,7 +409,11 @@ function EligibilityFields({
           placeholder="Leave blank to skip"
         />
       </ProgramField>
-      <ProgramField label="Min days to due date" span={2}>
+      <ProgramField
+        label="Min days to due date"
+        span={2}
+        tooltip="Invoice must have at least this many days remaining until due date."
+      >
         <input
           type="number"
           step="1"
@@ -389,6 +427,7 @@ function EligibilityFields({
       <ProgramField
         label="Dependency vintage (%)"
         hint="Minimum borrower dependency on anchor required for eligibility"
+        tooltip="Minimum share of borrower business dependent on this anchor, as a percentage."
       >
         <input
           type="number"
@@ -403,6 +442,7 @@ function EligibilityFields({
       <ProgramField
         label="Anchor relationship vintage (months)"
         hint="Minimum months of anchor relationship required for eligibility"
+        tooltip="Minimum months the borrower must have traded with this anchor."
       >
         <input
           type="number"
@@ -794,7 +834,11 @@ export default function ProgramsPage() {
           </p>
           <div className={formGridCls}>
             <p className={`${sectionTitleCls} first:mt-0 first:pt-0 first:border-t-0`}>Program details</p>
-            <ProgramField label="Program Name *" span={2}>
+            <ProgramField
+              label="Program Name *"
+              span={2}
+              tooltip="Display name for this umbrella program; a program code is generated on save."
+            >
               <input
                 value={form.programName}
                 onChange={(e) => setForm({ ...form, programName: e.target.value })}
@@ -803,7 +847,10 @@ export default function ProgramsPage() {
                 required
               />
             </ProgramField>
-            <ProgramField label="Product Type *">
+            <ProgramField
+              label="Product Type *"
+              tooltip="Product family that drives eligibility rules and operational parameters."
+            >
               <select
                 value={form.productType}
                 onChange={(e) => setForm({ ...form, productType: e.target.value })}
@@ -881,7 +928,10 @@ export default function ProgramsPage() {
                 className={inputCls}
               />
             </ProgramField>
-            <ProgramField label="Max Concurrent Loans">
+            <ProgramField
+              label="Max Concurrent Loans"
+              tooltip="Maximum number of active loans a borrower may hold under this program at once."
+            >
               <input
                 type="number"
                 value={form.maxConcurrentLoans}
@@ -916,7 +966,11 @@ export default function ProgramsPage() {
         >
           <div className={formGridCls}>
             <p className={`${sectionTitleCls} first:mt-0 first:pt-0 first:border-t-0`}>Program details</p>
-            <ProgramField label="Name" span={2}>
+            <ProgramField
+              label="Name"
+              span={2}
+              tooltip="Display name for this umbrella program."
+            >
               <input
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
@@ -924,7 +978,11 @@ export default function ProgramsPage() {
                 required
               />
             </ProgramField>
-            <ProgramField label="Description" span={2}>
+            <ProgramField
+              label="Description"
+              span={2}
+              tooltip="Optional notes for operators; not shown on borrower-facing screens."
+            >
               <textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}

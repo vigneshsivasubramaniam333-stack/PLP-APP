@@ -210,6 +210,13 @@ public class LosProgramIntegrationService {
             program.setEncoreProductCode(trimOrNull(dto.getEncoreProductCode()));
         }
         mergeVintageConfig(program, dto);
+        // RM resubmit after L1 send-back: reopen for L1 (send-back again or submit to L2).
+        if (program.getStatus() == ProgramStatus.SENT_BACK) {
+            program.setStatus(ProgramStatus.DRAFT);
+            program.setApprovalRemarks(null);
+            program.setSentBackAt(null);
+            program.setSentBackBy(null);
+        }
     }
 
     private static void mergeVintageConfig(Program program, LosProgramUpsertRequest dto) {

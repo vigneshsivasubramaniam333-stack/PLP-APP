@@ -813,7 +813,10 @@ function BorrowerTermsFields({
         </select>
       </div>
       <div className="col-span-full">
-        <label className={labelCls}>Repayment method</label>
+        <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+          <span>Repayment method</span>
+          <FieldTooltip text="Choose the platform default repayment mechanism or a custom method for this borrower." />
+        </label>
         <div className="mt-2 flex flex-col gap-2 text-sm">
           <label className="flex items-center gap-2">
             <input
@@ -822,7 +825,10 @@ function BorrowerTermsFields({
               checked={useGlobal}
               onChange={() => onChange({ ...form, paymentMethodMode: 'GLOBAL' })}
             />
-            Use platform default
+            <span className="inline-flex items-center gap-1.5">
+              Use platform default
+              <FieldTooltip text="Uses the repayment mechanism configured under Repayment defaults." />
+            </span>
             {globalDefaultMechanism ? (
               <span className="text-slate-500">({formatRepaymentMechanism(globalDefaultMechanism)})</span>
             ) : null}
@@ -834,13 +840,19 @@ function BorrowerTermsFields({
               checked={!useGlobal}
               onChange={() => onChange({ ...form, paymentMethodMode: 'CUSTOM' })}
             />
-            Custom for this borrower
+            <span className="inline-flex items-center gap-1.5">
+              Custom for this borrower
+              <FieldTooltip text="Override the platform default with Smart Collect or PayU for this dealer only." />
+            </span>
           </label>
         </div>
       </div>
       {!useGlobal ? (
         <div>
-          <label className={labelCls}>Custom payment method</label>
+          <label className={`${labelCls} inline-flex items-center gap-1.5`}>
+            <span>Custom payment method</span>
+            <FieldTooltip text="Collection channel used when Custom repayment is selected for this borrower." />
+          </label>
           <select
             value={form.paymentMethod}
             onChange={(e) => onChange({ ...form, paymentMethod: e.target.value })}
@@ -1845,7 +1857,11 @@ export default function SubProgramsPage() {
                     </button>
                   </div>
                   {!borrowerIdManual ? (
-                    <FormField label="Borrower *" span={2}>
+                    <FormField
+                      label="Borrower *"
+                      span={2}
+                      tooltip="Select an existing borrower from the program catalog to attach to this sub-program."
+                    >
                       <select
                         required
                         value={addBorrowerForm.borrowerId}
@@ -1866,7 +1882,11 @@ export default function SubProgramsPage() {
                       ) : null}
                     </FormField>
                   ) : (
-                    <FormField label="Borrower ID (UUID) *" span={2}>
+                    <FormField
+                      label="Borrower ID (UUID) *"
+                      span={2}
+                      tooltip="Paste the borrower UUID when the dealer is not yet listed in the catalog picker."
+                    >
                       <input
                         required
                         value={addBorrowerForm.borrowerId}

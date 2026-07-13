@@ -468,7 +468,7 @@ export function ProgramApprovalActions({
     menuItems.push({ id: 'edit', label: 'Edit program', onClick: onEdit });
   }
 
-  if (approvalConfig.enabled && isL1 && (st === 'DRAFT' || st === 'SENT_BACK')) {
+  if (approvalConfig.enabled && isL1 && st === 'DRAFT') {
     menuItems.push({
       id: 'submit-l2',
       label: 'Submit for L2',
@@ -478,7 +478,7 @@ export function ProgramApprovalActions({
     });
   }
 
-  if (approvalConfig.enabled && isL1 && st === 'DRAFT') {
+  if (approvalConfig.enabled && isL1 && (st === 'DRAFT' || st === 'PENDING_L2')) {
     menuItems.push({
       id: 'send-back-to-rm',
       label: 'Send back to RM',
