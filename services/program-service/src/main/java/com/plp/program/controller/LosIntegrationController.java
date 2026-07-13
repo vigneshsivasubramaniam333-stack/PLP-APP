@@ -66,6 +66,12 @@ public class LosIntegrationController {
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
     }
 
+    @PostMapping("/sub-programs/activate")
+    public ResponseEntity<Map<String, Object>> activateSubProgram(@Valid @RequestBody LosSubProgramActivateRequest body) {
+        LosSubProgramUpsertResponse data = losSubProgramIntegrationService.activate(body);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
     @PostMapping("/borrowers")
     public ResponseEntity<Map<String, Object>> upsertBorrower(@Valid @RequestBody LosBorrowerUpsertRequest body) {
         LosBorrowerUpsertResponse data = losBorrowerIntegrationService.upsert(body);

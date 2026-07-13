@@ -1,6 +1,7 @@
 package com.plp.program.service;
 
 import com.plp.program.integration.los.LosIntegrationResourceTypes;
+import com.plp.program.model.dto.integration.LosSubProgramActivateRequest;
 import com.plp.program.model.dto.integration.LosSubProgramUpsertRequest;
 import com.plp.program.model.dto.integration.LosSubProgramUpsertResponse;
 import com.plp.program.model.entity.Program;
@@ -128,8 +129,7 @@ public class LosSubProgramIntegrationService {
                         .losSubProgramId(losSid != null && !losSid.isBlank() ? losSid : null)
                         .interestRate(resolveInterestRate(program, req))
                         .maxTenureDays(resolveMaxTenureDays(program, req))
-                        // LOS-originated sub-programs are pre-approved upstream, so auto-activate in PLP.
-                        .status("ACTIVE")
+                        .status(resolveInitialStatus(req.getPreApproved()))
                         .build();
 
         SubProgram saved = subProgramService.createSubProgram(built);
@@ -221,6 +221,27 @@ public class LosSubProgramIntegrationService {
             return req.getMaxTenureDays();
         }
         return program.getMaxTenureDays();
+    }
+
+    @Transactional
+    public LosSubProgramUpsertResponse activate(LosSubProgramActivateRequest req) {
+        String sourceSystem = normalize(req.getSourceSystem());
+        String losSid = normalize(req.getLosSubProgramId());
+        SubProgram sp = subProgramRepository
+                .findBySourceSystemAndLosSubProgramId(sourceSystem, losSid)
+                .orElseThrow(() -> new RuntimeException("Sub-program not found for LOS id: " + losSid));
+        subProgramService.approveSubProgram(sp.getId());
+        log.info("LOS sub-program activated via integration: {} ({})", sp.getCode(), sp.getId());
+        return LosSubProgramUpsertResponse.builder()
+                .plpSubProgramId(sp.getId())
+                .subProgramCode(sp.getCode())
+                .created(false)
+                .updated(true)
+                .build();
+    }
+
+    private static String resolveInitialStatus(Boolean preApproved) {
+        return Boolean.TRUE.equals(preApproved) ? "ACTIVE" : "DRAFT";
     }
 
     private static String externalKey(LosSubProgramUpsertRequest req) {

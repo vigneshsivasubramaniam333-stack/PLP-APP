@@ -59,6 +59,9 @@ public class LosSubProgramUpsertRequest extends LosIntegrationBaseRequest {
 
     private Integer maxTenureDays;
 
+    /** When true, sub-program is created as ACTIVE (legacy). Default false → DRAFT pending LOS approval. */
+    private Boolean preApproved;
+
     @AssertTrue(message = "Exactly one of plpProgramId or programCode must be provided")
     public boolean isProgramReferenceValid() {
         boolean hasId = plpProgramId != null;

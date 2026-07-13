@@ -7,13 +7,12 @@ import {
   notifyError,
   notifySuccess,
   loanApi,
-  programApi,
   subProgramApi,
   useAuth,
 } from '@plp/shared';
-import type { Anchor, Borrower, Loan, Program, SubProgram } from '@plp/shared';
+import type { Anchor, Borrower, Loan, SubProgram } from '@plp/shared';
 
-type Section = 'programs' | 'subprograms' | 'anchors' | 'borrowers' | 'loans';
+type Section = 'subprograms' | 'anchors' | 'borrowers' | 'loans';
 
 /** Viewer: analyst + manager (+ admin). Actor: manager (+ admin). PROGRAM_MANAGER treated as manager per IAM legacy. */
 const WORKBENCH_VIEW_ROLES = new Set([
@@ -52,9 +51,8 @@ export default function MakerCheckerPage() {
   const role = user?.role;
   const canAct = canApproveWorkbench(role);
 
-  const [section, setSection] = useState<Section>('programs');
+  const [section, setSection] = useState<Section>('subprograms');
   const [loading, setLoading] = useState(true);
-  const [programs, setPrograms] = useState<Program[]>([]);
   const [subPrograms, setSubPrograms] = useState<SubProgram[]>([]);
   const [anchors, setAnchors] = useState<Anchor[]>([]);
   const [borrowers, setBorrowers] = useState<Borrower[]>([]);
@@ -66,14 +64,12 @@ export default function MakerCheckerPage() {
   const refreshAll = useCallback(async () => {
     setPageError('');
     try {
-      const [pr, spr, ar, br, lr] = await Promise.all([
-        programApi.list(),
+      const [spr, ar, br, lr] = await Promise.all([
         subProgramApi.list(),
         anchorApi.list(),
         borrowerApi.list(),
         loanApi.list(),
       ]);
-      setPrograms((pr.data?.data as Program[]) ?? []);
       setSubPrograms((spr.data?.data as SubProgram[]) ?? []);
       setAnchors((ar.data?.data as Anchor[]) ?? []);
       setBorrowers((br.data?.data as Borrower[]) ?? []);
@@ -118,7 +114,6 @@ export default function MakerCheckerPage() {
     );
   }
 
-  const pendingPrograms = programs.filter((p) => p.status === 'DRAFT');
   const pendingSubPrograms = subPrograms.filter((s) => String(s.status).toUpperCase() === 'DRAFT');
   const pendingAnchors = anchors.filter((a) => {
     const st = String(a.status).toUpperCase();
@@ -131,7 +126,6 @@ export default function MakerCheckerPage() {
   const pendingLoans = loans.filter((l) => l.status === 'REQUESTED');
 
   const tabs: { id: Section; label: string; count: number }[] = [
-    { id: 'programs', label: 'Program approvals', count: pendingPrograms.length },
     { id: 'subprograms', label: 'Sub program approvals', count: pendingSubPrograms.length },
     { id: 'anchors', label: 'Anchor approvals', count: pendingAnchors.length },
     { id: 'borrowers', label: 'Borrower approvals', count: pendingBorrowers.length },
@@ -148,8 +142,7 @@ export default function MakerCheckerPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Maker–checker workbench</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Pending approvals across programs, anchors, borrowers, and loans. Credit Analysts can review;
-          Credit Managers can approve or reject.
+          Pending approvals for sub-programs, anchors, borrowers, and loans. Program L1/L2 approval is on the Programs screen.
         </p>
         {!canAct && (
           <p className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 inline-block">
@@ -196,68 +189,6 @@ export default function MakerCheckerPage() {
           <div className="p-12 text-center text-slate-400 text-sm">Loading queue…</div>
         ) : (
           <>
-            {section === 'programs' && (
-              <table className={tableCls}>
-                <thead>
-                  <tr>
-                    <th className={thCls}>Entity</th>
-                    <th className={thCls}>Name / ID</th>
-                    <th className={thCls}>Created by</th>
-                    <th className={thCls}>Created at</th>
-                    <th className={`${thCls} text-right`}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingPrograms.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className={`${tdCls} text-slate-400 text-center py-10`}>
-                        No programs awaiting approval
-                      </td>
-                    </tr>
-                  ) : (
-                    pendingPrograms.map((p) => {
-                      const key = `program:${p.id}`;
-                      const busy = actingKey === key;
-                      return (
-                        <tr key={p.id}>
-                          <td className={tdCls}>Program</td>
-                          <td className={tdCls}>
-                            <div className="font-medium text-slate-800">{p.programName}</div>
-                            <div className="text-[11px] text-slate-400 font-mono">{p.id}</div>
-                          </td>
-                          <td className={tdCls}>—</td>
-                          <td className={tdCls}>{fmtTs(p.createdAt)}</td>
-                          <td className={`${tdCls} text-right whitespace-nowrap`}>
-                            <button
-                              type="button"
-                              disabled={!canAct || busy}
-                              onClick={() =>
-                                runAction(key, () => programApi.updateStatus(p.id, 'ACTIVE'), 'Program approved')
-                              }
-                              className="bt-btn bt-btn-primary bt-btn-sm mr-2 disabled:opacity-40"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!canAct || busy}
-                              onClick={() => {
-                                if (!window.confirm('Reject this program? Status will be set to CLOSED.')) return;
-                                void runAction(key, () => programApi.updateStatus(p.id, 'CLOSED'), 'Program rejected');
-                              }}
-                              className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-40"
-                            >
-                              Reject
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            )}
-
             {section === 'subprograms' && (
               <table className={tableCls}>
                 <thead>
