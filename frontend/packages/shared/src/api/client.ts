@@ -439,6 +439,14 @@ export const reportApi = {
     apiClient.get('/api/v1/reports/disbursement-summary', { params: { fromDate, toDate } }),
   portfolioSummary: () => apiClient.get('/api/v1/reports/portfolio-summary'),
   overdueReport: () => apiClient.get('/api/v1/reports/overdue'),
+  collectionSummary: (fromDate?: string, toDate?: string) =>
+    apiClient.get('/api/v1/reports/collection-summary', { params: { fromDate, toDate } }),
+  programUtilization: (programId?: string) =>
+    apiClient.get('/api/v1/reports/program-utilization', { params: { programId } }),
+  npaReport: () => apiClient.get('/api/v1/reports/npa-report'),
+  invoicePipeline: () => apiClient.get('/api/v1/reports/invoice-pipeline'),
+  onboardingFunnel: () => apiClient.get('/api/v1/reports/onboarding-funnel'),
+  workbenchPending: () => apiClient.get('/api/v1/reports/workbench-pending'),
   dashboardStats: () => apiClient.get('/api/v1/reports/dashboard-stats'),
   definitions: () => apiClient.get('/api/v1/reports/definitions'),
   auditEvents: (page = 0, size = 50) =>
@@ -453,6 +461,22 @@ export const reportApi = {
     apiClient.get('/api/v1/reports/export/portfolio-summary', { responseType: 'blob' }),
   exportOverdue: () =>
     apiClient.get('/api/v1/reports/export/overdue', { responseType: 'blob' }),
+  exportCollection: (fromDate?: string, toDate?: string) =>
+    apiClient.get('/api/v1/reports/export/collection-summary', {
+      params: { fromDate, toDate }, responseType: 'blob',
+    }),
+  exportProgramUtilization: (programId?: string) =>
+    apiClient.get('/api/v1/reports/export/program-utilization', {
+      params: { programId }, responseType: 'blob',
+    }),
+  exportNpa: () =>
+    apiClient.get('/api/v1/reports/export/npa-report', { responseType: 'blob' }),
+  exportInvoicePipeline: () =>
+    apiClient.get('/api/v1/reports/export/invoice-pipeline', { responseType: 'blob' }),
+  exportOnboardingFunnel: () =>
+    apiClient.get('/api/v1/reports/export/onboarding-funnel', { responseType: 'blob' }),
+  exportWorkbenchPending: () =>
+    apiClient.get('/api/v1/reports/export/workbench-pending', { responseType: 'blob' }),
 };
 
 /** Centralized audit events from program-service and lending-service (lender portal). */

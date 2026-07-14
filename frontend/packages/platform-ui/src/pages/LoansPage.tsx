@@ -255,6 +255,9 @@ export default function LoansPage() {
                 Loan
               </th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Invoice
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Product
               </th>
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -300,6 +303,9 @@ export default function LoansPage() {
                 <td className="px-5 py-3.5">
                   <div className="font-mono text-xs font-medium text-slate-700">{l.loanNumber}</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">{l.requestDate}</div>
+                </td>
+                <td className="px-5 py-3.5 font-mono text-xs text-slate-600">
+                  {l.invoiceNumber || '—'}
                 </td>
                 <td className="px-5 py-3.5">
                   <span
@@ -399,7 +405,7 @@ export default function LoansPage() {
               if (showClosedRepayments && expandedClosedLoanIds.has(l.id)) {
                 rows.push(
                   <tr key={`${l.id}-repayments`}>
-                    <td colSpan={7} className="bg-slate-50/60 px-5 py-4 align-top">
+                    <td colSpan={8} className="bg-slate-50/60 px-5 py-4 align-top">
                       <LoanSummaryWithRepayments loan={l} defaultExpandedHistory />
                     </td>
                   </tr>,
@@ -410,7 +416,7 @@ export default function LoansPage() {
             })}
             {loans.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center">
+                <td colSpan={8} className="px-5 py-12 text-center">
                   <div className="text-slate-400 text-sm">No loans found</div>
                 </td>
               </tr>

@@ -118,6 +118,13 @@ public class Loan {
     @Column(name = "salary_data_id")
     private UUID salaryDataId;
 
+    /**
+     * Populated for list/API responses by joining program-service Invoice via {@link #invoiceId}.
+     * Not persisted on the loan row.
+     */
+    @Transient
+    private String invoiceNumber;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> eligibilitySnapshot;

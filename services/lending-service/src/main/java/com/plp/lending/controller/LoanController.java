@@ -199,6 +199,7 @@ public class LoanController {
                     HttpStatus.FORBIDDEN, LoanAccessGuard.MSG_ACCESS_DENIED);
         }
         loans.forEach(loanService::applyResolvedAmountsForApi);
+        loanService.enrichInvoiceNumbers(loans);
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", loans));
     }
 

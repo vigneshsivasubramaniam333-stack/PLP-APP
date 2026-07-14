@@ -46,10 +46,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -739,6 +741,41 @@ public class LoanService {
     public void applyResolvedAmountsForApi(Loan loan) {
         if (LmsPayableAmounts.shouldUsePrincipalFallback(loan)) {
             LmsPayableAmounts.applyPrincipalFallback(loan);
+        }
+    }
+
+    /**
+     * Resolves {@link Loan#getInvoiceNumber()} from program-service for list/API responses.
+     */
+    public void enrichInvoiceNumbers(List<Loan> loans) {
+        if (loans == null || loans.isEmpty()) {
+            return;
+        }
+        Set<UUID> invoiceIds = new HashSet<>();
+        for (Loan loan : loans) {
+            if (loan.getInvoiceId() != null) {
+                invoiceIds.add(loan.getInvoiceId());
+            }
+        }
+        if (invoiceIds.isEmpty()) {
+            return;
+        }
+        Map<UUID, String> numbers = new HashMap<>();
+        for (UUID invoiceId : invoiceIds) {
+            try {
+                Map<String, Object> invoice = fetchInvoiceJson(invoiceId);
+                Object raw = invoice.get("invoiceNumber");
+                if (raw != null && !raw.toString().isBlank()) {
+                    numbers.put(invoiceId, raw.toString().trim());
+                }
+            } catch (Exception e) {
+                log.warn("Could not resolve invoiceNumber for invoice {}: {}", invoiceId, e.getMessage());
+            }
+        }
+        for (Loan loan : loans) {
+            if (loan.getInvoiceId() != null) {
+                loan.setInvoiceNumber(numbers.get(loan.getInvoiceId()));
+            }
         }
     }
 

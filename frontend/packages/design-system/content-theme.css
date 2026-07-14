@@ -81,6 +81,18 @@
   white-space: nowrap;
 }
 
+.bt-app-canvas main table thead th.text-right,
+.bt-app-canvas main table tr.bg-slate-50 th.text-right,
+.bt-app-canvas main .table-th.text-right {
+  text-align: right !important;
+}
+
+.bt-app-canvas main table thead th.text-center,
+.bt-app-canvas main table tr.bg-slate-50 th.text-center,
+.bt-app-canvas main .table-th.text-center {
+  text-align: center !important;
+}
+
 .bt-app-canvas main table thead th:first-child,
 .bt-app-canvas main table tbody td:first-child {
   padding-left: 16px;

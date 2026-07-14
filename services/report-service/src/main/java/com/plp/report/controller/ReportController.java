@@ -11,8 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -41,6 +43,45 @@ public class ReportController {
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
     }
 
+    @GetMapping("/collection-summary")
+    public ResponseEntity<Map<String, Object>> collectionSummary(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        List<Map<String, Object>> data = reportGeneratorService.generateCollectionSummary(fromDate, toDate);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/program-utilization")
+    public ResponseEntity<Map<String, Object>> programUtilization(
+            @RequestParam(required = false) String programId) {
+        List<Map<String, Object>> data = reportGeneratorService.generateProgramUtilization(programId);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/npa-report")
+    public ResponseEntity<Map<String, Object>> npaReport() {
+        List<Map<String, Object>> data = reportGeneratorService.generateNpaReport();
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/invoice-pipeline")
+    public ResponseEntity<Map<String, Object>> invoicePipeline() {
+        List<Map<String, Object>> data = reportGeneratorService.generateInvoicePipeline();
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/onboarding-funnel")
+    public ResponseEntity<Map<String, Object>> onboardingFunnel() {
+        List<Map<String, Object>> data = reportGeneratorService.generateOnboardingFunnel();
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
+    @GetMapping("/workbench-pending")
+    public ResponseEntity<Map<String, Object>> workbenchPending() {
+        List<Map<String, Object>> data = reportGeneratorService.generateWorkbenchPending();
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", data));
+    }
+
     @GetMapping("/dashboard-stats")
     public ResponseEntity<Map<String, Object>> dashboardStats() {
         Map<String, Object> data = reportGeneratorService.generateDashboardStats();
@@ -64,10 +105,7 @@ public class ReportController {
                     s.getDate(), s.getProductType(), s.getLoanCount(),
                     s.getTotalDisbursed(), s.getTotalApproved()));
         }
-        return ResponseEntity.ok()
-                .header("Content-Type", "text/csv")
-                .header("Content-Disposition", "attachment; filename=disbursement_summary.csv")
-                .body(csv.toString());
+        return csvResponse(csv.toString(), "disbursement_summary.csv");
     }
 
     @GetMapping("/export/portfolio-summary")
@@ -80,10 +118,7 @@ public class ReportController {
                     s.getTotalLoans(), s.getActiveLoans(), s.getOverdueLoans(),
                     s.getTotalDisbursed(), s.getTotalOutstanding(), s.getTotalOverdue(), s.getNpaPercent()));
         }
-        return ResponseEntity.ok()
-                .header("Content-Type", "text/csv")
-                .header("Content-Disposition", "attachment; filename=portfolio_summary.csv")
-                .body(csv.toString());
+        return csvResponse(csv.toString(), "portfolio_summary.csv");
     }
 
     @GetMapping("/export/overdue")
@@ -96,9 +131,79 @@ public class ReportController {
                     r.getProductType(), r.getOutstandingAmount(), r.getDpd(),
                     r.getDpdBucket(), r.getDueDate()));
         }
+        return csvResponse(csv.toString(), "overdue_report.csv");
+    }
+
+    @GetMapping("/export/collection-summary")
+    public ResponseEntity<String> exportCollectionSummary(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        return csvResponse(
+                mapsToCsv(reportGeneratorService.generateCollectionSummary(fromDate, toDate)),
+                "collection_summary.csv");
+    }
+
+    @GetMapping("/export/program-utilization")
+    public ResponseEntity<String> exportProgramUtilization(
+            @RequestParam(required = false) String programId) {
+        return csvResponse(
+                mapsToCsv(reportGeneratorService.generateProgramUtilization(programId)),
+                "program_utilization.csv");
+    }
+
+    @GetMapping("/export/npa-report")
+    public ResponseEntity<String> exportNpaReport() {
+        return csvResponse(mapsToCsv(reportGeneratorService.generateNpaReport()), "npa_report.csv");
+    }
+
+    @GetMapping("/export/invoice-pipeline")
+    public ResponseEntity<String> exportInvoicePipeline() {
+        return csvResponse(mapsToCsv(reportGeneratorService.generateInvoicePipeline()), "invoice_pipeline.csv");
+    }
+
+    @GetMapping("/export/onboarding-funnel")
+    public ResponseEntity<String> exportOnboardingFunnel() {
+        return csvResponse(mapsToCsv(reportGeneratorService.generateOnboardingFunnel()), "onboarding_funnel.csv");
+    }
+
+    @GetMapping("/export/workbench-pending")
+    public ResponseEntity<String> exportWorkbenchPending() {
+        return csvResponse(mapsToCsv(reportGeneratorService.generateWorkbenchPending()), "workbench_pending.csv");
+    }
+
+    private static ResponseEntity<String> csvResponse(String body, String filename) {
         return ResponseEntity.ok()
                 .header("Content-Type", "text/csv")
-                .header("Content-Disposition", "attachment; filename=overdue_report.csv")
-                .body(csv.toString());
+                .header("Content-Disposition", "attachment; filename=" + filename)
+                .body(body);
+    }
+
+    private static String mapsToCsv(List<Map<String, Object>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return "message\nNo data\n";
+        }
+        List<String> headers = rows.stream()
+                .map(Map::keySet)
+                .flatMap(Collection::stream)
+                .distinct()
+                .collect(Collectors.toList());
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(",", headers)).append('\n');
+        for (Map<String, Object> row : rows) {
+            csv.append(headers.stream()
+                    .map(h -> csvEscape(row.get(h)))
+                    .collect(Collectors.joining(",")));
+            csv.append('\n');
+        }
+        return csv.toString();
+    }
+
+    private static String csvEscape(Object value) {
+        if (value == null) return "";
+        String s = value.toString();
+        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
+            return "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
     }
 }

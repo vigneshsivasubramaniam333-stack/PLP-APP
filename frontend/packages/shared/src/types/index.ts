@@ -233,6 +233,8 @@ export interface Loan {
   borrowerId: string;
   programId: string;
   invoiceId?: string | null;
+  /** Invoice number from program-service when loan is linked to an invoice. */
+  invoiceNumber?: string | null;
   productType: string;
   requestedAmount: number;
   sanctionedAmount: number;
