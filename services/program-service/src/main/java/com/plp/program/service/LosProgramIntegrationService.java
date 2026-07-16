@@ -6,9 +6,11 @@ import com.plp.program.model.dto.integration.LosProgramStatusResponse;
 import com.plp.program.model.dto.integration.LosProgramUpsertRequest;
 import com.plp.program.model.dto.integration.LosProgramUpsertResponse;
 import com.plp.program.model.entity.Program;
+import com.plp.program.model.entity.SubProgram;
 import com.plp.program.model.enums.ProgramStatus;
 import com.plp.program.repository.AnchorRepository;
 import com.plp.program.repository.ProgramRepository;
+import com.plp.program.repository.SubProgramRepository;
 import com.plp.program.validation.ProgramParametersValidator;
 import com.plp.program.service.audit.LosSyncAuditService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,6 +34,7 @@ public class LosProgramIntegrationService {
     private final ProgramRepository programRepository;
     private final ProgramService programService;
     private final AnchorRepository anchorRepository;
+    private final SubProgramRepository subProgramRepository;
     private final LosSyncAuditService losSyncAuditService;
 
     @Transactional
@@ -285,12 +289,84 @@ public class LosProgramIntegrationService {
         Program program = programRepository
                 .findBySourceSystemAndLosProgramId(src, losPid)
                 .orElseThrow(() -> new RuntimeException("Program not found for LOS id: " + losPid));
+        BigDecimal dependencyVintagePercent = readConfigDecimal(program, "dependencyVintagePercent");
+        Integer anchorRelationshipVintageMonths = readConfigInteger(program, "anchorRelationshipVintageMonths");
+        BigDecimal interestRate = resolveInterestRateForLos(program);
+        Integer maxTenureDays = resolveMaxTenureDaysForLos(program);
         return LosProgramStatusResponse.builder()
                 .plpProgramId(program.getId())
                 .programCode(program.getProgramCode())
                 .status(program.getStatus() != null ? program.getStatus().name() : null)
                 .approvalRemarks(program.getApprovalRemarks())
+                .defaultInterestRate(interestRate)
+                .programLimit(program.getProgramLimit())
+                .maxBorrowerLimit(program.getMaxBorrowerLimit())
+                .maxTenureDays(maxTenureDays)
+                .dependencyVintagePercent(dependencyVintagePercent)
+                .anchorRelationshipVintageMonths(anchorRelationshipVintageMonths)
+                .lmsEntryIn(program.getLmsEntryIn())
+                .encoreProductCode(program.getEncoreProductCode())
                 .build();
+    }
+
+    /** Prefer sub-program rate (what L1/L2 typically edit) over program default. */
+    private BigDecimal resolveInterestRateForLos(Program program) {
+        List<SubProgram> subs = subProgramRepository.findByProgramId(program.getId());
+        for (SubProgram sp : subs) {
+            if (sp.getInterestRate() != null) {
+                return sp.getInterestRate();
+            }
+        }
+        return program.getDefaultInterestRate();
+    }
+
+    private Integer resolveMaxTenureDaysForLos(Program program) {
+        List<SubProgram> subs = subProgramRepository.findByProgramId(program.getId());
+        for (SubProgram sp : subs) {
+            if (sp.getMaxTenureDays() != null) {
+                return sp.getMaxTenureDays();
+            }
+        }
+        return program.getMaxTenureDays();
+    }
+
+    private static BigDecimal readConfigDecimal(Program program, String key) {
+        if (program.getConfig() == null || !program.getConfig().containsKey(key)) {
+            return null;
+        }
+        Object raw = program.getConfig().get(key);
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof BigDecimal bd) {
+            return bd;
+        }
+        if (raw instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
+        }
+        try {
+            return new BigDecimal(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Integer readConfigInteger(Program program, String key) {
+        if (program.getConfig() == null || !program.getConfig().containsKey(key)) {
+            return null;
+        }
+        Object raw = program.getConfig().get(key);
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static ProgramStatus resolveInitialStatus(Boolean preApproved) {
