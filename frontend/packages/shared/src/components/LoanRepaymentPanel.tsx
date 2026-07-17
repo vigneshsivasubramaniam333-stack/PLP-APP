@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { loanApi } from '../api/client';
 import type { Loan, LoanRepaymentRow } from '../types';
-import { loanPrincipalAmount } from '../utils/loanDisplay';
+import { loanPrincipalAmount, resolveLmsAccountId } from '../utils/loanDisplay';
 import { repaymentProgress } from '../utils/loanPayoff';
 
 function formatCurrency(amount: number): string {
@@ -139,6 +139,7 @@ export function LoanSummaryWithRepayments({ loan, defaultExpandedHistory = false
   const repaid = Number(loan.totalRepaid ?? 0);
   const outstanding = Number(loan.outstandingAmount ?? 0);
   const progress = repaymentProgress(repaid, outstanding);
+  const lmsAccountId = resolveLmsAccountId(loan);
 
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -146,6 +147,11 @@ export function LoanSummaryWithRepayments({ loan, defaultExpandedHistory = false
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-mono text-sm font-semibold text-slate-800">{loan.loanNumber ?? 'Loan'}</h3>
+            {lmsAccountId ? (
+              <p className="mt-0.5 font-mono text-xs text-sky-700">
+                LMS account <span className="font-semibold">{lmsAccountId}</span>
+              </p>
+            ) : null}
             <p className="mt-0.5 text-xs text-slate-500">Due {loan.dueDate ?? '—'}</p>
           </div>
           <span

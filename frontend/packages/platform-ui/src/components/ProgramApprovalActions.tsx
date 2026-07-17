@@ -464,7 +464,7 @@ export function ProgramApprovalActions({
 
   const menuItems: MenuItem[] = [{ id: 'review', label: 'Review parameters', onClick: () => setReview(true) }];
 
-  if (canEdit && onEdit) {
+  if (canEdit && onEdit && (st === 'DRAFT' || st === 'ACTIVE')) {
     menuItems.push({ id: 'edit', label: 'Edit program', onClick: onEdit });
   }
 
@@ -478,7 +478,7 @@ export function ProgramApprovalActions({
     });
   }
 
-  if (approvalConfig.enabled && isL1 && (st === 'DRAFT' || st === 'PENDING_L2')) {
+  if (approvalConfig.enabled && isL1 && st === 'DRAFT') {
     menuItems.push({
       id: 'send-back-to-rm',
       label: 'Send back to RM',

@@ -16,8 +16,17 @@ export function loanPrincipalAmount(loan: Pick<Loan, 'requestedAmount' | 'sancti
 
 /** True when Encore account id is present on the loan payload. */
 export function loanHasLmsAccount(loan: { lmsAccountId?: string | null; kfsData?: Record<string, unknown> | null }): boolean {
+  return Boolean(resolveLmsAccountId(loan));
+}
+
+/** Encore LMS account id (e.g. 0000IPP00688) from loan or kfsData. */
+export function resolveLmsAccountId(loan: {
+  lmsAccountId?: string | null;
+  kfsData?: Record<string, unknown> | null;
+}): string | null {
   const direct = (loan.lmsAccountId ?? '').trim();
-  if (direct) return true;
+  if (direct) return direct;
   const fromKfs = loan.kfsData?.lmsAccountId;
-  return typeof fromKfs === 'string' && fromKfs.trim().length > 0;
+  if (typeof fromKfs === 'string' && fromKfs.trim()) return fromKfs.trim();
+  return null;
 }

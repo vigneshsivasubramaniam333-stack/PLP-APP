@@ -7,6 +7,7 @@ import {
   fetchLoanPayoffs,
   loanHasLmsAccount,
   loanPrincipalAmount,
+  resolveLmsAccountId,
   type LoanPayoffInfo,
 } from '@plp/shared';
 import type { Loan } from '@plp/shared';
@@ -195,7 +196,14 @@ export default function MyLoansPage() {
                 const payableAmount = payoff?.payoffAmount ?? (Number(loan.outstandingAmount) || 0);
                 return (
                 <tr key={loan.id} className="hover:bg-slate-50/80">
-                  <td className="px-5 py-3.5 font-mono text-xs font-medium text-slate-700">{loan.loanNumber}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs font-medium text-slate-700">
+                    <div>{loan.loanNumber}</div>
+                    {loanHasLmsAccount(loan) ? (
+                      <div className="mt-0.5 text-[11px] font-normal text-sky-700">
+                        LMS {resolveLmsAccountId(loan)}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="px-5 py-3.5">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -207,9 +215,6 @@ export default function MyLoansPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-700">
                     {formatCurrency(loanPrincipalAmount(loan))}
-                    {loanHasLmsAccount(loan) ? (
-                      <span className="block text-[10px] text-sky-600 font-normal">LMS</span>
-                    ) : null}
                   </td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-700">
                     {formatCurrency(payableAmount)}

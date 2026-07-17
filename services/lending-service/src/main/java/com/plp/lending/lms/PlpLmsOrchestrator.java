@@ -92,6 +92,9 @@ public class PlpLmsOrchestrator {
                         tenureMonths,
                         productCode);
             }
+            if (loan.getSanctionDate() != null) {
+                params = params.withDisbursementDate(loan.getSanctionDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
+            }
 
             var loanOd = plpEncoreLmsAdapter.buildLoanOdAccount(params, borrower);
             String requestJson = objectMapper.writeValueAsString(loanOd);
@@ -214,6 +217,28 @@ public class PlpLmsOrchestrator {
     public boolean isLmsEnabledForLoan(Loan loan) {
         ProgramLmsConfig cfg = programLmsConfigClient.fetch(loan.getProgramId());
         return cfg.isLmsEnabled() && encoreLmsApi.isActive();
+    }
+
+    /**
+     * Best-effort refresh of stored outstanding / payoff from Encore for list and detail reads.
+     * Does not open, disburse, or repay — only pulls summary. Failures are logged and ignored.
+     *
+     * @return true if a summary refresh was attempted (account present and Encore active)
+     */
+    public boolean refreshOutstandingFromLms(Loan loan) {
+        if (loan == null) {
+            return false;
+        }
+        if (!encoreLmsApi.isActive()) {
+            return false;
+        }
+        String accountId = resolveAccountId(loan);
+        if (accountId == null) {
+            return false;
+        }
+        // Skip program config round-trip when account already exists — account implies LMS path was used.
+        refreshSummary(loan, accountId);
+        return true;
     }
 
     private void refreshSummary(Loan loan, String accountId) {

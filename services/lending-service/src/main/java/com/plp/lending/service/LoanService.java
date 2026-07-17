@@ -736,6 +736,45 @@ public class LoanService {
     }
 
     /**
+     * For loan list responses: pull Encore summary into stored outstanding for LMS-linked open loans.
+     * Best-effort per loan — does not change sanction/disburse/repay processing.
+     */
+    public void syncLmsOutstandingForList(List<Loan> loans) {
+        if (loans == null || loans.isEmpty()) {
+            return;
+        }
+        for (Loan loan : loans) {
+            if (!shouldSyncLmsOutstandingOnList(loan)) {
+                continue;
+            }
+            try {
+                plpLmsOrchestrator.refreshOutstandingFromLms(loan);
+            } catch (Exception e) {
+                log.warn("LMS outstanding sync skipped for loan {}: {}", loan.getLoanNumber(), e.getMessage());
+            }
+        }
+    }
+
+    private static boolean shouldSyncLmsOutstandingOnList(Loan loan) {
+        if (loan == null || loan.getStatus() == null) {
+            return false;
+        }
+        String accountId = loan.getLmsAccountId();
+        boolean hasAccount = accountId != null && !accountId.isBlank();
+        if (!hasAccount && loan.getKfsData() != null) {
+            Object v = loan.getKfsData().get("lmsAccountId");
+            hasAccount = v != null && !String.valueOf(v).isBlank();
+        }
+        if (!hasAccount) {
+            return false;
+        }
+        return switch (loan.getStatus()) {
+            case DISBURSED, REPAYMENT_DUE, OVERDUE, DISBURSEMENT_PENDING, SANCTIONED -> true;
+            default -> false;
+        };
+    }
+
+    /**
      * Adjusts in-memory loan amounts for API responses when LMS summary sync failed (detached entities only).
      */
     public void applyResolvedAmountsForApi(Loan loan) {

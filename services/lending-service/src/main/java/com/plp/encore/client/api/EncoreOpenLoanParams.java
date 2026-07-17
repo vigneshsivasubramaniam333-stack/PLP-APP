@@ -70,4 +70,16 @@ public record EncoreOpenLoanParams(
                 null, null
         );
     }
+
+    /** Returns a copy with {@code disbursementDate} set (maps to Encore {@code openedOnDate} on sanction). */
+    public EncoreOpenLoanParams withDisbursementDate(String disbursementDate) {
+        return new EncoreOpenLoanParams(
+                applicationNumber, borrowerName, sanctionedAmount, interestRate, tenureMonths, productCode,
+                branchCode, customerId, tenureUnit, penalInterestRate, numberOfInstallments,
+                moratoriumType, moratoriumPeriodMagnitude, moratoriumPeriodUnit,
+                moratoriumNormalInterestRateApplicable, moratoriumNormalInterestRate, moratoriumInterestAccrualCalculation,
+                pinCode, cityCode, stateCode, countryCode,
+                colendingApplicable, colenderProductCode, colenderId, colenderLendingRatio, colenderNormalInterestRate,
+                disbursementDate, userId);
+    }
 }

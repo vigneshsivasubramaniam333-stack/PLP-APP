@@ -85,10 +85,13 @@ public class ProgramApprovalService {
             throw new RuntimeException(
                     "Send back allowed only when status is PENDING_L2. Current: " + program.getStatus());
         }
-        program.setStatus(ProgramStatus.SENT_BACK);
+        // L2 send-back returns the program to L1's working queue for edits and resubmission.
+        program.setStatus(ProgramStatus.DRAFT);
         program.setApprovalRemarks(remarks.trim());
         program.setSentBackAt(Instant.now());
         program.setSentBackBy(trimUser(userId));
+        program.setSubmittedAt(null);
+        program.setSubmittedBy(null);
         Program saved = programService.saveProgram(program);
         log.info("Program {} sent back to L1 by {} with remarks", saved.getProgramCode(), userId);
         return saved;
@@ -104,10 +107,9 @@ public class ProgramApprovalService {
         requireRole(rolesHeader, cfg.getL1Role(), "Only L1 approver can send program back to RM");
         Program program = programService.getProgram(programId);
         ProgramStatus status = program.getStatus();
-        // Allow another send-back after RM resubmits (DRAFT), and also retract PENDING_L2 back to RM.
-        if (status != ProgramStatus.DRAFT && status != ProgramStatus.PENDING_L2) {
+        if (status != ProgramStatus.DRAFT) {
             throw new RuntimeException(
-                    "Send back to RM allowed when status is DRAFT or PENDING_L2. Current: " + status);
+                    "Send back to RM allowed only when status is DRAFT. Current: " + status);
         }
         program.setStatus(ProgramStatus.SENT_BACK);
         String trimmed = remarks == null ? null : remarks.trim();

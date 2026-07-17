@@ -622,7 +622,12 @@ export default function InvoiceDiscountingPage({
                           {linkedLoans.map((loan) =>
                             usePayu ? (
                               <div key={loan.id} className="text-xs text-slate-600 py-2 border-b border-slate-100 last:border-0">
-                                Loan {loan.loanNumber || loan.id} — {loan.status}
+                                Loan {loan.loanNumber || loan.id}
+                                {loan.lmsAccountId ? (
+                                  <span className="ml-2 font-mono text-sky-700">LMS {loan.lmsAccountId}</span>
+                                ) : null}
+                                {' — '}
+                                {loan.status}
                                 {inv.pipAmount && inv.pipAmount > 0 ? (
                                   <span className="ml-2 text-amber-700 font-medium">
                                     PRUS: {formatCurrency(inv.pipAmount)} (pending settlement)

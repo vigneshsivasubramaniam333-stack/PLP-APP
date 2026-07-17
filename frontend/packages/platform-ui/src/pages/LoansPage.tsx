@@ -5,6 +5,7 @@ import {
   loanApi,
   loanHasLmsAccount,
   loanPrincipalAmount,
+  resolveLmsAccountId,
   LoanSummaryWithRepayments,
   notifyError,
   notifySuccess,
@@ -302,6 +303,11 @@ export default function LoansPage() {
               <tr key={l.id} className="hover:bg-slate-50/80">
                 <td className="px-5 py-3.5">
                   <div className="font-mono text-xs font-medium text-slate-700">{l.loanNumber}</div>
+                  {loanHasLmsAccount(l) ? (
+                    <div className="mt-0.5 font-mono text-[11px] text-sky-700">
+                      LMS {resolveLmsAccountId(l)}
+                    </div>
+                  ) : null}
                   <div className="text-[11px] text-slate-400 mt-0.5">{l.requestDate}</div>
                 </td>
                 <td className="px-5 py-3.5 font-mono text-xs text-slate-600">
@@ -318,9 +324,6 @@ export default function LoansPage() {
                 </td>
                 <td className="px-5 py-3.5 text-right font-medium text-slate-700">
                   {formatCurrency(loanPrincipalAmount(l))}
-                  {loanHasLmsAccount(l) ? (
-                    <span className="block text-[10px] font-normal text-sky-600">LMS</span>
-                  ) : null}
                 </td>
                 <td className="px-5 py-3.5 text-right text-slate-600">{l.interestRate}%</td>
                 <td className="px-5 py-3.5 text-center text-slate-600">{l.tenureDays}d</td>

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { loanApi, loanPrincipalAmount, repaymentProgress } from '@plp/shared';
+import { loanApi, loanPrincipalAmount, repaymentProgress, resolveLmsAccountId } from '@plp/shared';
 import type { Invoice, Loan, LoanRepaymentRow } from '@plp/shared';
 
 function money(n: number | null | undefined): string {
@@ -42,6 +42,7 @@ export function InvoiceLoanRepaymentCard({ invoice, loan, onRepay, repaying }: P
   const outstanding = Number(loan.outstandingAmount ?? 0);
   const progress = repaymentProgress(repaid, outstanding);
   const canRepay = onRepay && ['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE'].includes(String(loan.status));
+  const lmsAccountId = resolveLmsAccountId(loan);
 
   const loadRepayments = useCallback(async () => {
     setLoadingRepayments(true);
@@ -91,6 +92,11 @@ export function InvoiceLoanRepaymentCard({ invoice, loan, onRepay, repaying }: P
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Linked loan</p>
             <p className="font-mono text-sm font-medium text-slate-800">{loan.loanNumber}</p>
+            {lmsAccountId ? (
+              <p className="mt-0.5 font-mono text-xs text-sky-700">
+                LMS account <span className="font-semibold">{lmsAccountId}</span>
+              </p>
+            ) : null}
             <p className="text-xs text-slate-500">Invoice {invoice.invoiceNumber}</p>
           </div>
           <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-700">
