@@ -47,7 +47,13 @@ export type { CreditLimitRow } from './components/CreditLimitDisplay';
 export { useBorrowerCreditLimits, useAnchorCreditLimits } from './hooks/useCreditLimits';
 export { fetchLoanPayoff, fetchLoanPayoffs, repaymentProgress } from './utils/loanPayoff';
 export type { LoanPayoffInfo } from './utils/loanPayoff';
-export { loanPrincipalAmount, loanHasLmsAccount, resolveLmsAccountId } from './utils/loanDisplay';
+export {
+  loanPrincipalAmount,
+  loanPayableAmount,
+  loanInterestAmount,
+  loanHasLmsAccount,
+  resolveLmsAccountId,
+} from './utils/loanDisplay';
 export { invoiceDueDateError } from './utils/invoiceDates';
 export { InvoiceListToolbar } from './components/InvoiceListToolbar';
 export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment';

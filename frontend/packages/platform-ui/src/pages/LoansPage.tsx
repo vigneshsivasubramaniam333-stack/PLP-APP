@@ -4,6 +4,8 @@ import {
   lenderLoanCapabilities,
   loanApi,
   loanHasLmsAccount,
+  loanInterestAmount,
+  loanPayableAmount,
   loanPrincipalAmount,
   resolveLmsAccountId,
   LoanSummaryWithRepayments,
@@ -262,7 +264,13 @@ export default function LoansPage() {
                 Product
               </th>
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Amount
+                Principal
+              </th>
+              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Interest
+              </th>
+              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Payable
               </th>
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Rate
@@ -299,6 +307,7 @@ export default function LoansPage() {
                 !hasActions &&
                 ['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE', 'CLOSED', 'CANCELLED'].includes(l.status);
 
+              const interestAmount = loanInterestAmount(l);
               const rows = [
               <tr key={l.id} className="hover:bg-slate-50/80">
                 <td className="px-5 py-3.5">
@@ -324,6 +333,15 @@ export default function LoansPage() {
                 </td>
                 <td className="px-5 py-3.5 text-right font-medium text-slate-700">
                   {formatCurrency(loanPrincipalAmount(l))}
+                </td>
+                <td className="px-5 py-3.5 text-right text-slate-600">
+                  {interestAmount != null ? formatCurrency(interestAmount) : '—'}
+                </td>
+                <td className="px-5 py-3.5 text-right font-medium text-slate-700">
+                  {formatCurrency(loanPayableAmount(l))}
+                  {loanHasLmsAccount(l) && loanPayableAmount(l) > loanPrincipalAmount(l) ? (
+                    <span className="block text-[10px] text-sky-600 font-normal">LMS</span>
+                  ) : null}
                 </td>
                 <td className="px-5 py-3.5 text-right text-slate-600">{l.interestRate}%</td>
                 <td className="px-5 py-3.5 text-center text-slate-600">{l.tenureDays}d</td>
