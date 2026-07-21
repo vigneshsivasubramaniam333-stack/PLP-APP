@@ -37,6 +37,8 @@ public record EncoreOpenLoanParams(
         String colenderNormalInterestRate,
         // Disbursement
         String disbursementDate,
+        /** Bank UTR / transaction reference for Encore disbursement description. */
+        String transactionRef,
         String userId
 ) {
     /**
@@ -51,7 +53,7 @@ public record EncoreOpenLoanParams(
                 "None", 0, "Month", false, null, null,
                 null, null, null, null,
                 null, null, null, null, null,
-                null, null
+                null, null, null
         );
     }
 
@@ -67,7 +69,7 @@ public record EncoreOpenLoanParams(
                 "None", 0, "Day", false, null, null,
                 null, null, null, null,
                 null, null, null, null, null,
-                null, null
+                null, null, null
         );
     }
 
@@ -80,6 +82,17 @@ public record EncoreOpenLoanParams(
                 moratoriumNormalInterestRateApplicable, moratoriumNormalInterestRate, moratoriumInterestAccrualCalculation,
                 pinCode, cityCode, stateCode, countryCode,
                 colendingApplicable, colenderProductCode, colenderId, colenderLendingRatio, colenderNormalInterestRate,
-                disbursementDate, userId);
+                disbursementDate, transactionRef, userId);
+    }
+
+    public EncoreOpenLoanParams withTransactionRef(String transactionRef) {
+        return new EncoreOpenLoanParams(
+                applicationNumber, borrowerName, sanctionedAmount, interestRate, tenureMonths, productCode,
+                branchCode, customerId, tenureUnit, penalInterestRate, numberOfInstallments,
+                moratoriumType, moratoriumPeriodMagnitude, moratoriumPeriodUnit,
+                moratoriumNormalInterestRateApplicable, moratoriumNormalInterestRate, moratoriumInterestAccrualCalculation,
+                pinCode, cityCode, stateCode, countryCode,
+                colendingApplicable, colenderProductCode, colenderId, colenderLendingRatio, colenderNormalInterestRate,
+                disbursementDate, transactionRef, userId);
     }
 }

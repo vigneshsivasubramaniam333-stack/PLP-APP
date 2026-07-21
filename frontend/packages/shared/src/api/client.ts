@@ -252,10 +252,13 @@ export const loanApi = {
     apiClient.post(`/api/v1/loans/${id}/approve`, data ?? {}, { headers: lenderLoanActionHeaders() }),
   reject: (id: string, reason: string) =>
     apiClient.post(`/api/v1/loans/${id}/reject`, { reason }, { headers: lenderLoanActionHeaders() }),
-  initiateDisbursement: (id: string, amount: number) =>
+  initiateDisbursement: (
+    id: string,
+    data: { amount: number; disbursementDate: string; transactionRef: string },
+  ) =>
     apiClient.post(
       `/api/v1/loans/${id}/initiate-disbursement`,
-      { amount },
+      data,
       { headers: lenderLoanActionHeaders() },
     ),
   disburse: (id: string, amount: number) =>
@@ -544,6 +547,8 @@ export interface PaymentCheckoutLine {
   programId: string;
   invoiceNumber?: string;
   amountToPay: number;
+  /** LMS interest due when available (display only). */
+  interestAmount?: number | null;
   discountAmount: number;
   status: string;
 }

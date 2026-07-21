@@ -5,6 +5,8 @@ import com.plp.lending.model.enums.LoanStatus;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,6 +22,17 @@ class LmsPayableAmountsTest {
         loan.setTotalRepayable(new BigDecimal("2059.18"));
         assertTrue(LmsPayableAmounts.shouldUsePrincipalFallback(loan));
         assertEquals(new BigDecimal("2000.00"), LmsPayableAmounts.principalOutstanding(loan));
+    }
+
+    @Test
+    void shouldNotUsePrincipalFallbackAfterSuccessfulLmsSyncEvenWhenPayoffExceedsPrincipal() {
+        Loan loan = baseLoan();
+        loan.setOutstandingAmount(new BigDecimal("1201.00"));
+        loan.setInterestAmount(new BigDecimal("1.17"));
+        Map<String, Object> kfs = new LinkedHashMap<>();
+        kfs.put("lmsOutstanding", "1201.00");
+        loan.setKfsData(kfs);
+        assertFalse(LmsPayableAmounts.shouldUsePrincipalFallback(loan));
     }
 
     @Test

@@ -17,11 +17,13 @@ import com.plp.program.repository.SubProgramBorrowerRepository;
 import com.plp.program.repository.SubProgramRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -93,12 +95,12 @@ public class SubProgramService {
     }
 
     public List<SubProgram> listAll() {
-        return subProgramRepository.findAll();
+        return subProgramRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
     /** Sub-programs where {@code borrowerId} appears in {@code sub_program_borrowers}. */
     public List<SubProgram> listSubProgramsForAnchor(UUID anchorId) {
-        return subProgramRepository.findByAnchorId(anchorId);
+        return subProgramRepository.findByAnchorIdOrderByCreatedAtDesc(anchorId);
     }
 
     public List<SubProgram> listSubProgramsForBorrower(UUID borrowerId) {
@@ -107,13 +109,15 @@ public class SubProgramService {
             return List.of();
         }
         List<UUID> ids = links.stream().map(SubProgramBorrower::getSubProgramId).distinct().toList();
-        return new ArrayList<>(subProgramRepository.findAllById(ids));
+        List<SubProgram> found = new ArrayList<>(subProgramRepository.findAllById(ids));
+        found.sort(Comparator.comparing(SubProgram::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        return found;
     }
 
     public List<SubProgram> listByProgramId(UUID programId) {
         programRepository.findById(programId)
                 .orElseThrow(() -> new RuntimeException("Program not found: " + programId));
-        return subProgramRepository.findByProgramId(programId);
+        return subProgramRepository.findByProgramIdOrderByCreatedAtDesc(programId);
     }
 
     private String generateUniqueSubProgramCode() {

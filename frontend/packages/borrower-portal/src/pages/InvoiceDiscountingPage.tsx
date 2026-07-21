@@ -15,6 +15,8 @@ import {
   canBorrowerAcceptInvoice,
   canBorrowerRequestFinance,
   canBorrowerRequestEarlyPay,
+  sanitizeNonNegativeNumberInput,
+  loanInterestAmount,
 } from '@plp/shared';
 import type { Invoice, InvoiceListFilters, InvoicePageMeta, Loan, InvoiceDiscountingFlowType } from '@plp/shared';
 import { InvoiceLoanRepaymentCard } from '../components/InvoiceLoanRepaymentCard';
@@ -277,8 +279,18 @@ export default function InvoiceDiscountingPage({
     }
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0);
+  const formatCurrency = (amount: number | null | undefined) =>
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
+
+  const formatInterest = (amount: number | null | undefined) => {
+    if (amount == null || Number(amount) <= 0) return '—';
+    return formatCurrency(Number(amount));
+  };
 
   const REPAYABLE_LOAN = new Set(['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE']);
 
@@ -297,6 +309,29 @@ export default function InvoiceDiscountingPage({
     const loan = (loansByInvoice[invoiceId] ?? []).find((l) => REPAYABLE_LOAN.has(l.status));
     if (!loan) return 0;
     return loan.outstandingAmount ?? loan.totalRepayable ?? 0;
+  };
+
+  const displayAvailableAmount = (inv: Invoice) => {
+    const programAvailable = inv.availableAmount;
+    if (programAvailable != null && programAvailable > 0) {
+      return programAvailable;
+    }
+    const outstanding = repayableAmountForInvoice(inv.id);
+    return outstanding > 0 ? outstanding : programAvailable;
+  };
+
+  const interestForInvoice = (invoiceId: string) => {
+    const loans = loansByInvoice[invoiceId] ?? [];
+    let total = 0;
+    let any = false;
+    for (const loan of loans) {
+      const interest = loanInterestAmount(loan);
+      if (interest != null && interest > 0) {
+        total += interest;
+        any = true;
+      }
+    }
+    return any ? total : null;
   };
 
   const selectionSummary = useMemo(() => {
@@ -522,6 +557,7 @@ export default function InvoiceDiscountingPage({
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Amount</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Eligible</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Available</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Interest</th>
                 {usePayu && (
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">PRUS</th>
                 )}
@@ -533,7 +569,7 @@ export default function InvoiceDiscountingPage({
             <tbody className="divide-y divide-slate-100">
               {invoices.length === 0 ? (
                 <tr>
-                    <td colSpan={usePayu ? 10 : 9} className="px-5 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={usePayu ? 11 : 10} className="px-5 py-12 text-center text-slate-400 text-sm">
                     No invoices yet.
                   </td>
                 </tr>
@@ -568,7 +604,10 @@ export default function InvoiceDiscountingPage({
                     <td className="px-5 py-3 text-xs text-slate-600">{inv.dueDate}</td>
                     <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.netAmount)}</td>
                     <td className="px-5 py-3 text-right text-slate-700">{formatCurrency(inv.eligibleAmount)}</td>
-                    <td className="px-5 py-3 text-right font-medium text-slate-800">{formatCurrency(inv.availableAmount)}</td>
+                    <td className="px-5 py-3 text-right font-medium text-slate-800">{formatCurrency(displayAvailableAmount(inv))}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-slate-600">
+                      {formatInterest(interestForInvoice(inv.id))}
+                    </td>
                     {usePayu && (
                       <td className="px-5 py-3 text-right text-amber-700 text-xs font-medium tabular-nums align-middle">
                         {inv.pipAmount && inv.pipAmount > 0 ? formatCurrency(inv.pipAmount) : '—'}
@@ -618,7 +657,7 @@ export default function InvoiceDiscountingPage({
                   if (linkedLoans.length > 0 && expandedLoanInvoiceIds.has(inv.id)) {
                     rows.push(
                       <tr key={`${inv.id}-loans`}>
-                        <td colSpan={usePayu ? 10 : 9} className="px-5 pb-4 bg-slate-50/40">
+                        <td colSpan={usePayu ? 11 : 10} className="px-5 pb-4 bg-slate-50/40">
                           {linkedLoans.map((loan) =>
                             usePayu ? (
                               <div key={loan.id} className="text-xs text-slate-600 py-2 border-b border-slate-100 last:border-0">
@@ -709,8 +748,9 @@ export default function InvoiceDiscountingPage({
                 <input
                   type="number"
                   step="0.01"
+                  min={0}
                   value={requestedAmount}
-                  onChange={(e) => setRequestedAmount(e.target.value)}
+                  onChange={(e) => setRequestedAmount(sanitizeNonNegativeNumberInput(e.target.value))}
                   max={selectedInvoice.availableAmount}
                   disabled={financingRequested || !panelCanFinance}
                   className="w-full pl-8 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:bg-white outline-none disabled:opacity-50"

@@ -129,13 +129,28 @@ public class PlpLmsOrchestrator {
         }
         try {
             BigDecimal amount = loan.getDisbursedAmount() != null ? loan.getDisbursedAmount() : loan.getSanctionedAmount();
+            LocalDate disbursementValueDate = loan.getDisbursementDate();
+            if (disbursementValueDate == null) {
+                log.error("PLP LMS disburse skipped — disbursementDate not set on loan {} (accountId={})",
+                        loan.getLoanNumber(), accountId);
+                recordOp(loan.getId(), OP_DISBURSE, accountId, STATUS_ERROR, null, null,
+                        "disbursementDate missing on loan");
+                return;
+            }
             EncoreOpenLoanParams ctx = EncoreOpenLoanParams.minimal(
                     loan.getLoanNumber(),
                     loan.getLoanNumber(),
                     amount,
                     loan.getInterestRate(),
                     Math.max(1, (loan.getTenureDays() + 29) / 30),
-                    cfg.getEncoreProductCode());
+                    cfg.getEncoreProductCode())
+                    .withDisbursementDate(disbursementValueDate.format(DateTimeFormatter.ISO_LOCAL_DATE));
+            String utr = disbursementUtrFromLoan(loan);
+            if (utr != null && !utr.isBlank()) {
+                ctx = ctx.withTransactionRef(utr.trim());
+            }
+            log.info("[PLP][ENCORE] Disburse — loanNumber={} accountId={} disbursementDate={} amount={}",
+                    loan.getLoanNumber(), accountId, disbursementValueDate, amount);
             String txnId = encoreLmsApi.disburse(accountId, ctx);
             recordOp(loan.getId(), OP_DISBURSE, accountId, STATUS_SUCCESS, null, txnId, null);
             refreshSummary(loan, accountId);
@@ -304,6 +319,14 @@ public class PlpLmsOrchestrator {
         Map<String, Object> kfs = loan.getKfsData() == null ? new HashMap<>() : new HashMap<>(loan.getKfsData());
         kfs.put(key, value);
         loan.setKfsData(kfs);
+    }
+
+    private static String disbursementUtrFromLoan(Loan loan) {
+        if (loan.getKfsData() == null) {
+            return null;
+        }
+        Object raw = loan.getKfsData().get("disbursementUtr");
+        return raw == null ? null : String.valueOf(raw).trim();
     }
 
     private void recordOp(UUID loanId, String operation, String accountId, String status,

@@ -9,6 +9,7 @@ import {
   DigitalInvoiceAttachment,
   extractApiErrorMessage,
   invoiceDueDateError,
+  sanitizeNonNegativeNumberInput,
 } from '@plp/shared';
 import type { Program, Invoice, AuthUser, Borrower, SubProgram } from '@plp/shared';
 import { downloadSampleInvoiceCsv } from '../invoice/invoiceShared';
@@ -463,8 +464,11 @@ export default function InvoiceUploadPage() {
               <input
                 type="number"
                 step="0.01"
+                min={0}
                 value={manual.invoiceAmount}
-                onChange={(e) => setManual({ ...manual, invoiceAmount: e.target.value })}
+                onChange={(e) =>
+                  setManual({ ...manual, invoiceAmount: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
                 required
               />
@@ -474,8 +478,11 @@ export default function InvoiceUploadPage() {
               <input
                 type="number"
                 step="0.01"
+                min={0}
                 value={manual.taxAmount}
-                onChange={(e) => setManual({ ...manual, taxAmount: e.target.value })}
+                onChange={(e) =>
+                  setManual({ ...manual, taxAmount: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </div>

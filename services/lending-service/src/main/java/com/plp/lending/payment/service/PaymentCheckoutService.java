@@ -52,7 +52,10 @@ public class PaymentCheckoutService {
 
     @Transactional(readOnly = true)
     public List<PaymentCheckoutLine> listCart(UUID borrowerId) {
-        return checkoutLineRepository.findByBorrowerIdAndStatusOrderByCreatedAtDesc(borrowerId, STATUS_INITIALIZED);
+        List<PaymentCheckoutLine> lines =
+                checkoutLineRepository.findByBorrowerIdAndStatusOrderByCreatedAtDesc(borrowerId, STATUS_INITIALIZED);
+        enrichInterestAmounts(lines);
+        return lines;
     }
 
     @Transactional(readOnly = true)
@@ -87,6 +90,12 @@ public class PaymentCheckoutService {
         }
         Loan loan = findRepayableLoanForInvoice(borrowerId, invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("No repayable loan found for this invoice"));
+        try {
+            loanService.syncLmsOutstandingForList(List.of(loan));
+            loan = loanRepository.findById(loan.getId()).orElse(loan);
+        } catch (Exception e) {
+            log.warn("LMS refresh before cart add skipped for {}: {}", loan.getLoanNumber(), e.getMessage());
+        }
         UUID subProgramId = resolveSubProgramId(borrowerId, invoice, loan);
         UUID programId = uuid(invoice.get("programId"));
         if (programId == null && loan.getProgramId() != null) {
@@ -106,7 +115,7 @@ public class PaymentCheckoutService {
                 });
         BigDecimal amount = amountOverride != null && amountOverride.compareTo(BigDecimal.ZERO) > 0
                 ? amountOverride
-                : loan.getOutstandingAmount() != null ? loan.getOutstandingAmount() : loan.getTotalRepayable();
+                : resolveCartPayAmount(loan);
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Repayment amount must be positive");
         }
@@ -118,10 +127,13 @@ public class PaymentCheckoutService {
                 .programId(programId)
                 .invoiceNumber(str(invoice.get("invoiceNumber")))
                 .amountToPay(amount)
+                .interestAmount(loan.getInterestAmount())
                 .discountAmount(BigDecimal.ZERO)
                 .status(STATUS_INITIALIZED)
                 .build();
-        return checkoutLineRepository.save(line);
+        PaymentCheckoutLine saved = checkoutLineRepository.save(line);
+        saved.setInterestAmount(loan.getInterestAmount());
+        return saved;
     }
 
     @Transactional
@@ -418,6 +430,50 @@ public class PaymentCheckoutService {
                 .filter(l -> invoiceId.equals(l.getInvoiceId()))
                 .filter(l -> REPAYABLE_LOAN_STATUSES.contains(l.getStatus()))
                 .findFirst();
+    }
+
+    /**
+     * Prefer live LMS payoff (payOffAndDueAmount); fall back to stored outstanding / total repayable.
+     */
+    private BigDecimal resolveCartPayAmount(Loan loan) {
+        try {
+            BigDecimal livePayoff = loanService.getPayoffAmount(loan.getId());
+            if (livePayoff != null && livePayoff.compareTo(BigDecimal.ZERO) > 0) {
+                return livePayoff;
+            }
+        } catch (Exception e) {
+            log.warn("Live payoff unavailable for cart line loan {}: {}", loan.getLoanNumber(), e.getMessage());
+        }
+        if (loan.getOutstandingAmount() != null && loan.getOutstandingAmount().compareTo(BigDecimal.ZERO) > 0) {
+            return loan.getOutstandingAmount();
+        }
+        return loan.getTotalRepayable();
+    }
+
+    private void enrichInterestAmounts(List<PaymentCheckoutLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        Set<UUID> loanIds = new HashSet<>();
+        for (PaymentCheckoutLine line : lines) {
+            if (line.getLoanId() != null) {
+                loanIds.add(line.getLoanId());
+            }
+        }
+        if (loanIds.isEmpty()) {
+            return;
+        }
+        Map<UUID, BigDecimal> interestByLoan = new HashMap<>();
+        for (Loan loan : loanRepository.findAllById(loanIds)) {
+            if (loan.getInterestAmount() != null) {
+                interestByLoan.put(loan.getId(), loan.getInterestAmount());
+            }
+        }
+        for (PaymentCheckoutLine line : lines) {
+            if (line.getLoanId() != null) {
+                line.setInterestAmount(interestByLoan.get(line.getLoanId()));
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

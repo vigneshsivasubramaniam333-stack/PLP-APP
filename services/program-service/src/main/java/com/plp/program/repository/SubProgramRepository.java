@@ -17,7 +17,11 @@ public interface SubProgramRepository extends JpaRepository<SubProgram, UUID> {
 
     List<SubProgram> findByProgramId(UUID programId);
 
+    List<SubProgram> findByProgramIdOrderByCreatedAtDesc(UUID programId);
+
     List<SubProgram> findByAnchorId(UUID anchorId);
+
+    List<SubProgram> findByAnchorIdOrderByCreatedAtDesc(UUID anchorId);
 
     boolean existsByProgramIdAndAnchorId(UUID programId, UUID anchorId);
 

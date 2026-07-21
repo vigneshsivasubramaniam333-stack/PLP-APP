@@ -13,6 +13,7 @@ import {
   buildBorrowerTermsRows,
   buildBorrowerTermsRowsFromMap,
   buildSubProgramConfigurationRows,
+  sanitizeNonNegativeNumberInput,
 } from '@plp/shared';
 import type { Program, Anchor, SubProgram, SubProgramBorrower, Borrower, ProductRepaymentDefault } from '@plp/shared';
 import { FieldTooltip } from '../components/FieldTooltip';
@@ -1552,8 +1553,11 @@ export default function SubProgramsPage() {
                 required
                 type="number"
                 step="0.0001"
+                min={0}
                 value={form.interestRate}
-                onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, interestRate: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </div>
@@ -1566,8 +1570,11 @@ export default function SubProgramsPage() {
                 required
                 type="number"
                 step="0.0001"
+                min={0}
                 value={form.marginPercent}
-                onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, marginPercent: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </div>
@@ -1581,7 +1588,9 @@ export default function SubProgramsPage() {
                 type="number"
                 min={1}
                 value={form.maxTenureDays}
-                onChange={(e) => setForm({ ...form, maxTenureDays: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, maxTenureDays: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </div>
@@ -1596,7 +1605,9 @@ export default function SubProgramsPage() {
                 step="0.01"
                 min={0}
                 value={form.subProgramLimit}
-                onChange={(e) => setForm({ ...form, subProgramLimit: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, subProgramLimit: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </div>
@@ -1768,26 +1779,44 @@ export default function SubProgramsPage() {
                     <input
                       type="number"
                       step="0.01"
+                      min={0}
                       className={inputCls}
                       value={editForm.interestRate}
-                      onChange={(e) => setEditForm({ ...editForm, interestRate: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          interestRate: sanitizeNonNegativeNumberInput(e.target.value),
+                        })
+                      }
                     />
                   </FormField>
                   <FormField label="Discount margin (%)" tooltip="Default discount margin applied when calculating eligible amounts.">
                     <input
                       type="number"
                       step="0.01"
+                      min={0}
                       className={inputCls}
                       value={editForm.marginPercent}
-                      onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          marginPercent: sanitizeNonNegativeNumberInput(e.target.value),
+                        })
+                      }
                     />
                   </FormField>
                   <FormField label="Max tenure (days)" tooltip="Maximum tenure allowed for transactions under this sub-program.">
                     <input
                       type="number"
+                      min={0}
                       className={inputCls}
                       value={editForm.maxTenureDays}
-                      onChange={(e) => setEditForm({ ...editForm, maxTenureDays: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          maxTenureDays: sanitizeNonNegativeNumberInput(e.target.value),
+                        })
+                      }
                     />
                   </FormField>
                   {detail.status === 'DRAFT' ? (
@@ -1798,9 +1827,15 @@ export default function SubProgramsPage() {
                       <input
                         type="number"
                         step="0.01"
+                        min={0}
                         className={inputCls}
                         value={editForm.subProgramLimit}
-                        onChange={(e) => setEditForm({ ...editForm, subProgramLimit: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            subProgramLimit: sanitizeNonNegativeNumberInput(e.target.value),
+                          })
+                        }
                       />
                     </FormField>
                   ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard, useAuth } from '@plp/shared';
+import { programApi, getStoredAuthUser, lenderLoanCapabilities, BtPageHeader, BtButton, BtBadge, BtCard, useAuth, sanitizeNonNegativeNumberInput } from '@plp/shared';
 import type { Program, ProgramEligibilityConfig, ProgramOperationalParameters } from '@plp/shared';
 import { ClearDemoDataButton } from '../components/ClearDemoDataButton';
 import { FieldTooltip } from '../components/FieldTooltip';
@@ -867,8 +867,11 @@ export default function ProgramsPage() {
               <input
                 type="number"
                 step="0.01"
+                min={0}
                 value={form.programLimit}
-                onChange={(e) => setForm({ ...form, programLimit: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, programLimit: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
                 placeholder="e.g., 10000000"
                 required
@@ -881,8 +884,11 @@ export default function ProgramsPage() {
               <input
                 type="number"
                 step="0.01"
+                min={0}
                 value={form.maxBorrowerLimit}
-                onChange={(e) => setForm({ ...form, maxBorrowerLimit: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, maxBorrowerLimit: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
                 placeholder="e.g., 100000"
                 required
@@ -895,8 +901,11 @@ export default function ProgramsPage() {
               <input
                 type="number"
                 step="0.01"
+                min={0}
                 value={form.defaultInterestRate}
-                onChange={(e) => setForm({ ...form, defaultInterestRate: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, defaultInterestRate: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
                 placeholder="e.g., 18"
                 required
@@ -910,9 +919,11 @@ export default function ProgramsPage() {
               <input
                 type="number"
                 step="0.01"
-                min="0"
+                min={0}
                 value={form.marginPercent}
-                onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, marginPercent: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
                 placeholder="0"
               />
@@ -923,8 +934,11 @@ export default function ProgramsPage() {
             >
               <input
                 type="number"
+                min={0}
                 value={form.maxTenureDays}
-                onChange={(e) => setForm({ ...form, maxTenureDays: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, maxTenureDays: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </ProgramField>
@@ -934,8 +948,11 @@ export default function ProgramsPage() {
             >
               <input
                 type="number"
+                min={0}
                 value={form.maxConcurrentLoans}
-                onChange={(e) => setForm({ ...form, maxConcurrentLoans: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, maxConcurrentLoans: sanitizeNonNegativeNumberInput(e.target.value) })
+                }
                 className={inputCls}
               />
             </ProgramField>
@@ -999,7 +1016,12 @@ export default function ProgramsPage() {
                 step="0.01"
                 min={0}
                 value={editForm.maxBorrowerLimit}
-                onChange={(e) => setEditForm({ ...editForm, maxBorrowerLimit: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    maxBorrowerLimit: sanitizeNonNegativeNumberInput(e.target.value),
+                  })
+                }
                 className={inputCls}
                 placeholder="e.g., 100000"
               />
@@ -1015,7 +1037,12 @@ export default function ProgramsPage() {
                 step="0.01"
                 min={0}
                 value={editForm.marginPercent}
-                onChange={(e) => setEditForm({ ...editForm, marginPercent: e.target.value })}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    marginPercent: sanitizeNonNegativeNumberInput(e.target.value),
+                  })
+                }
                 className={inputCls}
                 placeholder="0 = no margin (eligible = net amount)"
               />

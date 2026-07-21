@@ -9,6 +9,7 @@ import com.plp.program.repository.ProgramRepository;
 import com.plp.program.repository.SubProgramRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,7 +143,7 @@ public class ProgramService {
     /** Program rows with {@link Program#setUtilizedLimit} / {@link Program#setAvailableLimit} filled for API listing. */
     @Transactional(readOnly = true)
     public List<Program> listPrograms() {
-        List<Program> programs = programRepository.findAll();
+        List<Program> programs = programRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
         attachProgramLimitHeadroom(programs);
         return programs;
     }
@@ -150,6 +152,7 @@ public class ProgramService {
     @Transactional(readOnly = true)
     public List<Program> listProgramsForAnchor(UUID anchorId) {
         List<Program> programs = programRepository.findProgramsForAnchor(anchorId);
+        programs.sort(Comparator.comparing(Program::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
         attachProgramLimitHeadroom(programs);
         return programs;
     }

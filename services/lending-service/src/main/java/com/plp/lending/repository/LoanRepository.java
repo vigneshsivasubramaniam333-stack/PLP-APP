@@ -24,9 +24,15 @@ public interface LoanRepository extends JpaRepository<Loan, UUID> {
 
     List<Loan> findByBorrowerId(UUID borrowerId);
 
+    List<Loan> findByBorrowerIdOrderByCreatedAtDesc(UUID borrowerId);
+
     List<Loan> findByAnchorId(UUID anchorId);
 
+    List<Loan> findByAnchorIdOrderByCreatedAtDesc(UUID anchorId);
+
     List<Loan> findByProgramId(UUID programId);
+
+    List<Loan> findByProgramIdOrderByCreatedAtDesc(UUID programId);
 
     List<Loan> findByBorrowerIdAndStatus(UUID borrowerId, LoanStatus status);
 
@@ -37,6 +43,8 @@ public interface LoanRepository extends JpaRepository<Loan, UUID> {
     boolean existsByInvoiceIdAndStatusIn(UUID invoiceId, List<LoanStatus> statuses);
 
     List<Loan> findByInvoiceId(UUID invoiceId);
+
+    List<Loan> findByInvoiceIdOrderByCreatedAtDesc(UUID invoiceId);
 
     @Query("""
             SELECT l FROM Loan l

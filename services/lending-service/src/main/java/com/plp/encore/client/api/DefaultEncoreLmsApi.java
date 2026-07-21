@@ -11,8 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Default Encore LMS REST facade - aligned with legacy bl-core HTTP patterns
@@ -26,6 +28,9 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
     private final ObjectMapper objectMapper;
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    /** Encore sandbox / Credinnov uses IST for value-date interpretation. */
+    private static final ZoneId ENCORE_VALUE_DATE_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final Pattern BANK_DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     public DefaultEncoreLmsApi(EncoreClientProperties properties,
                                EncoreHttpTransport transport,
@@ -136,14 +141,24 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
             String transactionId = "BL-" + UUID.randomUUID().toString().substring(0, 8);
             ArrayNode transactions = objectMapper.createArrayNode();
             ObjectNode txn = objectMapper.createObjectNode();
+            LocalDate requestedDisbursementDate = parseRequestedDisbursementDate(requestContext.disbursementDate());
+            LocalDate bankDate = fetchBankWorkingDate();
+            if (requestedDisbursementDate == null) {
+                log.warn("[LMS-DISBURSE] No disbursementDate on request — falling back to Encore bank working date {} for account {}",
+                        bankDate, encoreAccountId);
+            }
 
             txn.put("transactionId", transactionId);
-            txn.put("valueDate", System.currentTimeMillis());
+            long valueDateMillis = resolveDisburseValueDateMillis(requestedDisbursementDate);
+            txn.put("valueDate", valueDateMillis);
             txn.putNull("transactionDate");
             txn.put("accountId", encoreAccountId);
             txn.put("transactionName", "Disbursement");
             txn.put("amount1", requestContext.sanctionedAmount().toPlainString());
-            txn.put("description", "");
+            String description = requestContext.transactionRef() != null
+                    ? requestContext.transactionRef().trim()
+                    : "";
+            txn.put("description", description);
             String userId = requestContext.userId() != null ? requestContext.userId() : "los-adapter";
             txn.put("userId", userId);
             txn.put("instrument", "CASH");
@@ -156,6 +171,8 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
 
             transactions.add(txn);
 
+            log.info("[LMS-DISBURSE] accountId={} | requestedDisbursementDate={} | valueDateMillis={} | bankWorkingDate={}",
+                    encoreAccountId, requestedDisbursementDate, valueDateMillis, bankDate);
             log.info("[LMS-DISBURSE-FINAL-PAYLOAD] class={} | mapper={} | endpoint={} | " +
                             "accountId={} | transactionId={} | fullPayload={}",
                     "ObjectNode (inline)", this.getClass().getSimpleName(),
@@ -202,6 +219,49 @@ public class DefaultEncoreLmsApi implements EncoreLmsApi {
         } catch (Exception e) {
             throw new RuntimeException("Encore repay failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * bl-core invoice disbursement posts the treasury-selected disbursement date to Encore as
+     * {@code valueDate}. We preserve that behavior here. When Encore interprets epoch millis as UTC,
+     * noon IST keeps the intended calendar date intact.
+     */
+    long resolveDisburseValueDateMillis(LocalDate requestedDisbursementDate) {
+        if (requestedDisbursementDate != null) {
+            return toEncoreCalendarDateMillis(requestedDisbursementDate);
+        }
+        return toEncoreCalendarDateMillis(fetchBankWorkingDate());
+    }
+
+    /** Noon IST keeps the intended calendar date when Encore interprets millis as UTC. */
+    static long toEncoreCalendarDateMillis(LocalDate date) {
+        return date.atTime(12, 0).atZone(ENCORE_VALUE_DATE_ZONE).toInstant().toEpochMilli();
+    }
+
+    private static LocalDate parseRequestedDisbursementDate(String disbursementDate) {
+        if (disbursementDate == null || disbursementDate.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(disbursementDate.trim(), DATE_FORMAT);
+    }
+
+    private LocalDate fetchBankWorkingDate() {
+        if (!isActive()) {
+            return LocalDate.now(ENCORE_VALUE_DATE_ZONE);
+        }
+        try {
+            String raw = findBankWorkingDateRaw();
+            if (raw != null) {
+                String trimmed = raw.trim().replace("\"", "");
+                var matcher = BANK_DATE_PATTERN.matcher(trimmed);
+                if (matcher.find()) {
+                    return LocalDate.parse(matcher.group(), DATE_FORMAT);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[LMS-DISBURSE] Could not fetch Encore bank working date, using IST today: {}", e.getMessage());
+        }
+        return LocalDate.now(ENCORE_VALUE_DATE_ZONE);
     }
 
     /** Legacy {@code postTransactions}: query params {@code transactions} + {@code commitSize}. */

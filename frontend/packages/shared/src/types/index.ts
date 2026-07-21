@@ -244,6 +244,8 @@ export interface Loan {
   totalRepayable: number;
   totalRepaid?: number | null;
   outstandingAmount: number;
+  /** LMS interest due when available (e.g. totalNormalInterestDue). */
+  interestAmount?: number | null;
   status: LoanStatus;
   requestDate: string;
   sanctionDate?: string | null;

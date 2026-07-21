@@ -40,9 +40,17 @@ export default function PaymentCartPage() {
   const total = lines.reduce((sum, l) => sum + (l.amountToPay || 0), 0);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
-      amount || 0,
-    );
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
+
+  const formatInterest = (amount: number | null | undefined) => {
+    if (amount == null || Number(amount) <= 0) return '—';
+    return formatCurrency(Number(amount));
+  };
 
   const removeLine = async (lineId: string) => {
     try {
@@ -100,6 +108,7 @@ export default function PaymentCartPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Invoice #</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Interest</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Amount</th>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Action</th>
               </tr>
@@ -108,6 +117,9 @@ export default function PaymentCartPage() {
               {lines.map((line) => (
                 <tr key={line.id}>
                   <td className="px-5 py-3 font-mono text-xs">{line.invoiceNumber || line.invoiceId}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">
+                    {formatInterest(line.interestAmount)}
+                  </td>
                   <td className="px-5 py-3 text-right font-medium">{formatCurrency(line.amountToPay)}</td>
                   <td className="px-5 py-3 text-center">
                     <button

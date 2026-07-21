@@ -12,6 +12,7 @@ import {
   notifyError,
   notifySuccess,
   notifyErrorMessage,
+  localDateIso,
 } from '@plp/shared';
 import type { Loan } from '@plp/shared';
 
@@ -26,6 +27,19 @@ function parsePendingDisburseAmount(loan: Loan): number {
     return typeof v === 'number' ? v : Number(v);
   }
   return loan.sanctionedAmount ?? loan.requestedAmount;
+}
+
+function sanctionDateIso(loan: Loan): string | undefined {
+  const raw = loan.sanctionDate;
+  if (!raw) return undefined;
+  return raw.slice(0, 10);
+}
+
+function defaultDisbursementDate(loan: Loan): string {
+  const today = localDateIso();
+  const sanction = sanctionDateIso(loan);
+  if (!sanction) return today;
+  return today >= sanction ? today : sanction;
 }
 
 const REPAY_ELIGIBLE_STATUSES = ['DISBURSED', 'REPAYMENT_DUE', 'OVERDUE'] as const;
@@ -45,8 +59,13 @@ export default function LoansPage() {
   const [repaySubmitting, setRepaySubmitting] = useState(false);
   const [sanctionModalLoan, setSanctionModalLoan] = useState<Loan | null>(null);
   const [sanctionAmount, setSanctionAmount] = useState('');
-  const [sanctionDate, setSanctionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sanctionDate, setSanctionDate] = useState(() => localDateIso());
   const [sanctionSubmitting, setSanctionSubmitting] = useState(false);
+  const [disburseModalLoan, setDisburseModalLoan] = useState<Loan | null>(null);
+  const [disburseAmount, setDisburseAmount] = useState('');
+  const [disbursementDate, setDisbursementDate] = useState(() => localDateIso());
+  const [transactionRef, setTransactionRef] = useState('');
+  const [disburseSubmitting, setDisburseSubmitting] = useState(false);
   const [expandedClosedLoanIds, setExpandedClosedLoanIds] = useState<Set<string>>(() => new Set());
 
   const caps = lenderLoanCapabilities(getStoredAuthUser()?.role);
@@ -71,7 +90,7 @@ export default function LoansPage() {
 
   const handleSanction = async (loan: Loan) => {
     setSanctionAmount(String(loan.requestedAmount ?? ''));
-    setSanctionDate(new Date().toISOString().slice(0, 10));
+    setSanctionDate(localDateIso());
     setSanctionModalLoan(loan);
   };
 
@@ -118,14 +137,56 @@ export default function LoansPage() {
     });
   };
 
-  const handleInitiateDisbursement = async (loan: Loan) => {
+  const handleInitiateDisbursement = (loan: Loan) => {
+    setDisburseAmount(String(loan.sanctionedAmount ?? loan.requestedAmount ?? ''));
+    setDisbursementDate(defaultDisbursementDate(loan));
+    setTransactionRef('');
+    setDisburseModalLoan(loan);
+  };
+
+  const closeDisburseModal = () => {
+    if (disburseSubmitting) return;
+    setDisburseModalLoan(null);
+    setDisburseAmount('');
+    setTransactionRef('');
+  };
+
+  const handleSubmitInitiateDisbursement = async () => {
+    if (!disburseModalLoan) return;
+    const amount = Number.parseFloat(disburseAmount.replace(/,/g, ''));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      notifyErrorMessage('Enter a valid disbursement amount greater than zero');
+      return;
+    }
+    if (!disbursementDate) {
+      notifyErrorMessage('Select a disbursement date');
+      return;
+    }
+    const sanction = sanctionDateIso(disburseModalLoan);
+    if (sanction && disbursementDate < sanction) {
+      notifyErrorMessage(`Disbursement date cannot be before sanction date (${sanction})`);
+      return;
+    }
+    if (!transactionRef.trim()) {
+      notifyErrorMessage('Enter transaction reference / UTR number');
+      return;
+    }
+    setDisburseSubmitting(true);
     try {
-      const amount = loan.sanctionedAmount ?? loan.requestedAmount;
-      await loanApi.initiateDisbursement(loan.id, amount);
-      notifySuccess(`Disbursement initiated for ${loan.loanNumber}`);
+      await loanApi.initiateDisbursement(disburseModalLoan.id, {
+        amount,
+        disbursementDate,
+        transactionRef: transactionRef.trim(),
+      });
+      notifySuccess(`Disbursement initiated for ${disburseModalLoan.loanNumber}`);
+      setDisburseModalLoan(null);
+      setDisburseAmount('');
+      setTransactionRef('');
       reload();
     } catch (err) {
       notifyError(err, 'Initiate disbursement failed');
+    } finally {
+      setDisburseSubmitting(false);
     }
   };
 
@@ -502,6 +563,86 @@ export default function LoansPage() {
                 className="px-3 py-1.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
               >
                 {sanctionSubmitting ? 'Sanctioning…' : 'Sanction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {disburseModalLoan && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeDisburseModal();
+          }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-lg border border-slate-200 w-full max-w-md p-5"
+            role="dialog"
+            aria-labelledby="disburse-modal-title"
+          >
+            <h2 id="disburse-modal-title" className="text-lg font-semibold text-slate-800">
+              Initiate disbursement
+            </h2>
+            <p className="text-xs text-slate-500 mt-1 font-mono">{disburseModalLoan.loanNumber}</p>
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-slate-600">Disbursement amount (₹)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={disburseAmount}
+                onChange={(e) => setDisburseAmount(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none"
+                placeholder="Amount"
+                disabled={disburseSubmitting}
+              />
+            </label>
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-slate-600">Disbursement date</span>
+              {sanctionDateIso(disburseModalLoan) && (
+                <span className="block text-[11px] text-slate-400 mt-0.5">
+                  On or after sanction date ({sanctionDateIso(disburseModalLoan)})
+                </span>
+              )}
+              <input
+                type="date"
+                value={disbursementDate}
+                min={sanctionDateIso(disburseModalLoan)}
+                max={localDateIso()}
+                onChange={(e) => setDisbursementDate(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none"
+                disabled={disburseSubmitting}
+              />
+            </label>
+            <label className="block mt-4">
+              <span className="text-xs font-medium text-slate-600">Transaction ref / UTR no.</span>
+              <input
+                type="text"
+                value={transactionRef}
+                onChange={(e) => setTransactionRef(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none"
+                placeholder="Bank UTR or payment reference"
+                disabled={disburseSubmitting}
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDisburseModal}
+                disabled={disburseSubmitting}
+                className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSubmitInitiateDisbursement()}
+                disabled={disburseSubmitting}
+                className="px-3 py-1.5 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {disburseSubmitting ? 'Initiating…' : 'Initiate'}
               </button>
             </div>
           </div>

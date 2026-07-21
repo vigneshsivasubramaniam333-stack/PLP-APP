@@ -55,6 +55,8 @@ export {
   resolveLmsAccountId,
 } from './utils/loanDisplay';
 export { invoiceDueDateError } from './utils/invoiceDates';
+export { localDateIso } from './utils/localDateIso';
+export { sanitizeNonNegativeNumberInput } from './utils/nonNegativeNumberInput';
 export { InvoiceListToolbar } from './components/InvoiceListToolbar';
 export { DigitalInvoiceAttachment } from './components/DigitalInvoiceAttachment';
 export type { InvoiceListFilters } from './components/InvoiceListToolbar';

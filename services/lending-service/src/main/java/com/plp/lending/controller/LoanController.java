@@ -272,7 +272,19 @@ public class LoanController {
             @RequestBody Map<String, Object> body) {
         LoanAccessGuard.requireLoanWriteAccess(id, userId, rolesHeader, LoanMutation.INITIATE_DISBURSE);
         BigDecimal amount = new BigDecimal(body.get("amount").toString());
-        Loan loan = loanService.initiateDisbursement(id, amount, UUID.fromString(userId));
+        LocalDate disbursementDate = null;
+        if (body.containsKey("disbursementDate") && body.get("disbursementDate") != null) {
+            String raw = body.get("disbursementDate").toString().trim();
+            if (!raw.isEmpty()) {
+                disbursementDate = LocalDate.parse(raw);
+            }
+        }
+        String transactionRef = null;
+        if (body.containsKey("transactionRef") && body.get("transactionRef") != null) {
+            transactionRef = body.get("transactionRef").toString().trim();
+        }
+        Loan loan = loanService.initiateDisbursement(
+                id, amount, UUID.fromString(userId), disbursementDate, transactionRef);
         auditService.logEvent(
                 "DISBURSEMENT_INITIATED",
                 "LOAN",

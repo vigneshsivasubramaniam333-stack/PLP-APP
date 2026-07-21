@@ -43,6 +43,12 @@ public class PaymentCheckoutLine {
     @Column(name = "amount_to_pay", nullable = false, precision = 15, scale = 2)
     private BigDecimal amountToPay;
 
+    /**
+     * LMS interest due (e.g. totalNormalInterestDue) for display only — not persisted on cart lines.
+     */
+    @Transient
+    private BigDecimal interestAmount;
+
     @Column(name = "discount_amount", nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal discountAmount = BigDecimal.ZERO;

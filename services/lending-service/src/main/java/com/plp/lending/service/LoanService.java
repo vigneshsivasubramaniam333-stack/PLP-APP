@@ -25,6 +25,7 @@ import com.plp.lending.repository.LoanRepository;
 import com.plp.lending.repository.RepaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
@@ -273,18 +274,23 @@ public class LoanService {
             loan.setInterestRate(BigDecimal.ZERO);
         }
 
-        int tenureDaysForInterest = mandatoryTenureDaysPrimitive(loan);
-
-        BigDecimal interest = calculateInterestForLoan(
-                loan,
-                loan.getRequestedAmount(),
-                loan.getInterestRate(),
-                tenureDaysForInterest);
-        loan.setInterestAmount(interest);
-
         BigDecimal processingFee = loan.getProcessingFee() != null ? loan.getProcessingFee() : BigDecimal.ZERO;
-        loan.setTotalRepayable(loan.getRequestedAmount().add(interest).add(processingFee));
-        loan.setOutstandingAmount(loan.getTotalRepayable());
+        if ("INVOICE_DISCOUNTING".equals(loan.getProductType())) {
+            // Interest is calculated only at sanction/disbursement (or from LMS after account open).
+            loan.setInterestAmount(null);
+            loan.setTotalRepayable(loan.getRequestedAmount().add(processingFee));
+            loan.setOutstandingAmount(loan.getRequestedAmount());
+        } else {
+            int tenureDaysForInterest = mandatoryTenureDaysPrimitive(loan);
+            BigDecimal interest = calculateInterestForLoan(
+                    loan,
+                    loan.getRequestedAmount(),
+                    loan.getInterestRate(),
+                    tenureDaysForInterest);
+            loan.setInterestAmount(interest);
+            loan.setTotalRepayable(loan.getRequestedAmount().add(interest).add(processingFee));
+            loan.setOutstandingAmount(loan.getTotalRepayable());
+        }
 
         if ("INVOICE_DISCOUNTING".equals(loan.getProductType()) && loan.getInvoiceId() != null) {
             UUID invId = loan.getInvoiceId();
@@ -388,9 +394,16 @@ public class LoanService {
      * Treasury / admin: move sanctioned loan to pending disbursement (no limits, no invoice updates).
      */
     @Transactional
-    public Loan initiateDisbursement(UUID loanId, BigDecimal amount, UUID initiatedBy) {
+    public Loan initiateDisbursement(
+            UUID loanId, BigDecimal amount, UUID initiatedBy, LocalDate disbursementDate, String transactionRef) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Amount must be positive");
+        }
+        if (disbursementDate == null) {
+            throw new RuntimeException("Disbursement date is required");
+        }
+        if (transactionRef == null || transactionRef.isBlank()) {
+            throw new RuntimeException("Transaction reference / UTR is required");
         }
         Loan loan = getLoanForUpdate(loanId);
         if (loan.getStatus() != LoanStatus.SANCTIONED) {
@@ -400,16 +413,19 @@ public class LoanService {
         if (amount.compareTo(cap) > 0) {
             throw new RuntimeException("Initiated amount exceeds sanctioned amount");
         }
+        enforceDisbursementNotBeforeSanction(loan, disbursementDate);
         enforceSanctionDisbursementGap(loan);
 
         Map<String, Object> snap = loan.getEligibilitySnapshot();
         Map<String, Object> mutable = snap == null ? new HashMap<>() : new HashMap<>(snap);
         mutable.put("pendingDisbursementAmount", amount.toPlainString());
+        mutable.put("pendingDisbursementDate", disbursementDate.toString());
+        mutable.put("pendingDisbursementUtr", transactionRef.trim());
         loan.setEligibilitySnapshot(mutable);
         loan.setStatus(LoanStatus.DISBURSEMENT_PENDING);
 
         loanRepository.save(loan);
-        log.info("Disbursement initiated: {} amount={}", loan.getLoanNumber(), amount);
+        log.info("Disbursement initiated: {} amount={} date={}", loan.getLoanNumber(), amount, disbursementDate);
         loanEventPublisher.publishAuditEvent(
                 "LOAN",
                 loan.getId().toString(),
@@ -417,7 +433,11 @@ public class LoanService {
                 initiatedBy != null ? initiatedBy.toString() : null,
                 null,
                 "{\"status\":\"SANCTIONED\"}",
-                "{\"status\":\"DISBURSEMENT_PENDING\",\"pendingDisbursementAmount\":" + amount.toPlainString() + "}");
+                "{\"status\":\"DISBURSEMENT_PENDING\",\"pendingDisbursementAmount\":"
+                        + amount.toPlainString()
+                        + ",\"pendingDisbursementDate\":\""
+                        + disbursementDate
+                        + "\"}");
         return loan;
     }
 
@@ -474,10 +494,18 @@ public class LoanService {
             throw new RuntimeException("Disbursement amount must match initiated amount: " + pending.toPlainString());
         }
         enforceSanctionDisbursementGap(loan);
+        LocalDate pendingDate = extractPendingDisbursementDate(loan);
+        enforceDisbursementNotBeforeSanction(loan, pendingDate != null ? pendingDate : LocalDate.now());
         loan.setDisbursedAmount(disbursedAmount);
-        loan.setDisbursementDate(LocalDate.now());
+        loan.setDisbursementDate(pendingDate != null ? pendingDate : LocalDate.now());
+        String pendingUtr = extractPendingDisbursementUtr(loan);
+        if (pendingUtr != null && !pendingUtr.isBlank()) {
+            Map<String, Object> kfs = loan.getKfsData() != null ? new HashMap<>(loan.getKfsData()) : new HashMap<>();
+            kfs.put("disbursementUtr", pendingUtr.trim());
+            loan.setKfsData(kfs);
+        }
         loan.setStatus(LoanStatus.DISBURSED);
-        loan.setDueDate(LocalDate.now().plusDays(loan.getTenureDays()));
+        loan.setDueDate(loan.getDisbursementDate().plusDays(loan.getTenureDays()));
 
         BigDecimal interest = calculateInterestForLoan(loan, disbursedAmount, loan.getInterestRate(), loan.getTenureDays());
         loan.setInterestAmount(interest);
@@ -1194,15 +1222,15 @@ public class LoanService {
     }
 
     public List<Loan> getLoansByBorrower(UUID borrowerId) {
-        return loanRepository.findByBorrowerId(borrowerId);
+        return loanRepository.findByBorrowerIdOrderByCreatedAtDesc(borrowerId);
     }
 
     public List<Loan> getLoansByAnchor(UUID anchorId) {
-        return loanRepository.findByAnchorId(anchorId);
+        return loanRepository.findByAnchorIdOrderByCreatedAtDesc(anchorId);
     }
 
     public List<Loan> getLoansByInvoice(UUID invoiceId) {
-        return loanRepository.findByInvoiceId(invoiceId);
+        return loanRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId);
     }
 
     public void validateBorrowerProgramConsistency(UUID borrowerId, UUID programId) {
@@ -1237,11 +1265,11 @@ public class LoanService {
     }
 
     public List<Loan> getLoansByProgram(UUID programId) {
-        return loanRepository.findByProgramId(programId);
+        return loanRepository.findByProgramIdOrderByCreatedAtDesc(programId);
     }
 
     public List<Loan> getAllLoans() {
-        return loanRepository.findAll();
+        return loanRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
     public List<Loan> getOverdueLoans() {
@@ -1378,6 +1406,18 @@ public class LoanService {
         if (elapsed < gapDays) {
             throw new RuntimeException(
                     "Minimum " + gapDays + " day(s) required between sanction and disbursement");
+        }
+    }
+
+    /** Encore rejects disburse when value date is before LMS account open date (sanction date). */
+    private void enforceDisbursementNotBeforeSanction(Loan loan, LocalDate disbursementDate) {
+        if (loan.getSanctionDate() == null || disbursementDate == null) {
+            return;
+        }
+        if (disbursementDate.isBefore(loan.getSanctionDate())) {
+            throw new LendingBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "Disbursement date cannot be before sanction date (" + loan.getSanctionDate() + ")");
         }
     }
 
@@ -2147,7 +2187,34 @@ public class LoanService {
         }
         Map<String, Object> copy = new HashMap<>(snap);
         copy.remove("pendingDisbursementAmount");
+        copy.remove("pendingDisbursementDate");
+        copy.remove("pendingDisbursementUtr");
         loan.setEligibilitySnapshot(copy.isEmpty() ? null : copy);
+    }
+
+    private static LocalDate extractPendingDisbursementDate(Loan loan) {
+        Map<String, Object> snap = loan.getEligibilitySnapshot();
+        if (snap == null) {
+            return null;
+        }
+        Object raw = snap.get("pendingDisbursementDate");
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.toString().trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        return LocalDate.parse(s);
+    }
+
+    private static String extractPendingDisbursementUtr(Loan loan) {
+        Map<String, Object> snap = loan.getEligibilitySnapshot();
+        if (snap == null) {
+            return null;
+        }
+        Object raw = snap.get("pendingDisbursementUtr");
+        return raw == null ? null : raw.toString().trim();
     }
 
     /** Program-service: clear FINANCING_REQUESTED after cancelling pending disbursement (invoice-discounting only). */
