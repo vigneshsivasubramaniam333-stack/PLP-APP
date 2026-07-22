@@ -1,5 +1,6 @@
 package com.plp.program.service;
 
+import com.plp.program.audit.EntityAuditHelper;
 import com.plp.program.model.dto.InvoiceCsvUploadResult;
 import com.plp.program.model.dto.InvoiceDigitalAttachmentResult;
 import com.plp.program.model.entity.Borrower;
@@ -62,12 +63,19 @@ public class InvoiceService {
     private final ProgramService programService;
     private final InvoiceAutoFinanceService invoiceAutoFinanceService;
     private final EarlyPayEligibilityService earlyPayEligibilityService;
+    private final EntityAuditHelper entityAuditHelper;
 
     private static final List<String> GAP_BLOCKING_STATUSES = List.of(
             InvoiceStatus.FINANCING_REQUESTED.name(),
             "PARTIALLY_DISCOUNTED",
             "FULLY_DISCOUNTED");
-    private static final List<String> DELETABLE_STATUSES = List.of("UPLOADED", "VERIFIED");
+    private static final List<String> DELETABLE_STATUSES = List.of(
+            "UPLOADED",
+            "VERIFIED",
+            "ELIGIBLE",
+            "BORROWER_ACCEPTED",
+            "REJECTED"
+    );
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -133,6 +141,15 @@ public class InvoiceService {
         invoice.setSource("MANUAL");
         invoice.setUploadedByUserId(uploadedByUserId);
         invoice = invoiceRepository.save(invoice);
+        entityAuditHelper.captureCreate(
+                "INVOICE",
+                invoice.getId().toString(),
+                invoice,
+                uploadedByUserId != null ? uploadedByUserId.toString() : null,
+                null,
+                null,
+                null,
+                "Invoice created with status " + invoice.getStatus());
         if (createAsApproved) {
             invoice = applyPostEligibleAutomation(invoice);
         }
@@ -355,13 +372,16 @@ public class InvoiceService {
     public Invoice verifyInvoice(UUID invoiceId, UUID verifiedBy) {
         Invoice invoice = getInvoice(invoiceId);
         requirePurchaseBillFlow(invoice, "verify");
+        String previousStatus = invoice.getStatus();
         invoice.setVerified(true);
         invoice.setVerifiedAt(Instant.now());
         invoice.setVerifiedBy(verifiedBy);
         if ("UPLOADED".equals(invoice.getStatus())) {
             invoice.setStatus("VERIFIED");
         }
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Invoice verified");
+        return invoice;
     }
 
     @Transactional
@@ -372,10 +392,12 @@ public class InvoiceService {
             throw new RuntimeException(
                     "Invoice must be in VERIFIED state before anchor confirmation. Current status: " + invoice.getStatus());
         }
+        String previousStatus = invoice.getStatus();
         invoice.setAnchorConfirmed(true);
         invoice.setAnchorConfirmedAt(Instant.now());
         invoice.setStatus("ELIGIBLE");
         invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Invoice confirmed by anchor");
         return applyPostEligibleAutomation(invoice);
     }
 
@@ -420,8 +442,10 @@ public class InvoiceService {
         }
         invoice.setBorrowerAccepted(true);
         invoice.setBorrowerAcceptedAt(Instant.now());
+        String previousStatus = invoice.getStatus();
         invoice.setStatus("BORROWER_ACCEPTED");
         invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Invoice accepted by borrower");
         maybeAutoPullFinance(invoice);
         return invoiceRepository.findById(invoiceId).orElse(invoice);
     }
@@ -444,8 +468,11 @@ public class InvoiceService {
         invoice.setVerifiedAt(Instant.now());
         invoice.setAnchorConfirmed(true);
         invoice.setAnchorConfirmedAt(Instant.now());
+        String previousStatus = invoice.getStatus();
         invoice.setStatus("ELIGIBLE");
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Seller invoice approved by anchor");
+        return invoice;
     }
 
     /**
@@ -462,10 +489,13 @@ public class InvoiceService {
             throw new RuntimeException(
                     "Anchor rejection allowed only when invoice status is UPLOADED. Current: " + invoice.getStatus());
         }
+        String previousStatus = invoice.getStatus();
         invoice.setStatus(InvoiceStatus.REJECTED.name());
         invoice.setRejectionReason(reason);
         invoice.setRejectedAt(Instant.now());
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Seller invoice rejected by anchor");
+        return invoice;
     }
 
     /**
@@ -498,7 +528,9 @@ public class InvoiceService {
         log.info("Updating invoice {} status from {} to FINANCING_REQUESTED", invoiceId, current);
         invoice.setStatus(InvoiceStatus.FINANCING_REQUESTED.name());
         invoice.setLastFinanceRequestedAt(Instant.now());
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, current, "Financing requested");
+        return invoice;
     }
 
     /**
@@ -515,8 +547,10 @@ public class InvoiceService {
         invoice.setStatus(InvoiceStatus.REJECTED.name());
         invoice.setRejectionReason(reason);
         invoice.setRejectedAt(Instant.now());
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, current, "Invoice rejected after finance request");
         log.info("Invoice {} marked REJECTED: {}", invoiceId, reason);
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     /**
@@ -536,8 +570,10 @@ public class InvoiceService {
         }
         invoice.setStatus(InvoiceStatus.CLOSED.name());
         invoice.setClosedAt(Instant.now());
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, current, "Invoice closed after repayment");
         log.info("Invoice {} marked CLOSED", invoiceId);
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     /**
@@ -564,8 +600,10 @@ public class InvoiceService {
         } else {
             throw new RuntimeException("Cannot revert FINANCING_REQUESTED for flowType: " + flow);
         }
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, current, "Financing request reverted");
         log.info("Reverted invoice {} from FINANCING_REQUESTED to {}", invoiceId, invoice.getStatus());
-        return invoiceRepository.save(invoice);
+        return invoice;
     }
 
     @Transactional
@@ -579,6 +617,7 @@ public class InvoiceService {
             throw new RuntimeException("Partial discount is not allowed for this program");
         }
         BigDecimal newDiscounted = existing.add(discountedAmount);
+        String previousStatus = invoice.getStatus();
         invoice.setDiscountedAmount(newDiscounted);
         invoice.setAvailableAmount(invoice.getEligibleAmount().subtract(newDiscounted));
         if (invoice.getAvailableAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -587,7 +626,9 @@ public class InvoiceService {
         } else {
             invoice.setStatus("PARTIALLY_DISCOUNTED");
         }
-        return invoiceRepository.save(invoice);
+        invoice = invoiceRepository.save(invoice);
+        recordStatusChange(invoice, previousStatus, "Invoice discount recorded");
+        return invoice;
     }
 
     @Transactional
@@ -599,9 +640,21 @@ public class InvoiceService {
             throw new RuntimeException("Invoice delete is not enabled for this program");
         }
         String status = invoice.getStatus();
+        if (status != null && "FINANCING_REQUESTED".equalsIgnoreCase(status.trim())) {
+            throw new RuntimeException("Invoice cannot be deleted after finance has been requested");
+        }
         if (status == null || !DELETABLE_STATUSES.contains(status)) {
             throw new RuntimeException("Invoice cannot be deleted in status: " + status);
         }
+        entityAuditHelper.captureDelete(
+                "INVOICE",
+                invoiceId.toString(),
+                invoice,
+                null,
+                null,
+                null,
+                null,
+                "Invoice deleted before finance request");
         invoiceRepository.delete(invoice);
         log.info("Invoice deleted: {} status={}", invoiceId, status);
     }
@@ -1273,5 +1326,19 @@ public class InvoiceService {
         invoice.setEligibleAmount(eligible);
         invoice.setAvailableAmount(eligible.subtract(
                 invoice.getDiscountedAmount() != null ? invoice.getDiscountedAmount() : BigDecimal.ZERO));
+    }
+
+    private void recordStatusChange(Invoice invoice, String previousStatus, String message) {
+        if (previousStatus == null || previousStatus.equals(invoice.getStatus())) {
+            return;
+        }
+        entityAuditHelper.captureInvoiceStatusChange(
+                invoice.getId().toString(),
+                invoice.getInvoiceNumber(),
+                previousStatus,
+                invoice.getStatus(),
+                invoice.getUploadedByUserId() != null ? invoice.getUploadedByUserId().toString() : null,
+                null,
+                message);
     }
 }

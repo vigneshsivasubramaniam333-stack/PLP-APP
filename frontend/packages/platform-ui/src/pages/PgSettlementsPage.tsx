@@ -8,11 +8,13 @@ import {
 
 export default function PgSettlementsPage() {
   const [pipRows, setPipRows] = useState<PaymentInProgressRow[]>([]);
+  const [closedRows, setClosedRows] = useState<PaymentInProgressRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [utr, setUtr] = useState('');
   const [settlementDate, setSettlementDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(true);
+  const [closedLoading, setClosedLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
@@ -27,12 +29,30 @@ export default function PgSettlementsPage() {
     }
   }, []);
 
+  const loadClosed = useCallback(async () => {
+    setClosedLoading(true);
+    try {
+      const res = await pgSettlementApi.listSettledPip();
+      setClosedRows(res.data?.data ?? []);
+    } catch (err) {
+      notifyError(err, 'Could not load closed settlements');
+    } finally {
+      setClosedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadClosed();
+  }, [load, loadClosed]);
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n || 0);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -59,7 +79,7 @@ export default function PgSettlementsPage() {
       notifySuccess('Settlement applied and repayments posted');
       setSelected(new Set());
       setUtr('');
-      await load();
+      await Promise.all([load(), loadClosed()]);
     } catch (err) {
       notifyError(err, 'Settlement failed');
     } finally {
@@ -119,49 +139,139 @@ export default function PgSettlementsPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80">
-          <span className="text-xs font-semibold text-slate-500 uppercase">Open PRUS / PIP</span>
-        </div>
-        {loading ? (
-          <p className="p-8 text-sm text-slate-400 text-center">Loading…</p>
-        ) : pipRows.length === 0 ? (
-          <p className="p-8 text-sm text-slate-400 text-center">No open payment-in-progress lines.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-2 w-10 align-middle" />
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Invoice</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Borrower</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase align-middle whitespace-nowrap tabular-nums">Amount</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {pipRows.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50/50">
+      <PipTable
+        title="Open PRUS / PIP"
+        loading={loading}
+        rows={pipRows}
+        empty="No open payment-in-progress lines."
+        selectable
+        selected={selected}
+        onToggle={toggle}
+        formatCurrency={formatCurrency}
+        showSettledAt={false}
+      />
+
+      <div className="mt-6">
+        <PipTable
+          title="Closed settlements"
+          loading={closedLoading}
+          rows={closedRows}
+          empty="No closed settlements yet."
+          selectable={false}
+          selected={new Set()}
+          onToggle={() => undefined}
+          formatCurrency={formatCurrency}
+          showSettledAt
+        />
+      </div>
+    </div>
+  );
+}
+
+function PipTable({
+  title,
+  loading,
+  rows,
+  empty,
+  selectable,
+  selected,
+  onToggle,
+  formatCurrency,
+  showSettledAt,
+}: {
+  title: string;
+  loading: boolean;
+  rows: PaymentInProgressRow[];
+  empty: string;
+  selectable: boolean;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  formatCurrency: (n: number) => string;
+  showSettledAt: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80">
+        <span className="text-xs font-semibold text-slate-500 uppercase">{title}</span>
+      </div>
+      {loading ? (
+        <p className="p-8 text-sm text-slate-400 text-center">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="p-8 text-sm text-slate-400 text-center">{empty}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              {selectable ? <col className="w-10" /> : null}
+              <col />
+              <col />
+              <col className="w-36" />
+              <col className="w-44" />
+              {showSettledAt ? <col className="w-44" /> : null}
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                {selectable ? <th className="px-4 py-2 w-10 align-middle" /> : null}
+                <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">
+                  Invoice No
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">
+                  Borrower Name
+                </th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase align-middle whitespace-nowrap tabular-nums">
+                  Amount
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">
+                  Created
+                </th>
+                {showSettledAt ? (
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase align-middle">
+                    Settled
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50/50">
+                  {selectable ? (
                     <td className="px-4 py-2 text-center align-middle">
                       <input
                         type="checkbox"
                         checked={selected.has(row.id)}
-                        onChange={() => toggle(row.id)}
+                        onChange={() => onToggle(row.id)}
                       />
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs align-middle">{row.invoiceId}</td>
-                    <td className="px-4 py-2 font-mono text-xs align-middle">{row.borrowerId}</td>
-                    <td className="px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap align-middle">{formatCurrency(row.principalAmount)}</td>
+                  ) : null}
+                  <td
+                    className="px-4 py-2 text-sm font-medium text-slate-800 align-middle truncate"
+                    title={row.invoiceId}
+                  >
+                    {row.invoiceNumber?.trim() || row.invoiceId}
+                  </td>
+                  <td
+                    className="px-4 py-2 text-sm text-slate-700 align-middle truncate"
+                    title={row.borrowerId}
+                  >
+                    {row.borrowerName?.trim() || row.borrowerId}
+                  </td>
+                  <td className="px-4 py-2 text-right font-medium tabular-nums whitespace-nowrap align-middle">
+                    {formatCurrency(Number(row.principalAmount))}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-slate-500 align-middle whitespace-nowrap">
+                    {row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
+                  </td>
+                  {showSettledAt ? (
                     <td className="px-4 py-2 text-xs text-slate-500 align-middle whitespace-nowrap">
-                      {row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
+                      {row.settledAt ? new Date(row.settledAt).toLocaleString() : '—'}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,5 @@
 package com.plp.lending.payment.controller;
 
-import com.plp.lending.payment.model.PaymentInProgress;
 import com.plp.lending.payment.model.PaymentTransaction;
 import com.plp.lending.payment.model.PgSettlementBatch;
 import com.plp.lending.payment.service.PaymentSettlementService;
@@ -25,8 +24,14 @@ public class PaymentSettlementController {
     public ResponseEntity<Map<String, Object>> listOpenPip(
             @RequestHeader(value = LenderRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader) {
         LenderRoleAuthorization.requireRepayRoles(rolesHeader);
-        List<PaymentInProgress> rows = settlementService.listOpenPip();
-        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", rows));
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", settlementService.listOpenPipViews()));
+    }
+
+    @GetMapping("/pip/settled")
+    public ResponseEntity<Map<String, Object>> listSettledPip(
+            @RequestHeader(value = LenderRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader) {
+        LenderRoleAuthorization.requireRepayRoles(rolesHeader);
+        return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", settlementService.listSettledPipViews()));
     }
 
     @GetMapping("/transactions")

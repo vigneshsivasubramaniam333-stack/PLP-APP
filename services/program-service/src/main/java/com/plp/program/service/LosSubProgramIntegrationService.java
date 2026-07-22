@@ -207,6 +207,11 @@ public class LosSubProgramIntegrationService {
         } else if (sp.getMaxTenureDays() == null && program.getMaxTenureDays() != null) {
             sp.setMaxTenureDays(program.getMaxTenureDays());
         }
+        // LOS borrower-sanction sync sends preApproved=true; promote DRAFT → ACTIVE without a separate call.
+        if (Boolean.TRUE.equals(req.getPreApproved())
+                && (sp.getStatus() == null || "DRAFT".equalsIgnoreCase(sp.getStatus()))) {
+            sp.setStatus("ACTIVE");
+        }
     }
 
     private static BigDecimal resolveInterestRate(Program program, LosSubProgramUpsertRequest req) {

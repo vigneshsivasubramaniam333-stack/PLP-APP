@@ -141,11 +141,14 @@ public class SubProgramService {
     }
 
     /**
-     * Approves a draft sub-program (sets status ACTIVE).
+     * Approves a draft sub-program (sets status ACTIVE). Idempotent when already ACTIVE.
      */
     @Transactional
     public SubProgram approveSubProgram(UUID id) {
         SubProgram sp = getSubProgram(id);
+        if ("ACTIVE".equals(sp.getStatus())) {
+            return sp;
+        }
         if (!"DRAFT".equals(sp.getStatus())) {
             throw new RuntimeException("Only sub-programs in DRAFT status can be approved");
         }

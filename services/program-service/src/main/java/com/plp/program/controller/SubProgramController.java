@@ -3,6 +3,7 @@ package com.plp.program.controller;
 import com.plp.program.audit.AuditBridge;
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.audit.EntityAuditHelper;
 import com.plp.program.model.dto.EffectiveBorrowerTermsDto;
 import com.plp.program.model.dto.SubProgramBorrowerTermsDto;
 import com.plp.program.model.dto.SubProgramEditDto;
@@ -36,6 +37,7 @@ public class SubProgramController {
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final SubProgramBorrowerTermsResolver borrowerTermsResolver;
     private final AuditService auditService;
+    private final EntityAuditHelper entityAuditHelper;
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(
@@ -57,6 +59,15 @@ public class SubProgramController {
                 linkedEntityType,
                 "SUCCESS",
                 null);
+        entityAuditHelper.captureCreate(
+                "SUBPROGRAM",
+                created.getId().toString(),
+                created,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Sub-program created");
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("status", "SUCCESS", "data", created));
     }
 
@@ -111,6 +122,7 @@ public class SubProgramController {
             @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
             @RequestHeader(value = SubProgramAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         SubProgramAccessGuard.requireSubProgramWriteAccess(rolesHeader);
+        SubProgram before = subProgramService.getSubProgram(id);
         SubProgram updated = subProgramService.updateSubProgram(id, dto);
         auditService.logEvent(
                 "SUBPROGRAM_UPDATED",
@@ -123,6 +135,16 @@ public class SubProgramController {
                 linkedEntityType,
                 "SUCCESS",
                 null);
+        entityAuditHelper.captureUpdate(
+                "SUBPROGRAM",
+                id.toString(),
+                before,
+                updated,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Sub-program updated");
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
     }
 

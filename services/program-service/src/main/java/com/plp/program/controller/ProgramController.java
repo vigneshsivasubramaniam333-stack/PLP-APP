@@ -2,6 +2,7 @@ package com.plp.program.controller;
 
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.audit.EntityAuditHelper;
 import com.plp.program.model.dto.ProgramEditDto;
 import com.plp.program.model.entity.Program;
 import com.plp.program.model.entity.SubProgram;
@@ -29,6 +30,7 @@ public class ProgramController {
     private final SubProgramService subProgramService;
     private final SubProgramBorrowerRepository subProgramBorrowerRepository;
     private final AuditService auditService;
+    private final EntityAuditHelper entityAuditHelper;
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createProgram(
@@ -50,6 +52,15 @@ public class ProgramController {
                 linkedEntityType,
                 "SUCCESS",
                 null);
+        entityAuditHelper.captureCreate(
+                "PROGRAM",
+                created.getId().toString(),
+                created,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Program created");
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("status", "SUCCESS", "data", created));
     }
 
@@ -69,9 +80,23 @@ public class ProgramController {
     public ResponseEntity<Map<String, Object>> updateProgram(
             @PathVariable UUID id,
             @RequestBody ProgramEditDto body,
-            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader) {
+            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         LenderPortalRoleAuthorization.requireCreditAnalystOrManager(rolesHeader);
+        Program before = programService.getProgram(id);
         Program updated = programService.updateProgram(id, body);
+        entityAuditHelper.captureUpdate(
+                "PROGRAM",
+                id.toString(),
+                before,
+                updated,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Program updated");
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", updated));
     }
 

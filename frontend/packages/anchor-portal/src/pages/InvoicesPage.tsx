@@ -111,6 +111,34 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this invoice permanently? This cannot be undone.')) {
+      return;
+    }
+    try {
+      await portalApi.anchorDeleteInvoice(id);
+      loadInvoices();
+    } catch (err) {
+      console.error(err);
+      window.alert(err instanceof Error ? err.message : 'Could not delete invoice');
+    }
+  };
+
+  const invoiceDeleteAllowed = useMemo(() => {
+    const program = programs.find((p) => p.id === umbrellaProgramId);
+    const raw = (program?.parameters as Record<string, unknown> | undefined)?.invoiceDelete;
+    if (raw == null) return false;
+    const s = String(raw).trim().toLowerCase();
+    return s === 'true' || s === 'yes' || s === 'y';
+  }, [programs, umbrellaProgramId]);
+
+  const canDeleteInvoice = (status: string) => {
+    if (!invoiceDeleteAllowed) return false;
+    const s = (status ?? '').toUpperCase();
+    if (s === 'FINANCING_REQUESTED') return false;
+    return ['UPLOADED', 'VERIFIED', 'ELIGIBLE', 'BORROWER_ACCEPTED', 'REJECTED'].includes(s);
+  };
+
   const toggleLoanDetails = (invoiceId: string) => {
     setExpandedLoanInvoiceIds((prev) => {
       const next = new Set(prev);
@@ -261,6 +289,15 @@ export default function InvoicesPage() {
                                   Confirm
                                 </button>
                               </span>
+                            ) : null}
+                            {canDeleteInvoice(inv.status) ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(inv.id)}
+                                className="bt-btn bt-btn-secondary bt-btn-sm text-rose-700"
+                              >
+                                Delete
+                              </button>
                             ) : null}
                             {showLoanDetails ? (
                               <button

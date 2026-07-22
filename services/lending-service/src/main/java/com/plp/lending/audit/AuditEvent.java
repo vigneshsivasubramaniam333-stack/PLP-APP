@@ -3,8 +3,11 @@ package com.plp.lending.audit;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -49,6 +52,17 @@ public class AuditEvent {
 
     @Column(length = 2000)
     private String message;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "old_values", columnDefinition = "jsonb")
+    private Map<String, Object> oldValues;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "new_values", columnDefinition = "jsonb")
+    private Map<String, Object> newValues;
+
+    @Column(name = "changed_fields", columnDefinition = "text")
+    private String changedFields;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

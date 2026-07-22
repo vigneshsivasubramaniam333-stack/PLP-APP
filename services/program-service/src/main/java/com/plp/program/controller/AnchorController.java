@@ -2,6 +2,7 @@ package com.plp.program.controller;
 
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.audit.EntityAuditHelper;
 import com.plp.program.model.entity.Anchor;
 import com.plp.program.model.enums.AnchorStatus;
 import com.plp.program.repository.AnchorRepository;
@@ -22,6 +23,7 @@ public class AnchorController {
 
     private final AnchorRepository anchorRepository;
     private final AuditService auditService;
+    private final EntityAuditHelper entityAuditHelper;
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createAnchor(
@@ -44,6 +46,15 @@ public class AnchorController {
                 linkedEntityType,
                 "SUCCESS",
                 null);
+        entityAuditHelper.captureCreate(
+                "ANCHOR",
+                created.getId().toString(),
+                created,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Anchor created");
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("status", "SUCCESS", "data", created));
     }
 
@@ -64,10 +75,14 @@ public class AnchorController {
     public ResponseEntity<Map<String, Object>> updateAnchor(
             @PathVariable UUID id,
             @RequestBody Anchor updated,
-            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader) {
+            @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         LenderPortalRoleAuthorization.requireCreditAnalystOrManager(rolesHeader);
         Anchor anchor = anchorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Anchor not found: " + id));
+        Anchor before = copyAnchor(anchor);
         anchor.setEntityName(updated.getEntityName());
         anchor.setContactPersonName(updated.getContactPersonName());
         anchor.setContactEmail(updated.getContactEmail());
@@ -77,6 +92,16 @@ public class AnchorController {
         anchor.setIntegrationConfig(updated.getIntegrationConfig());
         anchor.setRating(updated.getRating());
         anchorRepository.save(anchor);
+        entityAuditHelper.captureUpdate(
+                "ANCHOR",
+                id.toString(),
+                before,
+                anchor,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Anchor updated");
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", anchor));
     }
 
@@ -91,6 +116,7 @@ public class AnchorController {
         LenderPortalRoleAuthorization.requireCreditManagerApprove(rolesHeader);
         Anchor anchor = anchorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Anchor not found: " + id));
+        AnchorStatus oldStatus = anchor.getStatus();
         AnchorStatus newStatus = AnchorStatus.valueOf(body.get("status"));
         anchor.setStatus(newStatus);
         anchorRepository.save(anchor);
@@ -106,6 +132,18 @@ public class AnchorController {
                     linkedEntityType,
                     "SUCCESS",
                     null);
+        }
+        if (oldStatus != newStatus) {
+            entityAuditHelper.captureUpdate(
+                    "ANCHOR",
+                    id.toString(),
+                    Map.of("status", oldStatus != null ? oldStatus.name() : null),
+                    Map.of("status", newStatus.name()),
+                    userIdHeader,
+                    rolesHeader,
+                    linkedEntityId,
+                    linkedEntityType,
+                    "Anchor status changed");
         }
         return ResponseEntity.ok(Map.of("status", "SUCCESS", "data", anchor));
     }
@@ -124,5 +162,21 @@ public class AnchorController {
             }
         }
         throw new RuntimeException("Unable to generate a unique anchor code");
+    }
+
+    private static Anchor copyAnchor(Anchor source) {
+        Anchor copy = new Anchor();
+        copy.setId(source.getId());
+        copy.setAnchorCode(source.getAnchorCode());
+        copy.setEntityName(source.getEntityName());
+        copy.setContactPersonName(source.getContactPersonName());
+        copy.setContactEmail(source.getContactEmail());
+        copy.setContactPhone(source.getContactPhone());
+        copy.setAddress(source.getAddress());
+        copy.setBankAccount(source.getBankAccount());
+        copy.setIntegrationConfig(source.getIntegrationConfig());
+        copy.setRating(source.getRating());
+        copy.setStatus(source.getStatus());
+        return copy;
     }
 }

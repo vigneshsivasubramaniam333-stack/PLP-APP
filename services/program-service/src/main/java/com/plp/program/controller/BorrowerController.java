@@ -2,6 +2,7 @@ package com.plp.program.controller;
 
 import com.plp.program.audit.AuditHeaders;
 import com.plp.program.audit.AuditService;
+import com.plp.program.audit.EntityAuditHelper;
 import com.plp.program.model.dto.BorrowerCreateRequest;
 import com.plp.program.model.entity.Borrower;
 import com.plp.program.model.entity.BorrowerLimit;
@@ -35,6 +36,7 @@ public class BorrowerController {
     private final LimitService limitService;
     private final AuditService auditService;
     private final BorrowerPaymentProfileService borrowerPaymentProfileService;
+    private final EntityAuditHelper entityAuditHelper;
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createBorrower(
@@ -56,6 +58,15 @@ public class BorrowerController {
                 linkedEntityType,
                 "SUCCESS",
                 null);
+        entityAuditHelper.captureCreate(
+                "BORROWER",
+                created.getId().toString(),
+                created,
+                userIdHeader,
+                rolesHeader,
+                linkedEntityId,
+                linkedEntityType,
+                "Borrower created");
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("status", "SUCCESS", "data", created));
     }
 
@@ -172,13 +183,29 @@ public class BorrowerController {
             @PathVariable UUID id,
             @RequestBody Map<String, String> body,
             @RequestHeader(value = LenderPortalRoleAuthorization.HEADER_USER_ROLES, required = false)
-                    String rolesHeader) {
+                    String rolesHeader,
+            @RequestHeader(value = AuditHeaders.X_USER_ID, required = false) String userIdHeader,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = AuditHeaders.X_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
         LenderPortalRoleAuthorization.requireCreditManagerApprove(rolesHeader);
         Borrower borrower =
                 borrowerRepository.findById(id).orElseThrow(() -> new RuntimeException("Borrower not found: " + id));
+        BorrowerStatus oldStatus = borrower.getStatus();
         BorrowerStatus newStatus = BorrowerStatus.valueOf(body.get("status"));
         borrower.setStatus(newStatus);
         borrowerRepository.save(borrower);
+        if (oldStatus != newStatus) {
+            entityAuditHelper.captureUpdate(
+                    "BORROWER",
+                    id.toString(),
+                    Map.of("status", oldStatus != null ? oldStatus.name() : null),
+                    Map.of("status", newStatus.name()),
+                    userIdHeader,
+                    rolesHeader,
+                    linkedEntityId,
+                    linkedEntityType,
+                    "Borrower status changed");
+        }
         if (newStatus == BorrowerStatus.ACTIVE) {
             activatePendingSubProgramLinks(id);
         }

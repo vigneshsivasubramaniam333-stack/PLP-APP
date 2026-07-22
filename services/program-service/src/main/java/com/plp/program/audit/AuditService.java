@@ -22,6 +22,36 @@ public class AuditService {
             String linkedEntityTypeHeader,
             String status,
             String message) {
+        logEventWithValues(
+                eventType,
+                entityType,
+                entityId,
+                action,
+                userIdHeader,
+                userRolesHeader,
+                linkedEntityIdHeader,
+                linkedEntityTypeHeader,
+                status,
+                message,
+                null,
+                null,
+                null);
+    }
+
+    public void logEventWithValues(
+            String eventType,
+            String entityType,
+            String entityId,
+            String action,
+            String userIdHeader,
+            String userRolesHeader,
+            String linkedEntityIdHeader,
+            String linkedEntityTypeHeader,
+            String status,
+            String message,
+            java.util.Map<String, Object> oldValues,
+            java.util.Map<String, Object> newValues,
+            String changedFields) {
         try {
             AuditEvent row =
                     AuditEvent.builder()
@@ -35,6 +65,9 @@ public class AuditService {
                             .linkedEntityType(truncate(linkedEntityTypeHeader, 64))
                             .status(truncate(status, 32))
                             .message(truncate(message, 2000))
+                            .oldValues(oldValues)
+                            .newValues(newValues)
+                            .changedFields(truncate(changedFields, 4000))
                             .build();
             auditEventRepository.save(row);
         } catch (Exception e) {

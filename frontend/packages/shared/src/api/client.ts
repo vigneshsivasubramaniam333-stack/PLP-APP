@@ -242,6 +242,8 @@ export const invoiceApi = {
       responseType: 'blob',
       headers: invoiceAccessHeaders(),
     }),
+  delete: (invoiceId: string) =>
+    apiClient.delete(`/api/v1/invoices/${invoiceId}`, { headers: invoiceAccessHeaders() }),
 };
 
 export const loanApi = {
@@ -368,6 +370,8 @@ export const portalApi = {
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/verify`),
   anchorConfirmInvoice: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/confirm`),
+  anchorDeleteInvoice: (invoiceId: string) =>
+    apiClient.delete(`/api/v1/invoices/${invoiceId}`, { headers: invoiceAccessHeaders() }),
   anchorApproveSellerInvoice: (invoiceId: string) =>
     apiClient.post(`/api/v1/portal/anchor/invoices/${invoiceId}/approve`),
   anchorRejectSellerInvoice: (invoiceId: string, reason?: string) =>
@@ -495,6 +499,9 @@ export interface AuditEventRow {
   linkedEntityType: string | null;
   status: string;
   message: string | null;
+  oldValues?: Record<string, unknown> | null;
+  newValues?: Record<string, unknown> | null;
+  changedFields?: string | null;
   createdAt: string;
 }
 
@@ -531,7 +538,34 @@ export const auditApi = {
       params,
       headers: lenderLoanActionHeaders(),
     }),
+  listLmsOperations: (params?: { loanId?: string; page?: number; size?: number }) =>
+    apiClient.get<{ status?: string; data?: LmsOpsPageBody }>('/api/v1/lending-audit/lms-operations', {
+      params,
+      headers: lenderLoanActionHeaders(),
+    }),
 };
+
+export interface LmsOperationRow {
+  id: string;
+  loanId: string;
+  operation: string;
+  encoreAccountId?: string | null;
+  status: string;
+  requestJson?: string | null;
+  responseJson?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
+}
+
+export interface LmsOpsPageBody {
+  content: LmsOperationRow[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first?: boolean;
+  last?: boolean;
+}
 
 export const kfsApi = {
   getKfs: (loanId: string) =>
@@ -573,11 +607,15 @@ export interface PaymentInProgressRow {
   id: string;
   pgTransactionId: string;
   invoiceId: string;
+  invoiceNumber?: string | null;
   loanId: string;
   borrowerId: string;
+  borrowerName?: string | null;
   principalAmount: number;
   discountAmount: number;
   pipStatus: string;
+  settlementBatchId?: string | null;
+  settledAt?: string | null;
   createdAt?: string;
 }
 
@@ -632,6 +670,11 @@ export const pgSettlementApi = {
   listOpenPip: () =>
     apiClient.get<{ status?: string; data?: PaymentInProgressRow[] }>(
       '/api/v1/payments/settlements/pip',
+      { headers: lenderLoanActionHeaders() },
+    ),
+  listSettledPip: () =>
+    apiClient.get<{ status?: string; data?: PaymentInProgressRow[] }>(
+      '/api/v1/payments/settlements/pip/settled',
       { headers: lenderLoanActionHeaders() },
     ),
   listTransactions: () =>

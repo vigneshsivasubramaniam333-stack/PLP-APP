@@ -382,6 +382,29 @@ public class InvoiceController {
         }
     }
 
+    /**
+     * LOS / borrower-portal delete for seller-initiated invoices (SBD/PO).
+     * Uses lender JWT like {@code borrower-accept}, scoped by {@code borrowerId}.
+     */
+    @DeleteMapping("/{id}/borrower-delete")
+    public ResponseEntity<Map<String, Object>> borrowerDeleteInvoice(
+            @PathVariable UUID id,
+            @RequestParam UUID borrowerId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_USER_ROLES, required = false) String rolesHeader,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_ID, required = false) String linkedEntityId,
+            @RequestHeader(value = InvoiceAccessGuard.HEADER_LINKED_ENTITY_TYPE, required = false) String linkedEntityType) {
+        Invoice invoice = invoiceService.getInvoice(id);
+        UUID effectiveBorrowerId = InvoiceAccessGuard.resolveBorrowerIdForAccept(
+                invoice, rolesHeader, linkedEntityId, linkedEntityType, borrowerId);
+        InvoiceAccessGuard.requireBorrowerOwnedSellerInvoiceForDelete(invoice, effectiveBorrowerId);
+        try {
+            invoiceService.deleteInvoice(id);
+            return ResponseEntity.ok(Map.of("status", "SUCCESS"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", e.getMessage()));
+        }
+    }
+
     @PostMapping("/{id}/pip-adjust")
     public ResponseEntity<Invoice> adjustPip(
             @PathVariable UUID id,

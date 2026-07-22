@@ -4,9 +4,11 @@ import {
   type AuditEventRow,
   type AuditEventsPageBody,
   type AuditListParams,
+  type LmsOperationRow,
+  type LmsOpsPageBody,
 } from '@plp/shared';
 
-type AuditTab = 'program' | 'lending';
+type AuditTab = 'program' | 'lending' | 'lms' | 'invoices';
 
 const pageSize = 50;
 
@@ -61,9 +63,13 @@ export default function AuditTrailPage() {
   const [applied, setApplied] = useState(emptyFilters);
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<AuditEventRow[]>([]);
+  const [lmsRows, setLmsRows] = useState<LmsOperationRow[]>([]);
   const [pageInfo, setPageInfo] = useState<Omit<AuditEventsPageBody, 'content'> | null>(null);
+  const [lmsPageInfo, setLmsPageInfo] = useState<Omit<LmsOpsPageBody, 'content'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loanIdFilter, setLoanIdFilter] = useState('');
+  const [expandedLms, setExpandedLms] = useState<string | null>(null);
 
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineTarget, setTimelineTarget] = useState<{ entityType: string; entityId: string } | null>(
@@ -74,10 +80,17 @@ export default function AuditTrailPage() {
   const [timelineError, setTimelineError] = useState<string | null>(null);
 
   const buildParams = useCallback(
-    (p: number, f: typeof emptyFilters): AuditListParams => {
+    (p: number, f: typeof emptyFilters, currentTab: AuditTab): AuditListParams => {
       const params: AuditListParams = { page: p, size: pageSize };
+      // Invoice tab always scopes to INVOICE; other tabs must not keep a sticky INVOICE filter.
+      const entityType =
+        currentTab === 'invoices'
+          ? 'INVOICE'
+          : f.entityType.trim() === 'INVOICE'
+            ? ''
+            : f.entityType.trim();
       if (f.eventType.trim()) params.eventType = f.eventType.trim();
-      if (f.entityType.trim()) params.entityType = f.entityType.trim();
+      if (entityType) params.entityType = entityType;
       if (f.status.trim()) params.status = f.status.trim();
       if (f.performedByRole.trim()) params.performedByRole = f.performedByRole.trim();
       if (f.fromDate.trim()) params.fromDate = f.fromDate.trim();
@@ -91,27 +104,49 @@ export default function AuditTrailPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = buildParams(page, applied);
-      const res =
-        tab === 'program'
-          ? await auditApi.listProgramAudit(params)
-          : await auditApi.listLendingAudit(params);
-      const body = res.data?.data;
-      setRows(body?.content ?? []);
-      if (body) {
-        const { content: _c, ...rest } = body;
-        setPageInfo(rest);
-      } else {
+      if (tab === 'lms') {
+        const res = await auditApi.listLmsOperations({
+          page,
+          size: pageSize,
+          ...(loanIdFilter.trim() ? { loanId: loanIdFilter.trim() } : {}),
+        });
+        const body = res.data?.data;
+        setLmsRows(body?.content ?? []);
+        setRows([]);
         setPageInfo(null);
+        if (body) {
+          const { content: _c, ...rest } = body;
+          setLmsPageInfo(rest);
+        } else {
+          setLmsPageInfo(null);
+        }
+      } else {
+        const params = buildParams(page, applied, tab);
+        const res =
+          tab === 'program' || tab === 'invoices'
+            ? await auditApi.listProgramAudit(params)
+            : await auditApi.listLendingAudit(params);
+        const body = res.data?.data;
+        setRows(body?.content ?? []);
+        setLmsRows([]);
+        setLmsPageInfo(null);
+        if (body) {
+          const { content: _c, ...rest } = body;
+          setPageInfo(rest);
+        } else {
+          setPageInfo(null);
+        }
       }
     } catch (e: unknown) {
       setRows([]);
+      setLmsRows([]);
       setPageInfo(null);
+      setLmsPageInfo(null);
       setError(e instanceof Error ? e.message : 'Failed to load audit events');
     } finally {
       setLoading(false);
     }
-  }, [applied, buildParams, page, tab]);
+  }, [applied, buildParams, page, tab, loanIdFilter]);
 
   useEffect(() => {
     void fetchPage();
@@ -180,6 +215,14 @@ export default function AuditTrailPage() {
   const onTabChange = (next: AuditTab) => {
     setTab(next);
     setPage(0);
+    if (next === 'invoices') {
+      setApplied((f) => ({ ...f, entityType: 'INVOICE' }));
+      setFilters((f) => ({ ...f, entityType: 'INVOICE' }));
+    } else {
+      // Clear sticky INVOICE filter set by the Invoice audit tab so General/Lending reload unfiltered.
+      setApplied((f) => (f.entityType === 'INVOICE' ? { ...f, entityType: '' } : f));
+      setFilters((f) => (f.entityType === 'INVOICE' ? { ...f, entityType: '' } : f));
+    }
   };
 
   const statusChip = (status: string) => {
@@ -216,7 +259,18 @@ export default function AuditTrailPage() {
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Program Audit
+          General audit
+        </button>
+        <button
+          type="button"
+          onClick={() => onTabChange('invoices')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            tab === 'invoices'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Invoice audit
         </button>
         <button
           type="button"
@@ -229,9 +283,45 @@ export default function AuditTrailPage() {
         >
           Lending Audit
         </button>
+        <button
+          type="button"
+          onClick={() => onTabChange('lms')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            tab === 'lms'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          LMS API Audit
+        </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+      {tab === 'lms' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500">Loan ID (optional)</span>
+              <input
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm min-w-[280px]"
+                value={loanIdFilter}
+                onChange={(e) => {
+                  setLoanIdFilter(e.target.value);
+                  setPage(0);
+                }}
+                placeholder="UUID"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void fetchPage()}
+              className="px-4 py-2 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-500">Event type</span>
@@ -305,6 +395,7 @@ export default function AuditTrailPage() {
           </button>
         </div>
       </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -317,6 +408,87 @@ export default function AuditTrailPage() {
           <div className="flex items-center justify-center h-48">
             <div className="animate-pulse text-slate-400 text-sm">Loading audit events...</div>
           </div>
+        ) : tab === 'lms' ? (
+          lmsRows.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-sm text-slate-400">
+              No LMS API audit records found
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[960px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Time</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Loan</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Operation</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Account</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {lmsRows.map((row) => (
+                      <tr key={row.id} className="align-top hover:bg-slate-50/80">
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          {new Date(row.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[11px]">{row.loanId}</td>
+                        <td className="px-4 py-3 text-xs font-semibold">{row.operation}</td>
+                        <td className="px-4 py-3">{statusChip(row.status)}</td>
+                        <td className="px-4 py-3 font-mono text-[11px]">{row.encoreAccountId ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            className="text-[11px] font-medium text-blue-600 hover:underline"
+                            onClick={() => setExpandedLms(expandedLms === row.id ? null : row.id)}
+                          >
+                            {expandedLms === row.id ? 'Hide' : 'Request / Response'}
+                          </button>
+                          {expandedLms === row.id ? (
+                            <div className="mt-2 grid gap-2 md:grid-cols-2 max-w-3xl">
+                              <pre className="max-h-48 overflow-auto rounded bg-slate-50 p-2 text-[11px] whitespace-pre-wrap break-words">
+                                {row.requestJson || '—'}
+                              </pre>
+                              <pre className="max-h-48 overflow-auto rounded bg-slate-50 p-2 text-[11px] whitespace-pre-wrap break-words">
+                                {row.responseJson || row.errorMessage || '—'}
+                              </pre>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {lmsPageInfo ? (
+                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
+                  <span>
+                    Page {lmsPageInfo.number + 1} of {Math.max(lmsPageInfo.totalPages, 1)} (
+                    {lmsPageInfo.totalElements} ops)
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 0}
+                      className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-40"
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page + 1 >= (lmsPageInfo.totalPages || 1)}
+                      className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-40"
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )
         ) : rows.length === 0 ? (
           <div className="flex items-center justify-center h-48">
             <div className="text-center text-slate-400 text-sm">
@@ -408,6 +580,22 @@ export default function AuditTrailPage() {
                         <span className="line-clamp-2" title={row.message ?? ''}>
                           {row.message ?? '—'}
                         </span>
+                        {(row.oldValues || row.newValues || row.changedFields) && (
+                          <details className="mt-2 text-[11px] text-slate-600">
+                            <summary className="cursor-pointer text-indigo-600 hover:underline">
+                              View change details
+                              {row.changedFields ? ` (${row.changedFields})` : ''}
+                            </summary>
+                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                              <pre className="max-h-40 overflow-auto rounded border border-slate-100 bg-slate-50 p-2 whitespace-pre-wrap break-words">
+                                {JSON.stringify(row.oldValues ?? {}, null, 2)}
+                              </pre>
+                              <pre className="max-h-40 overflow-auto rounded border border-slate-100 bg-slate-50 p-2 whitespace-pre-wrap break-words">
+                                {JSON.stringify(row.newValues ?? {}, null, 2)}
+                              </pre>
+                            </div>
+                          </details>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -160,7 +160,8 @@ public final class InvoiceAccessGuard {
     }
 
     /**
-     * VERIFY / CONFIRM: lender or owning anchor. MARK_DISCOUNTED: lender only. Borrowers rejected for all.
+     * VERIFY / CONFIRM: lender or owning anchor. MARK_DISCOUNTED: lender only.
+     * DELETE: Anchor for PBF; Borrower for SBD/PO — lenders denied.
      */
     public static void requireInvoiceWriteAccess(
             Invoice invoice,
@@ -169,11 +170,14 @@ public final class InvoiceAccessGuard {
             String linkedEntityTypeHeader,
             InvoiceWriteOperation operation) {
         Set<String> roles = parseRoles(rolesHeader);
+        if (operation == InvoiceWriteOperation.DELETE) {
+            requireInvoiceDeleteAccess(invoice, roles, linkedEntityIdHeader, linkedEntityTypeHeader);
+            return;
+        }
         if (isBorrowerRole(roles)) {
             throw forbidden(MSG_BORROWER_CANNOT);
         }
         if (operation == InvoiceWriteOperation.MARK_DISCOUNTED
-                || operation == InvoiceWriteOperation.DELETE
                 || operation == InvoiceWriteOperation.MARK_FINANCING_REQUESTED
                 || operation == InvoiceWriteOperation.CANCEL_FINANCING_REQUESTED
                 || operation == InvoiceWriteOperation.MARK_REJECTED
@@ -195,6 +199,47 @@ public final class InvoiceAccessGuard {
             throw forbidden(MSG_NOT_THIS_ANCHOR);
         }
         throw forbidden(MSG_ACCESS_DENIED);
+    }
+
+    /**
+     * PBF → owning Anchor only. SBD/PO → owning Borrower only. Lenders cannot delete.
+     */
+    public static void requireInvoiceDeleteAccess(
+            Invoice invoice,
+            Set<String> roles,
+            String linkedEntityIdHeader,
+            String linkedEntityTypeHeader) {
+        if (InvoiceDiscountingFlowType.isSellerInitiated(invoice.getFlowType())) {
+            if (!isBorrowerRole(roles)) {
+                throw forbidden("Only the borrower can delete sales-bill / purchase-order invoices");
+            }
+            UUID borrower = parseRequiredLinkedUuid(linkedEntityIdHeader, linkedEntityTypeHeader, LINK_TYPE_BORROWER);
+            if (invoice.getBorrowerId() != null && invoice.getBorrowerId().equals(borrower)) {
+                return;
+            }
+            throw forbidden(MSG_NOT_THIS_BORROWER);
+        }
+        // PBF (default)
+        if (!isAnchorRole(roles)) {
+            throw forbidden("Only the anchor can delete purchase-bill invoices");
+        }
+        UUID anchor = parseRequiredLinkedUuid(linkedEntityIdHeader, linkedEntityTypeHeader, LINK_TYPE_ANCHOR);
+        if (invoice.getAnchorId() != null && invoice.getAnchorId().equals(anchor)) {
+            return;
+        }
+        throw forbidden(MSG_NOT_THIS_ANCHOR);
+    }
+
+    /**
+     * Borrower-initiated delete via LOS/PLP borrower portal (lender JWT + borrowerId query param).
+     */
+    public static void requireBorrowerOwnedSellerInvoiceForDelete(Invoice invoice, UUID borrowerId) {
+        if (borrowerId == null || invoice.getBorrowerId() == null || !invoice.getBorrowerId().equals(borrowerId)) {
+            throw forbidden(MSG_NOT_THIS_BORROWER);
+        }
+        if (!InvoiceDiscountingFlowType.isSellerInitiated(invoice.getFlowType())) {
+            throw forbidden("Borrower can only delete sales-bill / purchase-order invoices");
+        }
     }
 
     /**

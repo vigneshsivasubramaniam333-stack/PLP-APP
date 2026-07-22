@@ -151,8 +151,13 @@ public class PlpLmsOrchestrator {
             }
             log.info("[PLP][ENCORE] Disburse — loanNumber={} accountId={} disbursementDate={} amount={}",
                     loan.getLoanNumber(), accountId, disbursementValueDate, amount);
+            String requestJson = objectMapper.writeValueAsString(Map.of(
+                    "encoreAccountId", accountId,
+                    "amount", amount,
+                    "disbursementDate", disbursementValueDate.toString(),
+                    "transactionRef", utr != null ? utr : ""));
             String txnId = encoreLmsApi.disburse(accountId, ctx);
-            recordOp(loan.getId(), OP_DISBURSE, accountId, STATUS_SUCCESS, null, txnId, null);
+            recordOp(loan.getId(), OP_DISBURSE, accountId, STATUS_SUCCESS, requestJson, txnId, null);
             refreshSummary(loan, accountId);
         } catch (Exception e) {
             log.error("PLP LMS disburse failed for {} (non-blocking): {}", loan.getLoanNumber(), e.getMessage(), e);
