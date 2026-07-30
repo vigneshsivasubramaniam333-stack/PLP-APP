@@ -119,6 +119,22 @@ public final class ProgramParametersValidator {
         if (out.containsKey("anchorRelationshipVintageMonths") && out.get("anchorRelationshipVintageMonths") != null) {
             parsePositiveInt(out.get("anchorRelationshipVintageMonths"), "anchorRelationshipVintageMonths");
         }
+        if (out.containsKey("interestPayment") && out.get("interestPayment") != null) {
+            String v = out.get("interestPayment").toString().trim().toUpperCase().replace('-', '_').replace(' ', '_');
+            if ("REARENDED".equals(v)) {
+                v = "REAR_ENDED";
+            }
+            if (!"UPFRONT".equals(v) && !"MONTHLY".equals(v) && !"REAR_ENDED".equals(v)) {
+                throw new IllegalArgumentException("interestPayment must be UPFRONT, MONTHLY, or REAR_ENDED");
+            }
+            out.put("interestPayment", v);
+        }
+        if (out.containsKey("maxCmr") && out.get("maxCmr") != null) {
+            parsePositiveInt(out.get("maxCmr"), "maxCmr");
+        }
+        if (out.containsKey("minCibil") && out.get("minCibil") != null) {
+            parsePositiveInt(out.get("minCibil"), "minCibil");
+        }
         return out;
     }
 

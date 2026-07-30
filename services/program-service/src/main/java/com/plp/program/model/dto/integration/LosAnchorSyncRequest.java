@@ -21,6 +21,16 @@ public class LosAnchorSyncRequest {
     @NotNull
     private LosAnchorPayload anchor;
 
+    /** When true, ensure portal user is provisioned and return credentials when newly created. */
+    private Boolean provisionAtNotify;
+
+    /** INVITED | IN_PROGRESS | SUBMITTED | SENT_BACK | COMPLETED */
+    @Size(max = 30)
+    private String onboardingStatus;
+
+    @Size(max = 100)
+    private String losApplicationId;
+
     @Data
     public static class LosAnchorPayload {
 

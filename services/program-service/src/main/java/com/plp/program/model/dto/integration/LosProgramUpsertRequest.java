@@ -69,4 +69,14 @@ public class LosProgramUpsertRequest extends LosIntegrationBaseRequest {
     private BigDecimal dependencyVintagePercent;
 
     private Integer anchorRelationshipVintageMonths;
+
+    /** UPFRONT | MONTHLY | REAR_ENDED */
+    @Size(max = 20)
+    private String interestPayment;
+
+    private Integer maxInvoiceVintageDays;
+
+    private Integer maxCmr;
+
+    private Integer minCibil;
 }

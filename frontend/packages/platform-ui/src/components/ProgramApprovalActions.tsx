@@ -181,7 +181,13 @@ function ProgramReviewModal({ program, onClose }: { program: Program; onClose: (
     { label: 'Sanction type', value: String(ops.sanctionType ?? 'MANUAL') },
     { label: 'LMS entry', value: program.lmsEntryIn === 'YES' ? `Yes (${program.encoreProductCode || '—'})` : 'No' },
   ];
-  if (cfg.maxInvoiceAgeDays != null) rows.push({ label: 'Max invoice age', value: `${cfg.maxInvoiceAgeDays} days` });
+  if (cfg.maxInvoiceAgeDays != null) rows.push({ label: 'Max invoice vintage', value: `${cfg.maxInvoiceAgeDays} days` });
+  if (cfg.interestPayment != null) rows.push({ label: 'Interest payment', value: String(cfg.interestPayment).replace(/_/g, ' ') });
+  if (cfg.maxCmr != null) rows.push({ label: 'Max CMR', value: String(cfg.maxCmr) });
+  if (cfg.minCibil != null) rows.push({ label: 'Min CIBIL', value: String(cfg.minCibil) });
+  if (cfg.anchorRelationshipVintageMonths != null) {
+    rows.push({ label: 'Min Dir Relationship', value: `${cfg.anchorRelationshipVintageMonths} months` });
+  }
   if (cfg.minInvoiceAmount != null) rows.push({ label: 'Min invoice amount', value: `₹${Number(cfg.minInvoiceAmount).toLocaleString('en-IN')}` });
   if (cfg.minDaysToDueDate != null) rows.push({ label: 'Min days to due', value: `${cfg.minDaysToDueDate} days` });
 

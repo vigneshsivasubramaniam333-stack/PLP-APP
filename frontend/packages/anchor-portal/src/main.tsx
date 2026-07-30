@@ -16,6 +16,9 @@ import { FLOW_SALES_BILL_DISCOUNTING, FLOW_PURCHASE_ORDER_DISCOUNTING } from '@p
 import SettlementsPage from './pages/SettlementsPage';
 import ReportsPage from './pages/ReportsPage';
 import ProgramsPage from './pages/ProgramsPage';
+import OnboardingPage from './pages/OnboardingPage';
+import OnboardingContinuePage from './pages/OnboardingContinuePage';
+import MyApplicationPage from './pages/MyApplicationPage';
 import AnchorLayout from './layouts/AnchorLayout';
 
 window.__PLP_TOKEN_KEY__ = 'plp_anchor_token';
@@ -77,6 +80,9 @@ function App() {
           <Route path="/change-password" element={<ChangePasswordRoute />} />
           <Route path="/" element={<ProtectedRoute><AnchorLayout /></ProtectedRoute>}>
             <Route index element={<DashboardPage />} />
+            <Route path="onboarding" element={<OnboardingPage />} />
+            <Route path="onboarding/continue" element={<OnboardingContinuePage />} />
+            <Route path="my-application" element={<MyApplicationPage />} />
             <Route path="programs" element={<ProgramsPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="salary-upload" element={<SalaryUploadPage />} />

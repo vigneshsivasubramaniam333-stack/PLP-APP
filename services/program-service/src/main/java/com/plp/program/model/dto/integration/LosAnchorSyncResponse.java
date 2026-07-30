@@ -18,4 +18,8 @@ public class LosAnchorSyncResponse {
     private boolean created;
     /** True when an existing anchor was patched; omitted or false on pure create. */
     private Boolean updated;
+    private String temporaryPassword;
+    private String userId;
+    private Boolean passwordResetRequired;
+    private String onboardingStatus;
 }

@@ -119,7 +119,7 @@ public class Program {
     private Map<String, Object> parameters;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 40)
     @Builder.Default
     private ProgramStatus status = ProgramStatus.DRAFT;
 

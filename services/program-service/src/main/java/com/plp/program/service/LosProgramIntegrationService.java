@@ -224,7 +224,13 @@ public class LosProgramIntegrationService {
     }
 
     private static void mergeVintageConfig(Program program, LosProgramUpsertRequest dto) {
-        if (dto.getDependencyVintagePercent() == null && dto.getAnchorRelationshipVintageMonths() == null) {
+        boolean hasAny = dto.getDependencyVintagePercent() != null
+                || dto.getAnchorRelationshipVintageMonths() != null
+                || dto.getInterestPayment() != null
+                || dto.getMaxInvoiceVintageDays() != null
+                || dto.getMaxCmr() != null
+                || dto.getMinCibil() != null;
+        if (!hasAny) {
             return;
         }
         Map<String, Object> config = program.getConfig() != null ? new HashMap<>(program.getConfig()) : new HashMap<>();
@@ -234,7 +240,30 @@ public class LosProgramIntegrationService {
         if (dto.getAnchorRelationshipVintageMonths() != null) {
             config.put("anchorRelationshipVintageMonths", dto.getAnchorRelationshipVintageMonths());
         }
+        if (dto.getInterestPayment() != null && !dto.getInterestPayment().isBlank()) {
+            config.put("interestPayment", normalizeInterestPayment(dto.getInterestPayment()));
+        }
+        if (dto.getMaxInvoiceVintageDays() != null) {
+            config.put("maxInvoiceAgeDays", dto.getMaxInvoiceVintageDays());
+        }
+        if (dto.getMaxCmr() != null) {
+            config.put("maxCmr", dto.getMaxCmr());
+        }
+        if (dto.getMinCibil() != null) {
+            config.put("minCibil", dto.getMinCibil());
+        }
         program.setConfig(ProgramParametersValidator.validateConfig(config, program.getProductType()));
+    }
+
+    private static String normalizeInterestPayment(String raw) {
+        String v = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        if ("REARENDED".equals(v)) {
+            return "REAR_ENDED";
+        }
+        if ("UPFRONT".equals(v) || "MONTHLY".equals(v) || "REAR_ENDED".equals(v)) {
+            return v;
+        }
+        throw new RuntimeException("interestPayment must be UPFRONT, MONTHLY, or REAR_ENDED");
     }
 
     private static String normalizeLmsEntry(String raw) {

@@ -12,7 +12,7 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       const authUser = await login(email, password);
-      navigate(authUser.passwordResetRequired ? '/change-password' : '/');
+      navigate(authUser.passwordResetRequired ? '/change-password' : '/onboarding');
     } catch {
       // error handled by useAuth
     }

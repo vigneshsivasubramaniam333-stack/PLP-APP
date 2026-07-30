@@ -72,6 +72,9 @@ export interface ProgramEligibilityConfig {
   minDaysToDueDate?: number;
   dependencyVintagePercent?: number;
   anchorRelationshipVintageMonths?: number;
+  interestPayment?: 'UPFRONT' | 'MONTHLY' | 'REAR_ENDED' | string;
+  maxCmr?: number;
+  minCibil?: number;
 }
 
 export interface ProgramOperationalParameters {
@@ -191,6 +194,8 @@ export interface ProductRepaymentDefault {
   updatedBy?: string | null;
 }
 
+export type AnchorOnboardingStatus = 'INVITED' | 'IN_PROGRESS' | 'SUBMITTED' | 'SENT_BACK' | 'COMPLETED';
+
 export interface Anchor {
   id: string;
   anchorCode: string;
@@ -202,6 +207,54 @@ export interface Anchor {
   contactEmail?: string | null;
   contactPhone?: string | null;
   createdAt?: string | null;
+  /** LOS loan application id when onboarded via notify-portal. */
+  losApplicationId?: string | null;
+  onboardingStatus?: AnchorOnboardingStatus | null;
+}
+
+/** GET /api/v1/portal/anchor/onboarding response. */
+export interface AnchorOnboardingSummary {
+  onboardingStatus: AnchorOnboardingStatus | null;
+  applicationId: string | null;
+  applicationNumber?: string | null;
+  /** LOS ApplicationStatus (e.g. ANCHOR_CONSENT_PENDING, ANCHOR_SUBMITTED, ANCHOR_SENT_BACK, SANCTIONED...). */
+  status: string | null;
+  losStatus?: string | null;
+  friendlyStage: string;
+  canResume: boolean;
+  forceOnboarding?: boolean;
+  menusUnlocked?: boolean;
+  showMyApplication?: boolean;
+  sendBackNotes: string | null;
+  requiredActions: string[];
+  anchorId: string;
+  entityName: string;
+  losIntegrationAvailable: boolean;
+  requestedAmount?: number | null;
+  tenureMonths?: number | null;
+  loanProduct?: string | null;
+}
+
+/** Subset of LOS ApplicationResponse used by the anchor onboarding portal. */
+export interface AnchorOnboardingApplication {
+  id: string;
+  applicationNumber?: string | null;
+  status: string;
+  borrowerType?: string | null;
+  loanProduct?: string | null;
+  requestedAmount?: number | null;
+  tenureMonths?: number | null;
+  personalInfo?: Record<string, unknown> | null;
+  businessInfo?: Record<string, unknown> | null;
+  financialInfo?: Record<string, unknown> | null;
+  collateralInfo?: Record<string, unknown> | null;
+  anchorSentBackNotes?: string | null;
+  docVerificationNotes?: string | null;
+  remarks?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  submittedAt?: string | null;
+  [key: string]: unknown;
 }
 
 export interface Borrower {

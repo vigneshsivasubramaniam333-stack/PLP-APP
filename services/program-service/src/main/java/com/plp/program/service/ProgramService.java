@@ -275,9 +275,14 @@ public class ProgramService {
 
     private void validateStatusTransition(ProgramStatus from, ProgramStatus to) {
         boolean valid = switch (from) {
-            case DRAFT -> to == ProgramStatus.ACTIVE || to == ProgramStatus.PENDING_L2;
-            case PENDING_L2 -> to == ProgramStatus.ACTIVE || to == ProgramStatus.SENT_BACK;
+            case DRAFT -> to == ProgramStatus.ACTIVE
+                    || to == ProgramStatus.PENDING_L2
+                    || to == ProgramStatus.APPROVED_PENDING_DOCS;
+            case PENDING_L2 -> to == ProgramStatus.ACTIVE
+                    || to == ProgramStatus.SENT_BACK
+                    || to == ProgramStatus.APPROVED_PENDING_DOCS;
             case SENT_BACK -> to == ProgramStatus.PENDING_L2;
+            case APPROVED_PENDING_DOCS -> to == ProgramStatus.ACTIVE || to == ProgramStatus.SENT_BACK;
             case ACTIVE -> to == ProgramStatus.PAUSED || to == ProgramStatus.CLOSED;
             case PAUSED -> to == ProgramStatus.ACTIVE || to == ProgramStatus.CLOSED;
             case CLOSED -> false;

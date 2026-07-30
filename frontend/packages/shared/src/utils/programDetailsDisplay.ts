@@ -46,9 +46,14 @@ export function buildProgramConfigurationRows(program: Program | null | undefine
   const isId = program.productType === 'INVOICE_DISCOUNTING';
 
   if (isId) {
-    pushRow(rows, 'Age of invoice (days)', fmtNum(cfg.maxInvoiceAgeDays));
+    pushRow(rows, 'Max invoice vintage (days)', fmtNum(cfg.maxInvoiceAgeDays));
+    pushRow(rows, 'Interest payment', cfg.interestPayment ? String(cfg.interestPayment).replace(/_/g, ' ') : null);
+    pushRow(rows, 'Max CMR', fmtNum(cfg.maxCmr));
+    pushRow(rows, 'Min CIBIL', fmtNum(cfg.minCibil));
     pushRow(rows, 'Min invoice amount', cfg.minInvoiceAmount != null ? `₹${Number(cfg.minInvoiceAmount).toLocaleString('en-IN')}` : null);
     pushRow(rows, 'Min days to due date', fmtNum(cfg.minDaysToDueDate));
+    pushRow(rows, 'Dependency vintage (%)', fmtNum(cfg.dependencyVintagePercent));
+    pushRow(rows, 'Min Dir Relationship (months)', fmtNum(cfg.anchorRelationshipVintageMonths));
   }
 
   pushRow(rows, 'Enable payment for borrower', yesNo(params.enablePaymentForBorrower));

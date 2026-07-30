@@ -362,6 +362,9 @@ function EligibilityFields({
   minDaysToDueDate,
   dependencyVintagePercent,
   anchorRelationshipVintageMonths,
+  interestPayment,
+  maxCmr,
+  minCibil,
   onChange,
 }: {
   maxInvoiceAgeDays: string;
@@ -369,19 +372,25 @@ function EligibilityFields({
   minDaysToDueDate: string;
   dependencyVintagePercent: string;
   anchorRelationshipVintageMonths: string;
+  interestPayment: string;
+  maxCmr: string;
+  minCibil: string;
   onChange: (patch: {
     maxInvoiceAgeDays?: string;
     minInvoiceAmount?: string;
     minDaysToDueDate?: string;
     dependencyVintagePercent?: string;
     anchorRelationshipVintageMonths?: string;
+    interestPayment?: string;
+    maxCmr?: string;
+    minCibil?: string;
   }) => void;
 }) {
   return (
     <>
       <p className={sectionTitleCls}>Eligibility (optional)</p>
       <ProgramField
-        label="Age of invoice (days)"
+        label="Max invoice vintage (days)"
         hint="Credit period: invoice date to due date (default 90 for invoice discounting)"
         tooltip="Maximum allowed age of an invoice (invoice date to due date) for eligibility."
       >
@@ -394,6 +403,18 @@ function EligibilityFields({
           className={inputCls}
           placeholder="e.g. 90"
         />
+      </ProgramField>
+      <ProgramField label="Interest payment" tooltip="When interest is collected under this program.">
+        <select
+          value={interestPayment}
+          onChange={(e) => onChange({ interestPayment: e.target.value })}
+          className={inputCls}
+        >
+          <option value="">Select</option>
+          <option value="UPFRONT">Upfront</option>
+          <option value="MONTHLY">Monthly</option>
+          <option value="REAR_ENDED">Rear-ended</option>
+        </select>
       </ProgramField>
       <ProgramField
         label="Min invoice amount"
@@ -440,8 +461,8 @@ function EligibilityFields({
         />
       </ProgramField>
       <ProgramField
-        label="Anchor relationship vintage (months)"
-        hint="Minimum months of anchor relationship required for eligibility"
+        label="Min Dir Relationship (months)"
+        hint="Minimum months of direct / director relationship required for eligibility"
         tooltip="Minimum months the borrower must have traded with this anchor."
       >
         <input
@@ -452,6 +473,28 @@ function EligibilityFields({
           onChange={(e) => onChange({ anchorRelationshipVintageMonths: e.target.value })}
           className={inputCls}
           placeholder="e.g. 10"
+        />
+      </ProgramField>
+      <ProgramField label="Max CMR" tooltip="Maximum allowed commercial credit rating (CMR).">
+        <input
+          type="number"
+          step="1"
+          min={1}
+          value={maxCmr}
+          onChange={(e) => onChange({ maxCmr: e.target.value })}
+          className={inputCls}
+          placeholder="e.g. 7"
+        />
+      </ProgramField>
+      <ProgramField label="Min CIBIL" tooltip="Minimum required CIBIL score.">
+        <input
+          type="number"
+          step="1"
+          min={1}
+          value={minCibil}
+          onChange={(e) => onChange({ minCibil: e.target.value })}
+          className={inputCls}
+          placeholder="e.g. 700"
         />
       </ProgramField>
       <p className="col-span-full text-[11px] text-slate-400 -mt-1">
@@ -522,7 +565,10 @@ function fmtCfgSummary(c: ProgramEligibilityConfig): string {
   if (c.minInvoiceAmount != null) parts.push(`min ₹${Number(c.minInvoiceAmount).toLocaleString('en-IN')}`);
   if (c.minDaysToDueDate != null) parts.push(`due≥${c.minDaysToDueDate}d`);
   if (c.dependencyVintagePercent != null) parts.push(`dep≥${c.dependencyVintagePercent}%`);
-  if (c.anchorRelationshipVintageMonths != null) parts.push(`anchor≥${c.anchorRelationshipVintageMonths}mo`);
+  if (c.anchorRelationshipVintageMonths != null) parts.push(`dir≥${c.anchorRelationshipVintageMonths}mo`);
+  if (c.interestPayment) parts.push(`int:${String(c.interestPayment).replace(/_/g, '-')}`);
+  if (c.maxCmr != null) parts.push(`cmr≤${c.maxCmr}`);
+  if (c.minCibil != null) parts.push(`cibil≥${c.minCibil}`);
   return parts.length ? parts.join(' · ') : '—';
 }
 
@@ -546,6 +592,9 @@ export default function ProgramsPage() {
     minDaysToDueDate: '',
     dependencyVintagePercent: '',
     anchorRelationshipVintageMonths: '',
+    interestPayment: '',
+    maxCmr: '',
+    minCibil: '',
   });
 
   const portalCaps = lenderLoanCapabilities(getStoredAuthUser()?.role);
@@ -575,6 +624,9 @@ export default function ProgramsPage() {
     minDaysToDueDate: '',
     dependencyVintagePercent: '',
     anchorRelationshipVintageMonths: '',
+    interestPayment: '',
+    maxCmr: '',
+    minCibil: '',
     ...defaultOperationalSlice(),
   });
 
@@ -613,6 +665,9 @@ export default function ProgramsPage() {
       dependencyVintagePercent: cfg.dependencyVintagePercent != null ? String(cfg.dependencyVintagePercent) : '',
       anchorRelationshipVintageMonths:
         cfg.anchorRelationshipVintageMonths != null ? String(cfg.anchorRelationshipVintageMonths) : '',
+      interestPayment: cfg.interestPayment != null ? String(cfg.interestPayment) : '',
+      maxCmr: cfg.maxCmr != null ? String(cfg.maxCmr) : '',
+      minCibil: cfg.minCibil != null ? String(cfg.minCibil) : '',
       enablePaymentForBorrower: Boolean(ops.enablePaymentForBorrower),
       autoDiscounting: Boolean(ops.autoDiscounting),
       discountingDay: ops.discountingDay != null ? String(ops.discountingDay) : '0',
@@ -651,11 +706,23 @@ export default function ProgramsPage() {
     return n;
   };
 
-  const mergeVintageCfg = (cfg: Record<string, number>, dep: string, anchorMo: string) => {
+  const mergeVintageCfg = (
+    cfg: Record<string, number | string>,
+    dep: string,
+    anchorMo: string,
+    interestPayment: string,
+    maxCmr: string,
+    minCibil: string,
+  ) => {
     const depPct = parseNonNegativeOptional('Dependency vintage (%)', dep);
-    const anchorMonths = parsePositiveOptional('Anchor relationship vintage (months)', anchorMo);
+    const anchorMonths = parsePositiveOptional('Min Dir Relationship (months)', anchorMo);
     if (depPct !== undefined) cfg.dependencyVintagePercent = depPct;
     if (anchorMonths !== undefined) cfg.anchorRelationshipVintageMonths = anchorMonths;
+    if (interestPayment.trim()) cfg.interestPayment = interestPayment.trim().toUpperCase();
+    const cmr = parsePositiveOptional('Max CMR', maxCmr);
+    const cibil = parsePositiveOptional('Min CIBIL', minCibil);
+    if (cmr !== undefined) cfg.maxCmr = cmr;
+    if (cibil !== undefined) cfg.minCibil = cibil;
   };
 
   const handleEditSave = async (e: React.FormEvent) => {
@@ -667,15 +734,22 @@ export default function ProgramsPage() {
       if (!editForm.name.trim()) {
         throw new Error('Program name is required');
       }
-      let cfgPayload: Record<string, number> | undefined;
-      const cfg: Record<string, number> = {};
-      const maxAge = parsePositiveOptional('Max invoice age (days)', editForm.maxInvoiceAgeDays);
+      let cfgPayload: Record<string, number | string> | undefined;
+      const cfg: Record<string, number | string> = {};
+      const maxAge = parsePositiveOptional('Max invoice vintage (days)', editForm.maxInvoiceAgeDays);
       const minAmt = parsePositiveOptional('Min invoice amount', editForm.minInvoiceAmount);
       const minDue = parsePositiveOptional('Min days to due date', editForm.minDaysToDueDate);
       if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
       if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
       if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
-      mergeVintageCfg(cfg, editForm.dependencyVintagePercent, editForm.anchorRelationshipVintageMonths);
+      mergeVintageCfg(
+        cfg,
+        editForm.dependencyVintagePercent,
+        editForm.anchorRelationshipVintageMonths,
+        editForm.interestPayment,
+        editForm.maxCmr,
+        editForm.minCibil,
+      );
       if (Object.keys(cfg).length > 0) cfgPayload = cfg;
 
       const marginVal = editForm.marginPercent.trim();
@@ -723,16 +797,23 @@ export default function ProgramsPage() {
     setCreating(true);
     setError('');
     try {
-      let cfgPayload: Record<string, number> | undefined;
+      let cfgPayload: Record<string, number | string> | undefined;
       if (form.productType === 'INVOICE_DISCOUNTING') {
-        const cfg: Record<string, number> = {};
-        const maxAge = parsePositiveOptional('Age of invoice (days)', form.maxInvoiceAgeDays);
+        const cfg: Record<string, number | string> = {};
+        const maxAge = parsePositiveOptional('Max invoice vintage (days)', form.maxInvoiceAgeDays);
         const minAmt = parsePositiveOptional('Min invoice amount', form.minInvoiceAmount);
         const minDue = parsePositiveOptional('Min days to due date', form.minDaysToDueDate);
         if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
         if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
         if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
-        mergeVintageCfg(cfg, form.dependencyVintagePercent, form.anchorRelationshipVintageMonths);
+        mergeVintageCfg(
+          cfg,
+          form.dependencyVintagePercent,
+          form.anchorRelationshipVintageMonths,
+          form.interestPayment,
+          form.maxCmr,
+          form.minCibil,
+        );
         if (Object.keys(cfg).length > 0) cfgPayload = cfg;
       }
 
@@ -772,6 +853,9 @@ export default function ProgramsPage() {
         minDaysToDueDate: '',
         dependencyVintagePercent: '',
         anchorRelationshipVintageMonths: '',
+        interestPayment: '',
+        maxCmr: '',
+        minCibil: '',
         ...defaultOperationalSlice(),
       });
       reload();
@@ -963,6 +1047,9 @@ export default function ProgramsPage() {
                 minDaysToDueDate={form.minDaysToDueDate}
                 dependencyVintagePercent={form.dependencyVintagePercent}
                 anchorRelationshipVintageMonths={form.anchorRelationshipVintageMonths}
+                interestPayment={form.interestPayment}
+                maxCmr={form.maxCmr}
+                minCibil={form.minCibil}
                 onChange={(patch) => setForm({ ...form, ...patch })}
               />
             ) : null}
@@ -1055,6 +1142,9 @@ export default function ProgramsPage() {
                 minDaysToDueDate={editForm.minDaysToDueDate}
                 dependencyVintagePercent={editForm.dependencyVintagePercent}
                 anchorRelationshipVintageMonths={editForm.anchorRelationshipVintageMonths}
+                interestPayment={editForm.interestPayment}
+                maxCmr={editForm.maxCmr}
+                minCibil={editForm.minCibil}
                 onChange={(patch) => setEditForm({ ...editForm, ...patch })}
               />
             ) : null}

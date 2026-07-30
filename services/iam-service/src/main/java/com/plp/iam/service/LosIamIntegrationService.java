@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -24,6 +25,9 @@ public class LosIamIntegrationService {
 
     private static final Set<UserRole> ANCHOR_LINKED_ROLES =
             Set.of(UserRole.ANCHOR_ADMIN, UserRole.ANCHOR_MAKER, UserRole.ANCHOR_CHECKER);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String TEMP_PASSWORD_CHARS =
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -50,14 +54,18 @@ public class LosIamIntegrationService {
                     .email(user.getEmail())
                     .role(user.getRole().name())
                     .created(false)
+                    .passwordResetRequired(user.isPasswordResetRequired())
                     .build();
         }
 
         UserRole role = request.getRole() != null ? request.getRole() : defaultRoleForEntity(request.getLinkedEntityType());
+        boolean generateTemp = Boolean.TRUE.equals(request.getGenerateTemporaryPassword())
+                || "ANCHOR".equalsIgnoreCase(request.getLinkedEntityType());
+        String plainPassword = generateTemp ? randomTemporaryPassword() : defaultUserPassword;
         User user =
                 User.builder()
                         .email(email)
-                        .passwordHash(passwordEncoder.encode(defaultUserPassword))
+                        .passwordHash(passwordEncoder.encode(plainPassword))
                         .fullName(request.getFullName().trim())
                         .phone(trimOrNull(request.getPhone()))
                         .role(role)
@@ -78,6 +86,8 @@ public class LosIamIntegrationService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .created(true)
+                .temporaryPassword(plainPassword)
+                .passwordResetRequired(true)
                 .build();
     }
 
@@ -151,5 +161,13 @@ public class LosIamIntegrationService {
             return null;
         }
         return value.trim();
+    }
+
+    private static String randomTemporaryPassword() {
+        StringBuilder sb = new StringBuilder(14);
+        for (int i = 0; i < 14; i++) {
+            sb.append(TEMP_PASSWORD_CHARS.charAt(SECURE_RANDOM.nextInt(TEMP_PASSWORD_CHARS.length())));
+        }
+        return sb.toString();
     }
 }

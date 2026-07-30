@@ -1,5 +1,6 @@
 package com.plp.program.model.entity;
 
+import com.plp.program.model.enums.AnchorOnboardingStatus;
 import com.plp.program.model.enums.AnchorStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -81,6 +82,14 @@ public class Anchor {
     /** Anchor identifier in the originating LOS. */
     @Column(name = "los_anchor_id", length = 100)
     private String losAnchorId;
+
+    /** LOS loan application id when onboarded via notify-portal. */
+    @Column(name = "los_application_id", length = 100)
+    private String losApplicationId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "onboarding_status", length = 30)
+    private AnchorOnboardingStatus onboardingStatus;
 
     @CreationTimestamp
     @Column(updatable = false)

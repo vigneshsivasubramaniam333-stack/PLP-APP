@@ -407,6 +407,27 @@ export const portalApi = {
     formData.append('file', file);
     return apiClient.post('/api/v1/portal/anchor/early-pay/repayments/upload', formData);
   },
+  anchorOnboardingSummary: () =>
+    apiClient.get<{ status?: string; data?: import('../types').AnchorOnboardingSummary }>(
+      '/api/v1/portal/anchor/onboarding',
+    ),
+  anchorOnboardingApplication: () =>
+    apiClient.get<{ status?: string; data?: import('../types').AnchorOnboardingApplication }>(
+      '/api/v1/portal/anchor/onboarding/application',
+    ),
+  anchorOnboardingSaveApplication: (payload: Record<string, unknown>) =>
+    apiClient.put<{ status?: string; data?: import('../types').AnchorOnboardingApplication }>(
+      '/api/v1/portal/anchor/onboarding/application',
+      payload,
+    ),
+  anchorOnboardingSubmit: () =>
+    apiClient.post<{ status?: string; data?: import('../types').AnchorOnboardingSummary }>(
+      '/api/v1/portal/anchor/onboarding/submit',
+    ),
+  anchorOnboardingResubmit: () =>
+    apiClient.post<{ status?: string; data?: import('../types').AnchorOnboardingSummary }>(
+      '/api/v1/portal/anchor/onboarding/resubmit',
+    ),
 };
 
 export const earlyPayApi = {

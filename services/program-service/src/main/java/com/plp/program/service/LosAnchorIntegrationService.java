@@ -5,6 +5,7 @@ import com.plp.program.model.dto.integration.LosAnchorSyncRequest;
 import com.plp.program.model.dto.integration.LosAnchorSyncRequest.LosAnchorPayload;
 import com.plp.program.model.dto.integration.LosAnchorSyncResponse;
 import com.plp.program.model.entity.Anchor;
+import com.plp.program.model.enums.AnchorOnboardingStatus;
 import com.plp.program.model.enums.AnchorStatus;
 import com.plp.program.integration.iam.IamUserProvisioner;
 import com.plp.program.repository.AnchorRepository;
@@ -58,20 +59,16 @@ public class LosAnchorIntegrationService {
     private LosAnchorSyncResponse syncInternal(LosAnchorSyncRequest req, String sourceSystem, String losAnchorId) {
         LosAnchorPayload payload = req.getAnchor();
         String code = normalize(payload.getCode());
+        boolean provisionAtNotify = Boolean.TRUE.equals(req.getProvisionAtNotify());
 
         Optional<Anchor> byLos = anchorRepository.findBySourceSystemAndLosAnchorId(sourceSystem, losAnchorId);
         if (byLos.isPresent()) {
             Anchor anchor = byLos.get();
             assertCodeMatchesIfRequested(anchor, code);
-            applyLosUpdates(anchor, payload);
+            applyLosUpdates(anchor, payload, req);
             anchorRepository.save(anchor);
-            provisionAnchorPortalUser(anchor);
-            return LosAnchorSyncResponse.builder()
-                    .plpAnchorId(anchor.getId())
-                    .anchorCode(anchor.getAnchorCode())
-                    .created(false)
-                    .updated(true)
-                    .build();
+            IamUserProvisioner.ProvisionResult provision = provisionAnchorPortalUser(anchor, provisionAtNotify);
+            return toResponse(anchor, false, true, provision);
         }
 
         Optional<Anchor> byCode = anchorRepository.findByAnchorCode(code);
@@ -80,16 +77,11 @@ public class LosAnchorIntegrationService {
             ensureLosLinkCompatible(anchor, sourceSystem, losAnchorId);
             anchor.setSourceSystem(sourceSystem);
             anchor.setLosAnchorId(losAnchorId);
-            applyLosUpdates(anchor, payload);
+            applyLosUpdates(anchor, payload, req);
             anchorRepository.save(anchor);
-            provisionAnchorPortalUser(anchor);
+            IamUserProvisioner.ProvisionResult provision = provisionAnchorPortalUser(anchor, provisionAtNotify);
             log.info("LOS anchor linked by code: anchorId={} code={}", anchor.getId(), anchor.getAnchorCode());
-            return LosAnchorSyncResponse.builder()
-                    .plpAnchorId(anchor.getId())
-                    .anchorCode(anchor.getAnchorCode())
-                    .created(false)
-                    .updated(true)
-                    .build();
+            return toResponse(anchor, false, true, provision);
         }
 
         Anchor created =
@@ -104,18 +96,34 @@ public class LosAnchorIntegrationService {
                         .address(buildAddressJson(payload.getAddress()))
                         .sourceSystem(sourceSystem)
                         .losAnchorId(losAnchorId)
+                        .losApplicationId(trimOrNull(req.getLosApplicationId()))
                         .status(AnchorStatus.ACTIVE)
+                        .onboardingStatus(resolveOnboarding(req.getOnboardingStatus(),
+                                provisionAtNotify ? AnchorOnboardingStatus.INVITED : null))
                         .build();
 
         Anchor saved = anchorRepository.save(created);
         log.info("LOS anchor created: anchorId={} code={}", saved.getId(), saved.getAnchorCode());
-        provisionAnchorPortalUser(saved);
-        return LosAnchorSyncResponse.builder()
-                .plpAnchorId(saved.getId())
-                .anchorCode(saved.getAnchorCode())
-                .created(true)
-                .updated(false)
-                .build();
+        IamUserProvisioner.ProvisionResult provision = provisionAnchorPortalUser(saved, true);
+        return toResponse(saved, true, false, provision);
+    }
+
+    private static LosAnchorSyncResponse toResponse(
+            Anchor anchor, boolean created, Boolean updated, IamUserProvisioner.ProvisionResult provision) {
+        LosAnchorSyncResponse.LosAnchorSyncResponseBuilder b = LosAnchorSyncResponse.builder()
+                .plpAnchorId(anchor.getId())
+                .anchorCode(anchor.getAnchorCode())
+                .created(created)
+                .updated(updated)
+                .onboardingStatus(anchor.getOnboardingStatus() != null
+                        ? anchor.getOnboardingStatus().name()
+                        : null);
+        if (provision != null) {
+            b.userId(provision.getUserId())
+                    .temporaryPassword(provision.getTemporaryPassword())
+                    .passwordResetRequired(provision.getPasswordResetRequired());
+        }
+        return b.build();
     }
 
     private static void assertCodeMatchesIfRequested(Anchor anchor, String requestedCode) {
@@ -147,7 +155,7 @@ public class LosAnchorIntegrationService {
                         + " is already linked to a different LOS identity");
     }
 
-    private static void applyLosUpdates(Anchor anchor, LosAnchorPayload payload) {
+    private static void applyLosUpdates(Anchor anchor, LosAnchorPayload payload, LosAnchorSyncRequest req) {
         anchor.setEntityName(payload.getName().trim());
         if (payload.getPan() != null && !payload.getPan().isBlank()) {
             anchor.setPan(payload.getPan().trim());
@@ -163,6 +171,26 @@ public class LosAnchorIntegrationService {
         }
         if (payload.getAddress() != null && !payload.getAddress().isBlank()) {
             anchor.setAddress(buildAddressJson(payload.getAddress()));
+        }
+        AnchorOnboardingStatus onboarding = resolveOnboarding(req.getOnboardingStatus(), null);
+        if (onboarding != null) {
+            anchor.setOnboardingStatus(onboarding);
+        } else if (Boolean.TRUE.equals(req.getProvisionAtNotify()) && anchor.getOnboardingStatus() == null) {
+            anchor.setOnboardingStatus(AnchorOnboardingStatus.INVITED);
+        }
+        if (req.getLosApplicationId() != null && !req.getLosApplicationId().isBlank()) {
+            anchor.setLosApplicationId(req.getLosApplicationId().trim());
+        }
+    }
+
+    private static AnchorOnboardingStatus resolveOnboarding(String raw, AnchorOnboardingStatus fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return AnchorOnboardingStatus.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return fallback;
         }
     }
 
@@ -184,8 +212,11 @@ public class LosAnchorIntegrationService {
         return s.trim();
     }
 
-    private void provisionAnchorPortalUser(Anchor anchor) {
-        iamUserProvisioner.provisionAnchorAdmin(
+    private IamUserProvisioner.ProvisionResult provisionAnchorPortalUser(Anchor anchor, boolean force) {
+        if (!force && (anchor.getContactEmail() == null || anchor.getContactEmail().isBlank())) {
+            return IamUserProvisioner.ProvisionResult.empty();
+        }
+        return iamUserProvisioner.provisionAnchorAdmin(
                 anchor.getId(),
                 anchor.getContactEmail(),
                 anchor.getEntityName(),

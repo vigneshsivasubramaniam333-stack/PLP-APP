@@ -131,10 +131,10 @@ public class ProgramApprovalService {
             throw new RuntimeException(
                     "L2 approval allowed from PENDING_L2 or DRAFT. Current: " + status);
         }
-        program.setStatus(ProgramStatus.ACTIVE);
+        program.setStatus(ProgramStatus.APPROVED_PENDING_DOCS);
         program.setApprovalRemarks(null);
         Program saved = programService.saveProgram(program);
-        log.info("Program {} approved (ACTIVE) by L2 {}", saved.getProgramCode(), userId);
+        log.info("Program {} L2 approved (APPROVED_PENDING_DOCS) by {}", saved.getProgramCode(), userId);
         return saved;
     }
 

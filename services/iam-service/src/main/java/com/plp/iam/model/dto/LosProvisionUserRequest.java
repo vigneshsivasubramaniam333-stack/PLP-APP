@@ -31,4 +31,7 @@ public class LosProvisionUserRequest {
 
     @NotBlank
     private String linkedEntityType;
+
+    /** When true (or for ANCHOR), IAM generates a random temporary password and returns it. */
+    private Boolean generateTemporaryPassword;
 }

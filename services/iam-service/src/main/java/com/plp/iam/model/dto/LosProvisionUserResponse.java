@@ -10,4 +10,7 @@ public class LosProvisionUserResponse {
     private String email;
     private String role;
     private boolean created;
+    /** Plain temporary password — only set when a new user was created. */
+    private String temporaryPassword;
+    private Boolean passwordResetRequired;
 }

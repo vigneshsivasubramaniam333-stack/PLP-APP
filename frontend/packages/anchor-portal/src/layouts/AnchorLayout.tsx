@@ -1,6 +1,6 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useMemo } from 'react';
-import { useAuth, PortalSidebarBrand, PortalPoweredByFooter } from '@plp/shared';
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { apiClient, useAuth, PortalSidebarBrand, PortalPoweredByFooter } from '@plp/shared';
 import { useAnchorFlowSubPrograms } from '../hooks/useAnchorFlowSubPrograms';
 import { useAnchorEarlyPayEnabled } from '../hooks/useAnchorEarlyPayEnabled';
 import { anchorIdFromUser } from '../invoice/invoiceShared';
@@ -14,6 +14,14 @@ function navLinkClass(isActive: boolean) {
   return `${isActive ? 'bt-sidebar-link active' : 'bt-sidebar-link'} flex items-center gap-3`;
 }
 
+type OnboardingSummary = {
+  onboardingStatus?: string | null;
+  forceOnboarding?: boolean;
+  menusUnlocked?: boolean;
+  showMyApplication?: boolean;
+  canResume?: boolean;
+};
+
 export default function AnchorLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -23,6 +31,37 @@ export default function AnchorLayout() {
   );
   const flowFlags = useAnchorFlowSubPrograms(anchorId);
   const earlyPayEnabled = useAnchorEarlyPayEnabled();
+  const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: body } = await apiClient.get<{ data?: OnboardingSummary } | OnboardingSummary>(
+          '/api/v1/portal/anchor/onboarding',
+        );
+        const summary =
+          body && typeof body === 'object' && 'data' in body && (body as { data?: OnboardingSummary }).data
+            ? (body as { data: OnboardingSummary }).data
+            : (body as OnboardingSummary);
+        if (!cancelled) setOnboarding(summary);
+      } catch {
+        // Fail closed: keep menus locked until onboarding API confirms COMPLETED.
+        if (!cancelled) {
+          setOnboarding({ menusUnlocked: false, forceOnboarding: true, showMyApplication: true });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
+
+  // While status is unknown, show a minimal onboarding-only nav (not the full portal).
+  const unlocked = onboarding == null ? false : Boolean(onboarding.menusUnlocked);
+  const forceOnboarding = onboarding != null && Boolean(onboarding.forceOnboarding);
+  // Always offer My application during onboarding so anchors can track status after submit / send-back.
+  const showMyApplication = onboarding == null ? true : onboarding.showMyApplication !== false;
 
   const invoiceDiscountingItems = useMemo(() => {
     const items: { path: string; label: string; icon: typeof DocIcon }[] = [];
@@ -42,22 +81,36 @@ export default function AnchorLayout() {
   }, [flowFlags, earlyPayEnabled]);
 
   const navGroups = useMemo(() => {
+    if (!unlocked) {
+      const items: { path: string; label: string; icon: typeof ChartIcon }[] = [
+        { path: '/onboarding', label: 'Onboarding', icon: ProgramsIcon },
+      ];
+      if (showMyApplication) {
+        items.push({ path: '/my-application', label: 'My application', icon: DocIcon });
+      }
+      return [{ label: 'Onboarding', items }];
+    }
     const groups = [
       {
         label: 'Overview',
         items: [
           { path: '/', label: 'Dashboard', icon: ChartIcon },
           { path: '/programs', label: 'Programs', icon: ProgramsIcon },
+          ...(showMyApplication
+            ? [{ path: '/my-application', label: 'My application', icon: DocIcon }]
+            : []),
         ],
       },
-      {
+    ];
+    if (flowFlags.paydayLoan) {
+      groups.push({
         label: 'Pay Day Loan',
         items: [
           { path: '/employees', label: 'Employees', icon: UsersIcon },
           { path: '/salary-upload', label: 'Salary Upload', icon: UploadIcon },
         ],
-      },
-    ];
+      });
+    }
     if (invoiceDiscountingItems.length > 0) {
       groups.push({ label: 'Invoice Discounting', items: invoiceDiscountingItems });
     }
@@ -69,7 +122,15 @@ export default function AnchorLayout() {
       ],
     });
     return groups;
-  }, [invoiceDiscountingItems]);
+  }, [flowFlags.paydayLoan, invoiceDiscountingItems, unlocked, showMyApplication]);
+
+  const path = location.pathname;
+  const onOnboardingRoute = path === '/onboarding' || path.startsWith('/onboarding/') || path === '/my-application';
+  // Until summary loads, keep full menus hidden and stay on onboarding routes.
+  const awaitingSummary = onboarding == null;
+  if ((awaitingSummary || forceOnboarding) && !onOnboardingRoute) {
+    return <Navigate to="/onboarding" replace />;
+  }
 
   return (
     <div className="min-h-screen bt-app-canvas flex flex-col">
@@ -99,14 +160,14 @@ export default function AnchorLayout() {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bt-orange-light)] text-xs font-semibold text-[var(--bt-orange)]">
                 {user?.fullName?.charAt(0) || 'A'}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{user?.fullName}</div>
-                <div className="text-[11px] text-[var(--bt-gray-500)]">Anchor</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[var(--bt-gray-800)] truncate">{user?.fullName}</p>
+                <p className="text-xs text-[var(--bt-gray-500)] truncate">{user?.role}</p>
               </div>
+              <button type="button" onClick={logout} className="text-xs text-[var(--bt-gray-500)] hover:text-[var(--bt-orange)]">
+                Logout
+              </button>
             </div>
-            <button type="button" onClick={logout} className="mt-3 text-xs text-[var(--bt-red)] hover:underline">
-              Sign out
-            </button>
           </div>
         </aside>
 
@@ -121,56 +182,58 @@ export default function AnchorLayout() {
   );
 }
 
-function iconClass(active: boolean) {
-  return `h-4 w-4 shrink-0 ${active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-400)]'}`;
-}
-
-function ChartIcon({ active }: { active: boolean }) {
+function ChartIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <path d="M4 19V5M4 19h16M8 17V10M12 17V7M16 17v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
-function ProgramsIcon({ active }: { active: boolean }) {
+function ProgramsIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 9h18" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
-function UsersIcon({ active }: { active: boolean }) {
+function UsersIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 19c0-2.5 2.5-4.5 6-4.5s6 2 6 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="17" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
-function UploadIcon({ active }: { active: boolean }) {
+function UploadIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <path d="M12 16V4M12 4l-4 4M12 4l4 4M4 20h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
-function DocIcon({ active }: { active: boolean }) {
+function DocIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
-function CardIcon({ active }: { active: boolean }) {
+function CardIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
-function ReportIcon({ active }: { active: boolean }) {
+function ReportIcon({ active }: { active?: boolean }) {
   return (
-    <svg className={iconClass(active)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className={active ? 'text-[var(--bt-orange)]' : 'text-[var(--bt-gray-500)]'}>
+      <path d="M6 4h9l3 3v13H6V4z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 12h6M9 16h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
