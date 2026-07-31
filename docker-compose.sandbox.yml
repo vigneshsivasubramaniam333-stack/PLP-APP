@@ -12,3 +12,8 @@ services:
       PLP_PUBLIC_API_BASE_URL: ${PLP_PUBLIC_API_BASE_URL:-http://credinnov-sandbox.senseitech.com/plp-api}
       PLP_BORROWER_UI_URL: ${PLP_BORROWER_UI_URL:-http://credinnov-sandbox.senseitech.com/plp-borrower}
       LOS_BORROWER_UI_URL: ${LOS_BORROWER_UI_URL:-http://credinnov-sandbox.senseitech.com/los/borrower}
+
+  program-service:
+    environment:
+      PLP_LOS_BASE_URL: http://credinnov-sandbox.senseitech.com/los
+      PLP_LOS_ANCHOR_INTEGRATION_API_KEY: los-plp-anchor-integration-dev-key
