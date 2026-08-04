@@ -11,6 +11,7 @@ import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -79,4 +80,11 @@ public class LosProgramUpsertRequest extends LosIntegrationBaseRequest {
     private Integer maxCmr;
 
     private Integer minCibil;
+
+    /**
+     * Extra / eligibility values from LOS {@code program_masters.custom_fields}.
+     * Merged into {@code Program.config} with LOS→PLP key renames
+     * ({@code maxInvoiceVintageDays}→{@code maxInvoiceAgeDays}, {@code tenureDays}→max tenure column).
+     */
+    private Map<String, Object> customFields;
 }

@@ -8,6 +8,13 @@ import {
   ProgramApprovalToolbar,
   useProgramApprovalConfig,
 } from '../components/ProgramApprovalActions';
+import {
+  ProgramCustomFieldsForm,
+  configFromCustomFieldForm,
+  formValuesFromConfig,
+  useProgramFieldDefinitions,
+} from '../components/ProgramCustomFieldsForm';
+import { Link } from 'react-router-dom';
 
 const inputCls = 'bt-input w-full';
 const labelCls = 'bt-label';
@@ -356,66 +363,25 @@ function OperationalParamsFields({
   );
 }
 
-function EligibilityFields({
-  maxInvoiceAgeDays,
+/** Residual invoice processing knobs not in the system custom-field catalog. */
+function ResidualEligibilityFields({
   minInvoiceAmount,
   minDaysToDueDate,
   dependencyVintagePercent,
-  anchorRelationshipVintageMonths,
-  interestPayment,
-  maxCmr,
-  minCibil,
   onChange,
 }: {
-  maxInvoiceAgeDays: string;
   minInvoiceAmount: string;
   minDaysToDueDate: string;
   dependencyVintagePercent: string;
-  anchorRelationshipVintageMonths: string;
-  interestPayment: string;
-  maxCmr: string;
-  minCibil: string;
   onChange: (patch: {
-    maxInvoiceAgeDays?: string;
     minInvoiceAmount?: string;
     minDaysToDueDate?: string;
     dependencyVintagePercent?: string;
-    anchorRelationshipVintageMonths?: string;
-    interestPayment?: string;
-    maxCmr?: string;
-    minCibil?: string;
   }) => void;
 }) {
   return (
     <>
-      <p className={sectionTitleCls}>Eligibility (optional)</p>
-      <ProgramField
-        label="Max invoice vintage (days)"
-        hint="Credit period: invoice date to due date (default 90 for invoice discounting)"
-        tooltip="Maximum allowed age of an invoice (invoice date to due date) for eligibility."
-      >
-        <input
-          type="number"
-          step="1"
-          min={1}
-          value={maxInvoiceAgeDays}
-          onChange={(e) => onChange({ maxInvoiceAgeDays: e.target.value })}
-          className={inputCls}
-          placeholder="e.g. 90"
-        />
-      </ProgramField>
-      <ProgramField label="Interest payment" tooltip="When interest is collected under this program.">
-        <select
-          value={interestPayment}
-          onChange={(e) => onChange({ interestPayment: e.target.value })}
-          className={inputCls}
-        >
-          <option value="">Select</option>
-          <option value="UPFRONT">Upfront</option>
-          <option value="MONTHLY">Monthly</option>
-          <option value="REAR_ENDED">Rear-ended</option>
-        </select>
-      </ProgramField>
+      <p className={sectionTitleCls}>Invoice processing (optional)</p>
       <ProgramField
         label="Min invoice amount"
         tooltip="Invoices below this net amount are rejected at eligibility check."
@@ -432,7 +398,6 @@ function EligibilityFields({
       </ProgramField>
       <ProgramField
         label="Min days to due date"
-        span={2}
         tooltip="Invoice must have at least this many days remaining until due date."
       >
         <input
@@ -460,46 +425,6 @@ function EligibilityFields({
           placeholder="e.g. 12.00"
         />
       </ProgramField>
-      <ProgramField
-        label="Min Dir Relationship (months)"
-        hint="Minimum months of direct / director relationship required for eligibility"
-        tooltip="Minimum months the borrower must have traded with this anchor."
-      >
-        <input
-          type="number"
-          step="1"
-          min={1}
-          value={anchorRelationshipVintageMonths}
-          onChange={(e) => onChange({ anchorRelationshipVintageMonths: e.target.value })}
-          className={inputCls}
-          placeholder="e.g. 10"
-        />
-      </ProgramField>
-      <ProgramField label="Max CMR" tooltip="Maximum allowed commercial credit rating (CMR).">
-        <input
-          type="number"
-          step="1"
-          min={1}
-          value={maxCmr}
-          onChange={(e) => onChange({ maxCmr: e.target.value })}
-          className={inputCls}
-          placeholder="e.g. 7"
-        />
-      </ProgramField>
-      <ProgramField label="Min CIBIL" tooltip="Minimum required CIBIL score.">
-        <input
-          type="number"
-          step="1"
-          min={1}
-          value={minCibil}
-          onChange={(e) => onChange({ minCibil: e.target.value })}
-          className={inputCls}
-          placeholder="e.g. 700"
-        />
-      </ProgramField>
-      <p className="col-span-full text-[11px] text-slate-400 -mt-1">
-        Only filled fields are sent; each must be greater than 0. Server merges into stored config.
-      </p>
     </>
   );
 }
@@ -587,15 +512,12 @@ export default function ProgramsPage() {
     description: '',
     marginPercent: '',
     maxBorrowerLimit: '',
-    maxInvoiceAgeDays: '',
     minInvoiceAmount: '',
     minDaysToDueDate: '',
     dependencyVintagePercent: '',
-    anchorRelationshipVintageMonths: '',
-    interestPayment: '',
-    maxCmr: '',
-    minCibil: '',
   });
+  const [createCustomFields, setCreateCustomFields] = useState<Record<string, string>>({});
+  const [editCustomFields, setEditCustomFields] = useState<Record<string, string>>({});
 
   const portalCaps = lenderLoanCapabilities(getStoredAuthUser()?.role);
   const { user } = useAuth();
@@ -619,16 +541,20 @@ export default function ProgramsPage() {
     maxConcurrentLoans: '1',
     gracePeriodDays: '3',
     coolingOffDays: '3',
-    maxInvoiceAgeDays: '',
     minInvoiceAmount: '',
     minDaysToDueDate: '',
     dependencyVintagePercent: '',
-    anchorRelationshipVintageMonths: '',
-    interestPayment: '',
-    maxCmr: '',
-    minCibil: '',
     ...defaultOperationalSlice(),
   });
+
+  const productForDefs =
+    showCreate && form.productType === 'INVOICE_DISCOUNTING'
+      ? 'INVOICE_DISCOUNTING'
+      : editProgram?.productType === 'INVOICE_DISCOUNTING'
+        ? 'INVOICE_DISCOUNTING'
+        : undefined;
+  const { definitions: fieldDefs, loading: fieldDefsLoading } = useProgramFieldDefinitions(productForDefs);
+  const hasTenureDef = fieldDefs.some((d) => d.fieldKey === 'maxTenureDays');
 
   useEffect(() => {
     programApi.list().then((res) => setPrograms(res.data.data || [])).catch(console.error).finally(() => setLoading(false));
@@ -659,15 +585,9 @@ export default function ProgramsPage() {
       description: p.description ?? '',
       marginPercent: p.marginPercent != null ? String(p.marginPercent) : '',
       maxBorrowerLimit: p.maxBorrowerLimit != null ? String(p.maxBorrowerLimit) : '',
-      maxInvoiceAgeDays: cfg.maxInvoiceAgeDays != null ? String(cfg.maxInvoiceAgeDays) : '',
       minInvoiceAmount: cfg.minInvoiceAmount != null ? String(cfg.minInvoiceAmount) : '',
       minDaysToDueDate: cfg.minDaysToDueDate != null ? String(cfg.minDaysToDueDate) : '',
       dependencyVintagePercent: cfg.dependencyVintagePercent != null ? String(cfg.dependencyVintagePercent) : '',
-      anchorRelationshipVintageMonths:
-        cfg.anchorRelationshipVintageMonths != null ? String(cfg.anchorRelationshipVintageMonths) : '',
-      interestPayment: cfg.interestPayment != null ? String(cfg.interestPayment) : '',
-      maxCmr: cfg.maxCmr != null ? String(cfg.maxCmr) : '',
-      minCibil: cfg.minCibil != null ? String(cfg.minCibil) : '',
       enablePaymentForBorrower: Boolean(ops.enablePaymentForBorrower),
       autoDiscounting: Boolean(ops.autoDiscounting),
       discountingDay: ops.discountingDay != null ? String(ops.discountingDay) : '0',
@@ -688,7 +608,22 @@ export default function ProgramsPage() {
       lmsEntryIn: p.lmsEntryIn === 'YES' ? 'YES' : 'NO',
       encoreProductCode: p.encoreProductCode ?? '',
     });
+    setEditCustomFields(
+      formValuesFromConfig(fieldDefs, p.config as Record<string, unknown>, p.maxTenureDays),
+    );
   };
+
+  // When defs load after edit open, re-hydrate custom field form values
+  useEffect(() => {
+    if (!editProgram || !fieldDefs.length) return;
+    setEditCustomFields(
+      formValuesFromConfig(
+        fieldDefs,
+        editProgram.config as Record<string, unknown>,
+        editProgram.maxTenureDays,
+      ),
+    );
+  }, [fieldDefs, editProgram]);
 
   const parsePositiveOptional = (label: string, raw: string): number | undefined => {
     const t = raw.trim();
@@ -706,23 +641,19 @@ export default function ProgramsPage() {
     return n;
   };
 
-  const mergeVintageCfg = (
-    cfg: Record<string, number | string>,
+  const buildResidualCfg = (
+    minAmt: string,
+    minDue: string,
     dep: string,
-    anchorMo: string,
-    interestPayment: string,
-    maxCmr: string,
-    minCibil: string,
-  ) => {
+  ): Record<string, number | string> => {
+    const cfg: Record<string, number | string> = {};
+    const amt = parsePositiveOptional('Min invoice amount', minAmt);
+    const due = parsePositiveOptional('Min days to due date', minDue);
     const depPct = parseNonNegativeOptional('Dependency vintage (%)', dep);
-    const anchorMonths = parsePositiveOptional('Min Dir Relationship (months)', anchorMo);
+    if (amt !== undefined) cfg.minInvoiceAmount = amt;
+    if (due !== undefined) cfg.minDaysToDueDate = due;
     if (depPct !== undefined) cfg.dependencyVintagePercent = depPct;
-    if (anchorMonths !== undefined) cfg.anchorRelationshipVintageMonths = anchorMonths;
-    if (interestPayment.trim()) cfg.interestPayment = interestPayment.trim().toUpperCase();
-    const cmr = parsePositiveOptional('Max CMR', maxCmr);
-    const cibil = parsePositiveOptional('Min CIBIL', minCibil);
-    if (cmr !== undefined) cfg.maxCmr = cmr;
-    if (cibil !== undefined) cfg.minCibil = cibil;
+    return cfg;
   };
 
   const handleEditSave = async (e: React.FormEvent) => {
@@ -735,22 +666,16 @@ export default function ProgramsPage() {
         throw new Error('Program name is required');
       }
       let cfgPayload: Record<string, number | string> | undefined;
-      const cfg: Record<string, number | string> = {};
-      const maxAge = parsePositiveOptional('Max invoice vintage (days)', editForm.maxInvoiceAgeDays);
-      const minAmt = parsePositiveOptional('Min invoice amount', editForm.minInvoiceAmount);
-      const minDue = parsePositiveOptional('Min days to due date', editForm.minDaysToDueDate);
-      if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
-      if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
-      if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
-      mergeVintageCfg(
-        cfg,
-        editForm.dependencyVintagePercent,
-        editForm.anchorRelationshipVintageMonths,
-        editForm.interestPayment,
-        editForm.maxCmr,
-        editForm.minCibil,
-      );
-      if (Object.keys(cfg).length > 0) cfgPayload = cfg;
+      if (editProgram.productType === 'INVOICE_DISCOUNTING') {
+        const residual = buildResidualCfg(
+          editForm.minInvoiceAmount,
+          editForm.minDaysToDueDate,
+          editForm.dependencyVintagePercent,
+        );
+        const { config: customCfg } = configFromCustomFieldForm(fieldDefs, editCustomFields);
+        const cfg = { ...residual, ...customCfg };
+        if (Object.keys(cfg).length > 0) cfgPayload = cfg;
+      }
 
       const marginVal = editForm.marginPercent.trim();
       const marginNum = marginVal !== '' ? parseFloat(marginVal) : undefined;
@@ -798,23 +723,20 @@ export default function ProgramsPage() {
     setError('');
     try {
       let cfgPayload: Record<string, number | string> | undefined;
+      let maxTenureDays = parseInt(form.maxTenureDays, 10);
       if (form.productType === 'INVOICE_DISCOUNTING') {
-        const cfg: Record<string, number | string> = {};
-        const maxAge = parsePositiveOptional('Max invoice vintage (days)', form.maxInvoiceAgeDays);
-        const minAmt = parsePositiveOptional('Min invoice amount', form.minInvoiceAmount);
-        const minDue = parsePositiveOptional('Min days to due date', form.minDaysToDueDate);
-        if (maxAge !== undefined) cfg.maxInvoiceAgeDays = maxAge;
-        if (minAmt !== undefined) cfg.minInvoiceAmount = minAmt;
-        if (minDue !== undefined) cfg.minDaysToDueDate = minDue;
-        mergeVintageCfg(
-          cfg,
+        const residual = buildResidualCfg(
+          form.minInvoiceAmount,
+          form.minDaysToDueDate,
           form.dependencyVintagePercent,
-          form.anchorRelationshipVintageMonths,
-          form.interestPayment,
-          form.maxCmr,
-          form.minCibil,
         );
+        const { config: customCfg, maxTenureDays: fromCustom } = configFromCustomFieldForm(
+          fieldDefs,
+          createCustomFields,
+        );
+        const cfg = { ...residual, ...customCfg };
         if (Object.keys(cfg).length > 0) cfgPayload = cfg;
+        if (fromCustom != null) maxTenureDays = fromCustom;
       }
 
       await programApi.create({
@@ -825,7 +747,7 @@ export default function ProgramsPage() {
         maxBorrowerLimit: parseFloat(form.maxBorrowerLimit),
         defaultInterestRate: parseFloat(form.defaultInterestRate),
         marginPercent: form.marginPercent ? parseFloat(form.marginPercent) : 0,
-        maxTenureDays: parseInt(form.maxTenureDays, 10),
+        maxTenureDays,
         maxConcurrentLoans: parseInt(form.maxConcurrentLoans, 10),
         gracePeriodDays: parseInt(form.gracePeriodDays, 10),
         coolingOffDays: parseInt(form.coolingOffDays, 10),
@@ -836,6 +758,7 @@ export default function ProgramsPage() {
         status: 'DRAFT',
       });
       setShowCreate(false);
+      setCreateCustomFields({});
       setForm({
         programName: '',
         productType: 'PAY_DAY_LOAN',
@@ -848,14 +771,9 @@ export default function ProgramsPage() {
         maxConcurrentLoans: '1',
         gracePeriodDays: '3',
         coolingOffDays: '3',
-        maxInvoiceAgeDays: '',
         minInvoiceAmount: '',
         minDaysToDueDate: '',
         dependencyVintagePercent: '',
-        anchorRelationshipVintageMonths: '',
-        interestPayment: '',
-        maxCmr: '',
-        minCibil: '',
         ...defaultOperationalSlice(),
       });
       reload();
@@ -891,6 +809,9 @@ export default function ProgramsPage() {
                 Create Program
               </BtButton>
             ) : null}
+            <Link to="/program-custom-fields">
+              <BtButton variant="secondary">Program custom fields</BtButton>
+            </Link>
           </div>
         }
       />
@@ -1012,20 +933,22 @@ export default function ProgramsPage() {
                 placeholder="0"
               />
             </ProgramField>
-            <ProgramField
-              label="Max Tenure (days)"
-              tooltip="Maximum loan/invoice tenure allowed under this program."
-            >
-              <input
-                type="number"
-                min={0}
-                value={form.maxTenureDays}
-                onChange={(e) =>
-                  setForm({ ...form, maxTenureDays: sanitizeNonNegativeNumberInput(e.target.value) })
-                }
-                className={inputCls}
-              />
-            </ProgramField>
+            {!(form.productType === 'INVOICE_DISCOUNTING' && hasTenureDef) ? (
+              <ProgramField
+                label="Max Tenure (days)"
+                tooltip="Maximum loan/invoice tenure allowed under this program."
+              >
+                <input
+                  type="number"
+                  min={0}
+                  value={form.maxTenureDays}
+                  onChange={(e) =>
+                    setForm({ ...form, maxTenureDays: sanitizeNonNegativeNumberInput(e.target.value) })
+                  }
+                  className={inputCls}
+                />
+              </ProgramField>
+            ) : null}
             <ProgramField
               label="Max Concurrent Loans"
               tooltip="Maximum number of active loans a borrower may hold under this program at once."
@@ -1041,17 +964,20 @@ export default function ProgramsPage() {
               />
             </ProgramField>
             {form.productType === 'INVOICE_DISCOUNTING' ? (
-              <EligibilityFields
-                maxInvoiceAgeDays={form.maxInvoiceAgeDays}
-                minInvoiceAmount={form.minInvoiceAmount}
-                minDaysToDueDate={form.minDaysToDueDate}
-                dependencyVintagePercent={form.dependencyVintagePercent}
-                anchorRelationshipVintageMonths={form.anchorRelationshipVintageMonths}
-                interestPayment={form.interestPayment}
-                maxCmr={form.maxCmr}
-                minCibil={form.minCibil}
-                onChange={(patch) => setForm({ ...form, ...patch })}
-              />
+              <>
+                <ProgramCustomFieldsForm
+                  definitions={fieldDefs}
+                  values={createCustomFields}
+                  onChange={setCreateCustomFields}
+                  loading={fieldDefsLoading}
+                />
+                <ResidualEligibilityFields
+                  minInvoiceAmount={form.minInvoiceAmount}
+                  minDaysToDueDate={form.minDaysToDueDate}
+                  dependencyVintagePercent={form.dependencyVintagePercent}
+                  onChange={(patch) => setForm({ ...form, ...patch })}
+                />
+              </>
             ) : null}
             <OperationalParamsFields values={form} onChange={(patch) => setForm({ ...form, ...patch })} />
           </div>
@@ -1136,17 +1062,20 @@ export default function ProgramsPage() {
             </ProgramField>
             <OperationalParamsFields values={editForm} onChange={(patch) => setEditForm({ ...editForm, ...patch })} />
             {editProgram.productType === 'INVOICE_DISCOUNTING' ? (
-              <EligibilityFields
-                maxInvoiceAgeDays={editForm.maxInvoiceAgeDays}
-                minInvoiceAmount={editForm.minInvoiceAmount}
-                minDaysToDueDate={editForm.minDaysToDueDate}
-                dependencyVintagePercent={editForm.dependencyVintagePercent}
-                anchorRelationshipVintageMonths={editForm.anchorRelationshipVintageMonths}
-                interestPayment={editForm.interestPayment}
-                maxCmr={editForm.maxCmr}
-                minCibil={editForm.minCibil}
-                onChange={(patch) => setEditForm({ ...editForm, ...patch })}
-              />
+              <>
+                <ProgramCustomFieldsForm
+                  definitions={fieldDefs}
+                  values={editCustomFields}
+                  onChange={setEditCustomFields}
+                  loading={fieldDefsLoading}
+                />
+                <ResidualEligibilityFields
+                  minInvoiceAmount={editForm.minInvoiceAmount}
+                  minDaysToDueDate={editForm.minDaysToDueDate}
+                  dependencyVintagePercent={editForm.dependencyVintagePercent}
+                  onChange={(patch) => setEditForm({ ...editForm, ...patch })}
+                />
+              </>
             ) : null}
           </div>
         </ProgramFormModal>

@@ -120,6 +120,13 @@ public class AnchorOnboardingService {
         String applicationId = requireApplicationId(anchor);
         Map<String, Object> updated;
         try {
+            Map<String, Object> current = losAnchorApplicationClient.getApplication(applicationId);
+            String losStatus = asString(current != null ? current.get("status") : null);
+            if ("DOC_VERIFICATION_SENT_BACK".equalsIgnoreCase(losStatus)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Only document upload is allowed while document verification is sent back. "
+                                + "Personal and KYC details cannot be changed.");
+            }
             updated = losAnchorApplicationClient.updateApplication(applicationId, payload);
         } catch (LosIntegrationException e) {
             throw mapLosException(e);
@@ -358,7 +365,7 @@ public class AnchorOnboardingService {
         List<String> actions = new ArrayList<>();
         if ("DOC_VERIFICATION_SENT_BACK".equalsIgnoreCase(losStatus)) {
             actions.add("Review the document verification notes");
-            actions.add("Update documents or details and resubmit");
+            actions.add("Update documents and resubmit");
             return actions;
         }
         if (status == null || status == AnchorOnboardingStatus.INVITED) {

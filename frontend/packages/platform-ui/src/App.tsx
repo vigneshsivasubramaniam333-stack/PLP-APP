@@ -18,6 +18,7 @@ import DesignPreviewPage from './pages/DesignPreviewPage';
 import MakerCheckerPage, { canViewWorkbench } from './pages/MakerCheckerPage';
 import PgSettlementsPage from './pages/PgSettlementsPage';
 import RepaymentDefaultsPage from './pages/RepaymentDefaultsPage';
+import ProgramFieldDefinitionsPage from './pages/ProgramFieldDefinitionsPage';
 
 const LENDER_PORTAL_ROLES = new Set([
   'PLATFORM_ADMIN',
@@ -100,6 +101,9 @@ export default function App() {
         <Route path="loans" element={<LoansPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
         <Route path="repayment-defaults" element={<RepaymentDefaultsPage />} />
+        {/* Primary config URL + alias for older bookmarks */}
+        <Route path="program-custom-fields" element={<ProgramFieldDefinitionsPage />} />
+        <Route path="program-field-definitions" element={<Navigate to="/program-custom-fields" replace />} />
         <Route path="pg-settlements" element={<PgSettlementsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="workbench" element={<WorkbenchRoute />} />

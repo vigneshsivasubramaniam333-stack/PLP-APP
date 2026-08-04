@@ -121,6 +121,17 @@ export const programApi = {
   updateApprovalConfig: (data: { l1Role: string; l2Role: string; enabled: boolean }) =>
     apiClient.put('/api/v1/platform/program-approval/config', data, { headers: lenderLoanActionHeaders() }),
   getUtilization: (id: string) => apiClient.get(`/api/v1/programs/${id}/utilization`),
+  listFieldDefinitions: (params?: { productType?: string; activeOnly?: boolean }) =>
+    apiClient.get<{ status?: string; data?: import('../types').ProgramFieldDefinition[] }>(
+      '/api/v1/programs/field-definitions',
+      { params },
+    ),
+  createFieldDefinition: (data: Record<string, unknown>) =>
+    apiClient.post('/api/v1/programs/field-definitions', data, { headers: lenderLoanActionHeaders() }),
+  updateFieldDefinition: (id: string, data: Record<string, unknown>) =>
+    apiClient.put(`/api/v1/programs/field-definitions/${id}`, data, { headers: lenderLoanActionHeaders() }),
+  deleteFieldDefinition: (id: string) =>
+    apiClient.delete(`/api/v1/programs/field-definitions/${id}`, { headers: lenderLoanActionHeaders() }),
 };
 
 export const repaymentDefaultsApi = {

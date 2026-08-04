@@ -29,6 +29,8 @@ class ProgramServiceLimitHeadroomTest {
     BorrowerLimitRepository borrowerLimitRepository;
     @Mock
     SubProgramRepository subProgramRepository;
+    @Mock
+    ProgramFieldDefinitionService programFieldDefinitionService;
 
     @InjectMocks
     ProgramService programService;

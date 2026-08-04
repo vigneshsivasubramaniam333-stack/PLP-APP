@@ -280,15 +280,29 @@ export function loanProductLabel(code: string): string {
   return code.replace(/_/g, ' ');
 }
 
-export function isEditableIntakeStatus(losStatus: string | null | undefined): boolean {
-  if (!losStatus) return true;
+/** Portal edit surface for the current LOS application status. */
+export type PortalEditMode = 'NONE' | 'FULL_INTAKE' | 'DOCUMENTS_ONLY';
+
+/**
+ * FULL_INTAKE — first fill / intake send-back (all sections).
+ * DOCUMENTS_ONLY — post-eSign document verification send-back (upload + resubmit only).
+ * NONE — under review / complete (view-only).
+ */
+export function resolvePortalEditMode(losStatus: string | null | undefined): PortalEditMode {
+  if (!losStatus) return 'FULL_INTAKE';
   const s = losStatus.toUpperCase();
-  return (
-    s === 'ANCHOR_CONSENT_PENDING' ||
-    s === 'ANCHOR_SENT_BACK' ||
-    s === 'DOC_VERIFICATION_SENT_BACK' ||
-    s === 'DRAFT'
-  );
+  if (s === 'DOC_VERIFICATION_SENT_BACK') return 'DOCUMENTS_ONLY';
+  if (s === 'ANCHOR_CONSENT_PENDING' || s === 'ANCHOR_SENT_BACK' || s === 'DRAFT') return 'FULL_INTAKE';
+  return 'NONE';
+}
+
+/** True when the anchor may change any part of the application (full intake or documents-only). */
+export function isEditableIntakeStatus(losStatus: string | null | undefined): boolean {
+  return resolvePortalEditMode(losStatus) !== 'NONE';
+}
+
+export function isDocumentsOnlyMode(losStatus: string | null | undefined): boolean {
+  return resolvePortalEditMode(losStatus) === 'DOCUMENTS_ONLY';
 }
 
 export function needsResubmit(losStatus: string | null | undefined): boolean {
@@ -559,6 +573,31 @@ export function resolvePortalDocumentSlots(
   for (const doc of workflow?.intakeConfig?.standaloneDocuments ?? []) {
     if (doc.documentType) {
       add(doc.documentType, doc.label ?? doc.documentType.replace(/_/g, ' '), doc.required === true);
+    }
+  }
+
+  // eSign additional documents marked collectAtIntake (default when required) must appear as slots.
+  for (const step of workflow?.steps ?? []) {
+    const stepName = String(step.step ?? '').trim().toUpperCase();
+    if (stepName !== 'ESIGN_AGREEMENT' && stepName !== 'ESIGN' && stepName !== 'ESIGN_KFS') continue;
+    const esignDocs = step.esignDocuments as
+      | {
+          additional?: {
+            documentType?: string;
+            label?: string;
+            required?: boolean;
+            collectAtIntake?: boolean;
+          }[];
+        }
+      | undefined;
+    if (!esignDocs?.additional?.length) continue;
+    for (const d of esignDocs.additional) {
+      if (!d?.documentType) continue;
+      const required = d.required !== false;
+      const collect =
+        d.collectAtIntake != null ? d.collectAtIntake === true : required;
+      if (!collect) continue;
+      add(d.documentType, d.label ?? d.documentType.replace(/_/g, ' '), required);
     }
   }
 

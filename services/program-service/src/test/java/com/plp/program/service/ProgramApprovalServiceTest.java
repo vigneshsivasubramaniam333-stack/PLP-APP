@@ -73,6 +73,53 @@ class ProgramApprovalServiceTest {
 
         assertThatThrownBy(() -> service.sendBackToRm(programId, "Back to RM", l1Roles, "l1-user"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("allowed only when status is DRAFT");
+                .hasMessageContaining("Only L2 approver");
+    }
+
+    @Test
+    void l2SendBackToRmFromPendingL2SetsSentBack() {
+        Program program = Program.builder()
+                .id(programId)
+                .programCode("PRG-3")
+                .status(ProgramStatus.PENDING_L2)
+                .build();
+        when(programService.getProgram(programId)).thenReturn(program);
+        when(programService.saveProgram(program)).thenReturn(program);
+
+        Program updated = service.sendBackToRm(programId, "Revise limit with RM", l2Roles, "l2-user");
+
+        assertThat(updated.getStatus()).isEqualTo(ProgramStatus.SENT_BACK);
+        assertThat(updated.getApprovalRemarks()).isEqualTo("Revise limit with RM");
+        assertThat(updated.getSubmittedAt()).isNull();
+        assertThat(updated.getSubmittedBy()).isNull();
+    }
+
+    @Test
+    void l2SendBackToRmRequiresRemarks() {
+        Program program = Program.builder()
+                .id(programId)
+                .programCode("PRG-4")
+                .status(ProgramStatus.PENDING_L2)
+                .build();
+        when(programService.getProgram(programId)).thenReturn(program);
+
+        assertThatThrownBy(() -> service.sendBackToRm(programId, "  ", l2Roles, "l2-user"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Remarks are required");
+    }
+
+    @Test
+    void l1SendBackToRmFromDraftStillWorks() {
+        Program program = Program.builder()
+                .id(programId)
+                .programCode("PRG-5")
+                .status(ProgramStatus.DRAFT)
+                .build();
+        when(programService.getProgram(programId)).thenReturn(program);
+        when(programService.saveProgram(program)).thenReturn(program);
+
+        Program updated = service.sendBackToRm(programId, null, l1Roles, "l1-user");
+
+        assertThat(updated.getStatus()).isEqualTo(ProgramStatus.SENT_BACK);
     }
 }

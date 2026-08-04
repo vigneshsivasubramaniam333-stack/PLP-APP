@@ -75,6 +75,22 @@ export interface ProgramEligibilityConfig {
   interestPayment?: 'UPFRONT' | 'MONTHLY' | 'REAR_ENDED' | string;
   maxCmr?: number;
   minCibil?: number;
+  [key: string]: string | number | undefined;
+}
+
+export interface ProgramFieldDefinition {
+  id: string;
+  fieldKey: string;
+  label: string;
+  inputType: 'TEXT' | 'NUMBER' | 'DROPDOWN' | string;
+  options?: { value?: string; label?: string }[] | null;
+  required: boolean;
+  active: boolean;
+  sortOrder: number;
+  productTypes?: string[] | null;
+  systemManaged: boolean;
+  helpText?: string | null;
+  storageTarget?: string | null;
 }
 
 export interface ProgramOperationalParameters {

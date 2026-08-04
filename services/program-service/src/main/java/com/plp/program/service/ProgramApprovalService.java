@@ -98,27 +98,56 @@ public class ProgramApprovalService {
     }
 
     /**
-     * L1 sends a DRAFT program back to the relationship manager (RM) for revision.
-     * Remarks are optional. Resulting status is {@link ProgramStatus#SENT_BACK}.
+     * Send a program back to the relationship manager (RM) for commercial revision.
+     * <ul>
+     *   <li>L1 from {@link ProgramStatus#DRAFT} → {@link ProgramStatus#SENT_BACK} (remarks optional)</li>
+     *   <li>L2 from {@link ProgramStatus#PENDING_L2} → {@link ProgramStatus#SENT_BACK} (remarks required)</li>
+     * </ul>
      */
     @Transactional
     public Program sendBackToRm(UUID programId, String remarks, String rolesHeader, String userId) {
         ProgramApprovalConfig cfg = getConfig();
-        requireRole(rolesHeader, cfg.getL1Role(), "Only L1 approver can send program back to RM");
         Program program = programService.getProgram(programId);
         ProgramStatus status = program.getStatus();
-        if (status != ProgramStatus.DRAFT) {
-            throw new RuntimeException(
-                    "Send back to RM allowed only when status is DRAFT. Current: " + status);
+        Set<String> roles = LenderPortalRoleAuthorization.parseRoles(rolesHeader);
+        boolean platformAdmin = roles.contains("PLATFORM_ADMIN");
+        boolean isL1 = platformAdmin || roles.contains(normalizeRole(cfg.getL1Role(), "CREDIT_ANALYST"));
+        boolean isL2 = platformAdmin || roles.contains(normalizeRole(cfg.getL2Role(), "CREDIT_MANAGER"));
+
+        if (status == ProgramStatus.DRAFT) {
+            if (!isL1) {
+                throw new RuntimeException("Only L1 approver can send program back to RM from DRAFT");
+            }
+            program.setStatus(ProgramStatus.SENT_BACK);
+            String trimmed = remarks == null ? null : remarks.trim();
+            program.setApprovalRemarks(trimmed == null || trimmed.isEmpty() ? null : trimmed);
+            program.setSentBackAt(Instant.now());
+            program.setSentBackBy(trimUser(userId));
+            Program saved = programService.saveProgram(program);
+            log.info("Program {} sent back to RM by L1 {}", saved.getProgramCode(), userId);
+            return saved;
         }
-        program.setStatus(ProgramStatus.SENT_BACK);
-        String trimmed = remarks == null ? null : remarks.trim();
-        program.setApprovalRemarks(trimmed == null || trimmed.isEmpty() ? null : trimmed);
-        program.setSentBackAt(Instant.now());
-        program.setSentBackBy(trimUser(userId));
-        Program saved = programService.saveProgram(program);
-        log.info("Program {} sent back to RM by L1 {}", saved.getProgramCode(), userId);
-        return saved;
+
+        if (status == ProgramStatus.PENDING_L2) {
+            if (!isL2) {
+                throw new RuntimeException("Only L2 approver can send program back to RM from PENDING_L2");
+            }
+            if (remarks == null || remarks.isBlank()) {
+                throw new RuntimeException("Remarks are required when L2 sends the program back to RM");
+            }
+            program.setStatus(ProgramStatus.SENT_BACK);
+            program.setApprovalRemarks(remarks.trim());
+            program.setSentBackAt(Instant.now());
+            program.setSentBackBy(trimUser(userId));
+            program.setSubmittedAt(null);
+            program.setSubmittedBy(null);
+            Program saved = programService.saveProgram(program);
+            log.info("Program {} sent back to RM by L2 {}", saved.getProgramCode(), userId);
+            return saved;
+        }
+
+        throw new RuntimeException(
+                "Send back to RM allowed only from DRAFT (L1) or PENDING_L2 (L2). Current: " + status);
     }
 
     @Transactional

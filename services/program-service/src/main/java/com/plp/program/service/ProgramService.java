@@ -34,6 +34,7 @@ public class ProgramService {
     private final ProgramRepository programRepository;
     private final BorrowerLimitRepository borrowerLimitRepository;
     private final SubProgramRepository subProgramRepository;
+    private final ProgramFieldDefinitionService programFieldDefinitionService;
 
     @Transactional
     public Program createProgram(Program program) {
@@ -78,9 +79,33 @@ public class ProgramService {
         } else {
             program.setConfig(ProgramParametersValidator.mergeConfigWithDefaults(program.getConfig(), program.getProductType()));
         }
+        applyCustomFieldDefinitions(program);
         if (program.getLmsEntryIn() == null || program.getLmsEntryIn().isBlank()) {
             program.setLmsEntryIn("NO");
         }
+    }
+
+    /** Validate definition values on config and dual-write maxTenureDays from config when present. */
+    private void applyCustomFieldDefinitions(Program program) {
+        Map<String, Object> cfg = program.getConfig() != null ? new HashMap<>(program.getConfig()) : new HashMap<>();
+        Object tenure = cfg.get(ProgramFieldDefinitionService.PLP_MAX_TENURE);
+        if (tenure == null) {
+            tenure = cfg.get(ProgramFieldDefinitionService.LOS_TENURE_DAYS);
+        }
+        if (tenure != null) {
+            try {
+                int days = tenure instanceof Number n
+                        ? n.intValue()
+                        : (int) Double.parseDouble(String.valueOf(tenure).trim());
+                program.setMaxTenureDays(days);
+                cfg.remove(ProgramFieldDefinitionService.LOS_TENURE_DAYS);
+                // Keep maxTenureDays only on column for system field; optional in config too is fine
+            } catch (NumberFormatException ignored) {
+                // leave to definition validator
+            }
+        }
+        cfg = programFieldDefinitionService.validateConfigAgainstDefinitions(program.getProductType(), cfg);
+        program.setConfig(cfg);
     }
 
     /** Returns normalized program parameters map (for invoice/lending consumers). */
@@ -211,6 +236,7 @@ public class ProgramService {
             }
             program.setConfig(merged);
             program.setConfig(ProgramParametersValidator.validateConfig(program.getConfig(), program.getProductType()));
+            applyCustomFieldDefinitions(program);
         }
         if (dto.getParameters() != null && !dto.getParameters().isEmpty()) {
             Map<String, Object> merged =

@@ -36,6 +36,7 @@ public class LosProgramIntegrationService {
     private final AnchorRepository anchorRepository;
     private final SubProgramRepository subProgramRepository;
     private final LosSyncAuditService losSyncAuditService;
+    private final ProgramFieldDefinitionService programFieldDefinitionService;
 
     @Transactional
     public LosProgramUpsertResponse upsert(LosProgramUpsertRequest req) {
@@ -188,7 +189,7 @@ public class LosProgramIntegrationService {
         }
     }
 
-    private static void applyProgramUpdates(Program program, LosProgramUpsertRequest dto) {
+    private void applyProgramUpdates(Program program, LosProgramUpsertRequest dto) {
         program.setProgramName(dto.getProgramName().trim());
         program.setProgramLimit(dto.getProgramLimit());
         program.setMaxBorrowerLimit(dto.getMaxBorrowerLimit());
@@ -223,17 +224,31 @@ public class LosProgramIntegrationService {
         }
     }
 
-    private static void mergeVintageConfig(Program program, LosProgramUpsertRequest dto) {
+    private void mergeVintageConfig(Program program, LosProgramUpsertRequest dto) {
+        Map<String, Object> translatedCustom =
+                ProgramFieldDefinitionService.translateLosCustomFields(dto.getCustomFields());
         boolean hasAny = dto.getDependencyVintagePercent() != null
                 || dto.getAnchorRelationshipVintageMonths() != null
                 || dto.getInterestPayment() != null
                 || dto.getMaxInvoiceVintageDays() != null
                 || dto.getMaxCmr() != null
-                || dto.getMinCibil() != null;
+                || dto.getMinCibil() != null
+                || !translatedCustom.isEmpty();
         if (!hasAny) {
             return;
         }
         Map<String, Object> config = program.getConfig() != null ? new HashMap<>(program.getConfig()) : new HashMap<>();
+        // Free-form + system custom fields from LOS jsonb first; typed scalars override when present
+        for (Map.Entry<String, Object> e : translatedCustom.entrySet()) {
+            if (ProgramFieldDefinitionService.PLP_MAX_TENURE.equals(e.getKey())) {
+                Integer days = toInteger(e.getValue());
+                if (days != null) {
+                    program.setMaxTenureDays(days);
+                }
+                continue;
+            }
+            config.put(e.getKey(), e.getValue());
+        }
         if (dto.getDependencyVintagePercent() != null) {
             config.put("dependencyVintagePercent", dto.getDependencyVintagePercent());
         }
@@ -252,7 +267,32 @@ public class LosProgramIntegrationService {
         if (dto.getMinCibil() != null) {
             config.put("minCibil", dto.getMinCibil());
         }
-        program.setConfig(ProgramParametersValidator.validateConfig(config, program.getProductType()));
+        if (dto.getMaxTenureDays() != null) {
+            program.setMaxTenureDays(dto.getMaxTenureDays());
+        }
+        Map<String, Object> validated = ProgramParametersValidator.validateConfig(config, program.getProductType());
+        validated = programFieldDefinitionService.validateConfigAgainstDefinitions(program.getProductType(), validated);
+        // Preserve unknown custom keys that validator may not care about
+        for (Map.Entry<String, Object> e : config.entrySet()) {
+            if (!validated.containsKey(e.getKey())) {
+                validated.put(e.getKey(), e.getValue());
+            }
+        }
+        program.setConfig(validated);
+    }
+
+    private static Integer toInteger(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        String s = String.valueOf(v).trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        return (int) Double.parseDouble(s);
     }
 
     private static String normalizeInterestPayment(String raw) {

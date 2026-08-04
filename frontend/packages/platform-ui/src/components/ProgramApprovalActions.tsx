@@ -291,11 +291,13 @@ function SendBackToRmModal({
   busy,
   onClose,
   onSubmit,
+  remarksRequired = false,
 }: {
   program: Program;
   busy: boolean;
   onClose: () => void;
   onSubmit: (remarks: string) => void;
+  remarksRequired?: boolean;
 }) {
   const [remarks, setRemarks] = useState('');
   return (
@@ -309,22 +311,31 @@ function SendBackToRmModal({
         </div>
         <div className="bt-modal-body">
           <p className="text-sm text-slate-600 mb-3">
-            Send <strong>{program.programName}</strong> back to the relationship manager for revision. Remarks are
-            optional.
+            Send <strong>{program.programName}</strong> back to the relationship manager for commercial setup changes
+            in LOS. They can revise parameters and re-sync the program.
           </p>
-          <label className="bt-label">Remarks (optional)</label>
+          <label className="bt-label">Remarks {remarksRequired ? '*' : '(optional)'}</label>
           <textarea
             className="bt-input w-full min-h-[100px] resize-y"
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder="Optional notes for the RM…"
+            placeholder={
+              remarksRequired
+                ? 'Describe what the RM needs to change…'
+                : 'Optional notes for the RM…'
+            }
+            required={remarksRequired}
           />
         </div>
         <div className="bt-modal-footer">
           <button type="button" onClick={onClose} className="bt-btn bt-btn-secondary" disabled={busy}>
             Cancel
           </button>
-          <BtButton type="button" disabled={busy} onClick={() => onSubmit(remarks.trim())}>
+          <BtButton
+            type="button"
+            disabled={busy || (remarksRequired && !remarks.trim())}
+            onClick={() => onSubmit(remarks.trim())}
+          >
             {busy ? 'Sending…' : 'Send back to RM'}
           </BtButton>
         </div>
@@ -450,6 +461,8 @@ export function ProgramApprovalActions({
   const [review, setReview] = useState(false);
   const [sendBack, setSendBack] = useState(false);
   const [sendBackToRm, setSendBackToRm] = useState(false);
+  /** When true, L2 is send-back-to-RM from PENDING_L2 (remarks required). */
+  const [sendBackToRmFromL2, setSendBackToRmFromL2] = useState(false);
 
   const isL1 = role === approvalConfig.l1Role || role === 'PLATFORM_ADMIN';
   const isL2 = role === approvalConfig.l2Role || role === 'PLATFORM_ADMIN';
@@ -490,7 +503,10 @@ export function ProgramApprovalActions({
       label: 'Send back to RM',
       tone: 'warning',
       disabled: busy,
-      onClick: () => setSendBackToRm(true),
+      onClick: () => {
+        setSendBackToRmFromL2(false);
+        setSendBackToRm(true);
+      },
     });
   }
 
@@ -508,6 +524,16 @@ export function ProgramApprovalActions({
       tone: 'warning',
       disabled: busy,
       onClick: () => setSendBack(true),
+    });
+    menuItems.push({
+      id: 'send-back-to-rm-l2',
+      label: 'Send back to RM',
+      tone: 'warning',
+      disabled: busy,
+      onClick: () => {
+        setSendBackToRmFromL2(true);
+        setSendBackToRm(true);
+      },
     });
   }
 
@@ -540,10 +566,15 @@ export function ProgramApprovalActions({
         <SendBackToRmModal
           program={program}
           busy={busy}
-          onClose={() => setSendBackToRm(false)}
+          remarksRequired={sendBackToRmFromL2}
+          onClose={() => {
+            setSendBackToRm(false);
+            setSendBackToRmFromL2(false);
+          }}
           onSubmit={async (remarks) => {
             await run(() => programApi.sendBackToRm(program.id, remarks || undefined), 'Sent back to RM');
             setSendBackToRm(false);
+            setSendBackToRmFromL2(false);
           }}
         />
       ) : null}

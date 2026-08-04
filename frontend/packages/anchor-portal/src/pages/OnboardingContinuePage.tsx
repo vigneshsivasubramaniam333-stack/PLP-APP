@@ -12,6 +12,7 @@ import {
   buildPortalSavePayload,
   docsByType,
   hydrateFormFromApplication,
+  isDocumentsOnlyMode,
   isEditableIntakeStatus,
   loanProductLabel,
   missingRequiredDocs,
@@ -20,6 +21,7 @@ import {
   resolveAllowedStatesFromWorkflow,
   resolveOnboardingStepLabels,
   resolvePortalDocumentSlots,
+  resolvePortalEditMode,
   unwrapApiData,
   validateConsent,
   validateCorporate,
@@ -100,7 +102,10 @@ export default function OnboardingContinuePage() {
   const [geoWarning, setGeoWarning] = useState<string | null>(null);
   const [workflowWarning, setWorkflowWarning] = useState<string | null>(null);
 
+  const editMode = resolvePortalEditMode(app?.status);
   const editable = isEditableIntakeStatus(app?.status);
+  const documentsOnly = isDocumentsOnlyMode(app?.status);
+  const fullIntake = editMode === 'FULL_INTAKE';
   const resubmit = needsResubmit(app?.status);
   const byType = useMemo(() => docsByType(docs), [docs]);
   const sendBackNotes = app?.anchorSentBackNotes || app?.docVerificationNotes || null;
@@ -239,6 +244,9 @@ export default function OnboardingContinuePage() {
       setForm(hydrateFormFromApplication(application));
       setDocs(Array.isArray(documentList) ? documentList : []);
       setGeoStates(Array.isArray(states) ? states : []);
+      if (isDocumentsOnlyMode(application?.status)) {
+        setStep(2);
+      }
     } catch (e: unknown) {
       setError(apiErrorMessage(e, 'Failed to load application'));
     } finally {
@@ -276,6 +284,9 @@ export default function OnboardingContinuePage() {
   }, [matchedState?.id]);
 
   async function saveSection(): Promise<boolean> {
+    if (documentsOnly) {
+      return true;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -297,6 +308,19 @@ export default function OnboardingContinuePage() {
 
   async function onNext() {
     if (!editable && step < reviewStep) {
+      setStep((s) => Math.min(reviewStep, s + 1));
+      return;
+    }
+    // Document-verification send-back: allow free navigation without personal validation/saves.
+    if (documentsOnly) {
+      setError(null);
+      if (step === 2) {
+        const missing = missingRequiredDocs(byType, docSlots);
+        if (missing.length > 0) {
+          setError(`Please upload: ${missing.join(', ')}`);
+          return;
+        }
+      }
       setStep((s) => Math.min(reviewStep, s + 1));
       return;
     }
@@ -356,6 +380,25 @@ export default function OnboardingContinuePage() {
 
   async function onSubmit() {
     if (!editable) return;
+    if (documentsOnly) {
+      const missing = missingRequiredDocs(byType, docSlots);
+      if (missing.length > 0) {
+        setError(`Please upload: ${missing.join(', ')}`);
+        setStep(2);
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        await apiClient.post('/api/v1/portal/anchor/onboarding/resubmit');
+        void navigate('/my-application', { replace: true });
+      } catch (e: unknown) {
+        setError(apiErrorMessage(e, 'Resubmit failed'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const corp = validateCorporate(form);
     if (corp) {
       setError(corp);
@@ -442,7 +485,13 @@ export default function OnboardingContinuePage() {
             ← Onboarding
           </Link>
           <h1 className="mt-2 text-xl font-semibold text-slate-900">
-            {editable ? (resubmit ? 'Update & resubmit application' : 'Complete application') : 'Application details'}
+            {editable
+              ? documentsOnly
+                ? 'Update documents & resubmit'
+                : resubmit
+                  ? 'Update & resubmit application'
+                  : 'Complete application'
+              : 'Application details'}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             {app?.applicationNumber ? (
@@ -462,8 +511,26 @@ export default function OnboardingContinuePage() {
 
       {sendBackNotes ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p className="font-semibold">Action required — sent back for corrections</p>
+          <p className="font-semibold">
+            {documentsOnly
+              ? 'Action required — document verification corrections'
+              : 'Action required — sent back for corrections'}
+          </p>
           <p className="mt-1 whitespace-pre-wrap">{sendBackNotes}</p>
+          {documentsOnly ? (
+            <p className="mt-2 text-xs text-amber-900">
+              You may upload or replace documents only. Corporate, KYC, consent, and user details cannot be changed.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {documentsOnly && !sendBackNotes ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Document verification — re-upload required</p>
+          <p className="mt-1">
+            Personal and KYC details are locked. Upload the requested documents, then resubmit for verification.
+          </p>
         </div>
       ) : null}
 
@@ -534,7 +601,7 @@ export default function OnboardingContinuePage() {
                   id={key}
                   className={fieldInput}
                   type={key === 'dateOfIncorporation' ? 'date' : key === 'email' ? 'email' : 'text'}
-                  disabled={!editable}
+                  disabled={!fullIntake}
                   value={form[key]}
                   onChange={(e) => patch({ [key]: e.target.value })}
                 />
@@ -547,7 +614,7 @@ export default function OnboardingContinuePage() {
               <select
                 id="state"
                 className={fieldInput}
-                disabled={!editable || geoStates.length === 0}
+                disabled={!fullIntake || geoStates.length === 0}
                 value={form.state}
                 onChange={(e) => patch({ state: e.target.value, city: '' })}
               >
@@ -572,7 +639,7 @@ export default function OnboardingContinuePage() {
               <select
                 id="city"
                 className={fieldInput}
-                disabled={!editable || !form.state.trim() || loadingCities}
+                disabled={!fullIntake || !form.state.trim() || loadingCities}
                 value={form.city}
                 onChange={(e) => patch({ city: e.target.value })}
               >
@@ -600,7 +667,7 @@ export default function OnboardingContinuePage() {
               <input
                 id="pincode"
                 className={fieldInput}
-                disabled={!editable}
+                disabled={!fullIntake}
                 inputMode="numeric"
                 maxLength={6}
                 value={form.pincode}
@@ -614,7 +681,7 @@ export default function OnboardingContinuePage() {
               <input
                 id="country"
                 className={fieldInput}
-                disabled={!editable}
+                disabled={!fullIntake}
                 value={form.country}
                 onChange={(e) => patch({ country: e.target.value })}
               />
@@ -694,7 +761,7 @@ export default function OnboardingContinuePage() {
                 <input
                   id={fld.key}
                   className={fieldInput}
-                  disabled={!editable}
+                  disabled={!fullIntake}
                   maxLength={fld.maxLength}
                   value={form[fld.key]}
                   onChange={(e) =>
@@ -729,7 +796,7 @@ export default function OnboardingContinuePage() {
                 <input
                   type="checkbox"
                   className="mt-1"
-                  disabled={!editable}
+                  disabled={!fullIntake}
                   checked={form[key]}
                   onChange={(e) => patch({ [key]: e.target.checked })}
                 />
@@ -745,7 +812,7 @@ export default function OnboardingContinuePage() {
           <AnchorContactsUsersSection
             contacts={form.contacts}
             maxUsers={contactsCfg.maxUsers}
-            disabled={!editable}
+            disabled={!fullIntake}
             onChange={(contacts) => setForm((f) => ({ ...f, contacts }))}
           />
         </div>
@@ -814,8 +881,11 @@ export default function OnboardingContinuePage() {
           </dl>
           {editable ? (
             <p className="text-sm text-slate-600">
-              Submitting will send this application to your lender for review
-              {resubmit ? ' (resubmission after send-back)' : ''}.
+              {documentsOnly
+                ? 'Resubmitting will send your updated documents for verification.'
+                : `Submitting will send this application to your lender for review${
+                    resubmit ? ' (resubmission after send-back)' : ''
+                  }.`}
             </p>
           ) : null}
         </section>
@@ -834,7 +904,7 @@ export default function OnboardingContinuePage() {
           Back
         </button>
         <div className="flex flex-wrap gap-3">
-          {editable && step > 0 && step < reviewStep ? (
+          {editable && fullIntake && step > 0 && step < reviewStep ? (
             <button
               type="button"
               className={secondaryBtn}
@@ -852,7 +922,7 @@ export default function OnboardingContinuePage() {
             </button>
           ) : editable ? (
             <button type="button" className={primaryBtn} disabled={busy} onClick={() => void onSubmit()}>
-              {busy ? 'Submitting…' : resubmit ? 'Resubmit application' : 'Submit application'}
+              {busy ? 'Submitting…' : documentsOnly || resubmit ? 'Resubmit application' : 'Submit application'}
             </button>
           ) : (
             <Link to="/my-application" className={primaryBtn}>
